@@ -1,0 +1,91 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Prisma
+prisma/*.db
+prisma/*.db-journal
+prisma/generated/
+!prisma/generated/.gitkeep
+
+# NestJS
+nest-cli.json.backup
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# OS
+.DS_Store
+Desktop.ini
+Thumbs.db
+ehthumbs.db
+*.lnk
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# Temporary files
+tmp/
+temp/
+
+# Electron
+out/
+release/
+dist-electron/
+*.asar
+
+# React Native
+ios/Pods/
+ios/build/
+android/build/
+android/app/build/
+android/.gradle/
+*.hprof
+*.keystore
+!*.p8
+
+# SQLite databases (local development)
+*.sqlite
+*.sqlite3
+*.db
+
+# PostgreSQL dumps
+*.dump
+*.backup
+*.sql.gz
+
+# OpenCode agent cache
+.opencode/node_modules/
+.opencode/package-lock.json
+.opencode/package.json
+
+# Docker
+docker-compose.override.yml

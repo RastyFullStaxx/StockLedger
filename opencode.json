@@ -1,0 +1,112 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "agent": {
+    "architecture-supervisor": {
+      "description": "Reviews code changes, PRs, and architectural decisions in the StockLedger NestJS event-sourced system to enforce production-grade discipline: event sourcing principles, multi-tenant isolation, offline-first design, and maintainability.",
+      "mode": "all",
+      "temperature": 0.1,
+      "permission": {
+        "edit": "ask",
+        "bash": {
+          "*": "ask",
+          "git status*": "allow",
+          "git diff*": "allow",
+          "git log*": "allow",
+          "npm run build*": "ask",
+          "npm run lint*": "ask",
+          "npm run typecheck*": "ask",
+          "npm run test*": "ask",
+          "npx prisma*": "ask"
+        }
+      },
+      "prompt": "{file:.opencode/agents/architecture-supervisor.md}"
+    },
+    "devops-deployment-guardian": {
+      "description": "Reviews changes affecting build processes, deployment pipelines, environment variables, Node.js/NestJS version compatibility, Prisma migrations, Docker/PostgreSQL config, and Electron packaging for StockLedger.",
+      "mode": "all",
+      "temperature": 0.1,
+      "permission": {
+        "edit": "ask",
+        "bash": {
+          "*": "ask",
+          "git status*": "allow",
+          "git diff*": "allow",
+          "git log*": "allow",
+          "npm run build*": "ask",
+          "npm run lint*": "ask",
+          "npm run typecheck*": "ask",
+          "npm run test*": "ask",
+          "npx prisma*": "ask"
+        }
+      },
+      "prompt": "{file:.opencode/agents/devops-deployment-guardian.md}"
+    },
+    "docs-onboarding-writer": {
+      "description": "Creates, updates, and reviews documentation for StockLedger including README, architecture notes, developer guides, setup docs, and deployment guides.",
+      "mode": "all",
+      "temperature": 0.1,
+      "prompt": "{file:.opencode/agents/docs-onboarding-writer.md}"
+    },
+    "domain-data-integrity-auditor": {
+      "description": "Reviews Prisma schema, TypeScript types, event model definitions, mock data structures, and business rules in StockLedger to ensure the data layer faithfully represents the inventory event-sourcing domain.",
+      "mode": "all",
+      "temperature": 0.1,
+      "prompt": "{file:.opencode/agents/domain-data-integrity-auditor.md}"
+    },
+    "frontend-ui-reviewer": {
+      "description": "Reviews Electron desktop UI components and React Native mobile screens for StockLedger for consistency, accessibility, responsiveness, and maintainability against the established design system.",
+      "mode": "all",
+      "temperature": 0.1,
+      "prompt": "{file:.opencode/agents/frontend-ui-reviewer.md}"
+    },
+    "performance-query-optimizer": {
+      "description": "Reviews code for performance and optimization concerns across StockLedger's NestJS backend, event replay engine, Prisma/PostgreSQL queries, Electron client rendering, and offline sync layer.",
+      "mode": "all",
+      "temperature": 0.1,
+      "prompt": "{file:.opencode/agents/performance-query-optimizer.md}"
+    },
+    "refactor-planner": {
+      "description": "Plans safe, staged refactoring of messy, overgrown, or risky areas of the StockLedger codebase — event handlers, sync engine, inventory logic, or API routes.",
+      "mode": "all",
+      "temperature": 0.1,
+      "prompt": "{file:.opencode/agents/refactor-planner.md}"
+    },
+    "security-auth-auditor": {
+      "description": "Audits authentication, authorization, RBAC, multi-tenant isolation, JWT/device auth, API route protection, and data privacy across StockLedger's NestJS backend and client applications.",
+      "mode": "all",
+      "temperature": 0.1,
+      "prompt": "{file:.opencode/agents/security-auth-auditor.md}"
+    },
+    "senior-debug-analyst": {
+      "description": "Diagnoses bugs, failures, and errors in StockLedger by tracing control flow across NestJS controllers/services, event handlers, Prisma queries, sync engine, and Electron client components.",
+      "mode": "all",
+      "temperature": 0.1,
+      "prompt": "{file:.opencode/agents/senior-debug-analyst.md}"
+    },
+    "senior-qa-test-engineer": {
+      "description": "Verifies code changes behave correctly under real conditions, writes meaningful regression tests, and validates event sourcing correctness, sync atomicity, and multi-tenant isolation in StockLedger.",
+      "mode": "all",
+      "temperature": 0.1,
+      "prompt": "{file:.opencode/agents/senior-qa-test-engineer.md}"
+    },
+    "ui-runtime-speed-optimizer": {
+      "description": "Reviews and improves user-perceived application speed in StockLedger's Electron desktop and React Native clients: app startup, tab switching, sync transitions, modal flows, and form submissions.",
+      "mode": "all",
+      "temperature": 0.1,
+      "permission": {
+        "edit": "ask",
+        "bash": {
+          "*": "ask",
+          "git status*": "allow",
+          "git diff*": "allow",
+          "git log*": "allow",
+          "npm run build*": "ask",
+          "npm run lint*": "ask",
+          "npm run typecheck*": "ask",
+          "npm run test*": "ask"
+        }
+      },
+      "prompt": "{file:.opencode/agents/ui-runtime-speed-optimizer.md}"
+    }
+  }
+}
