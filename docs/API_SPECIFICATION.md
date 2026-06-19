@@ -154,7 +154,48 @@ Create product metadata.
 
 List all products for tenant.
 
----
+### PATCH /api/products/:product_id
+
+Update product lifecycle metadata.
+
+Request examples:
+
+```json
+{
+  "is_active": false,
+  "reason": "Planned decommission for seasonal menu update"
+}
+```
+
+Behavior:
+
+- `is_active=false` deactivates a product.
+- Deactivation should emit one `STOCK_ADJUSTMENT` event for each location with non-zero replayed stock.
+- Each adjustment uses the exact negative of current replayed quantity at that location (with epsilon close-to-zero guard, default `1e-4`).
+- Historical movement records remain immutable; no events are deleted.
+- `is_active=true` reactivates the product and must not create movement events.
+- Querying products includes lifecycle fields: `is_active`, `deactivated_at`, `deactivated_by`, `deactivated_reason`, `reactivated_at`, `reactivated_by`.
+
+### Lifecycle failure and concurrency behavior
+
+- Deactivation requests must verify that:
+  - the product exists,
+  - the caller has authority for catalog changes,
+  - and product state is not already in the requested lifecycle state.
+- If already in target state, endpoint should return success with no-op metadata (or explicit `204`/`409` policy), but never emit additional `STOCK_ADJUSTMENT` events.
+- Deactivation closure calculation:
+  - use current replayed balances including unsynced local queue where present in the same device context,
+  - apply epsilon normalization (`1e-4`) before generating balancing events,
+  - emit no adjustment for zero-residue balances.
+- Reactivation must not create stock movement events.
+- Server should return pending lifecycle transition status if a product has unsent local closure events.
+
+### Query behavior
+
+- `GET /api/products` accepts `is_active` query (`true|false|all`, default `all` for admin views).
+- See [Product Lifecycle Pre-Mortem and Hardening Plan](./PRODUCT_LIFECYCLE_PREMORTEM.md) for operational and risk controls.
+
+ 
 
 ## 4.5 Location Management
 

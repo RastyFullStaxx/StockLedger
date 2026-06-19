@@ -12,6 +12,8 @@ import {
 import "./styles.css";
 
 const STORAGE_KEY = "stockledger-local-prototype-state-v1";
+const PRODUCT_DEACTIVATE_EPSILON = 0.0001;
+const PRODUCT_DEACTIVATION_REASON = "Product deactivated; balances auto-closed by system";
 const tenant = {
   client_id: "tenant-northstar-hospitality",
   client_name: "Northstar Hospitality",
@@ -22,10 +24,58 @@ const tenant = {
 };
 
 const DEFAULT_PRODUCTS = [
-  { id: "prod-gin", name: "Juniper Gin", category: "Spirits", unit: "bottle", low: 6 },
-  { id: "prod-rum", name: "Harbor Rum", category: "Spirits", unit: "bottle", low: 5 },
-  { id: "prod-lime", name: "Fresh Lime", category: "Kitchen", unit: "kg", low: 8 },
-  { id: "prod-tonic", name: "Tonic Water", category: "Mixer", unit: "case", low: 7 },
+  {
+    id: "prod-gin",
+    name: "Juniper Gin",
+    category: "Spirits",
+    unit: "bottle",
+    low: 6,
+    is_active: true,
+    deactivated_at: null,
+    deactivated_by: null,
+    deactivated_reason: null,
+    reactivated_at: null,
+    reactivated_by: null,
+  },
+  {
+    id: "prod-rum",
+    name: "Harbor Rum",
+    category: "Spirits",
+    unit: "bottle",
+    low: 5,
+    is_active: true,
+    deactivated_at: null,
+    deactivated_by: null,
+    deactivated_reason: null,
+    reactivated_at: null,
+    reactivated_by: null,
+  },
+  {
+    id: "prod-lime",
+    name: "Fresh Lime",
+    category: "Kitchen",
+    unit: "kg",
+    low: 8,
+    is_active: true,
+    deactivated_at: null,
+    deactivated_by: null,
+    deactivated_reason: null,
+    reactivated_at: null,
+    reactivated_by: null,
+  },
+  {
+    id: "prod-tonic",
+    name: "Tonic Water",
+    category: "Mixer",
+    unit: "case",
+    low: 7,
+    is_active: true,
+    deactivated_at: null,
+    deactivated_by: null,
+    deactivated_reason: null,
+    reactivated_at: null,
+    reactivated_by: null,
+  },
 ];
 
 function defaultProducts() {
@@ -40,6 +90,7 @@ const locations = [
 ];
 
 let state = loadState();
+let productLifecycleBusy = null;
 let toastTimer = null;
 let shouldFocusActionOnCompose = state.activeView === "compose";
 let fieldSelectUid = 0;
@@ -309,6 +360,12 @@ function sanitizeProducts(products) {
       category: `${product.category ?? ""}`.trim(),
       unit: `${product.unit ?? "unit"}`.trim() || "unit",
       low: Number(product.low) || 0,
+      is_active: product.is_active !== false,
+      deactivated_at: product.deactivated_at ?? null,
+      deactivated_by: product.deactivated_by ?? null,
+      deactivated_reason: product.deactivated_reason ?? "",
+      reactivated_at: product.reactivated_at ?? null,
+      reactivated_by: product.reactivated_by ?? null,
     }))
     .filter((product) => product.name);
 }
@@ -324,6 +381,7 @@ function saveState() {
 
 function render() {
   const app = document.querySelector("#app");
+  ensureProductSelectionIntegrity();
   const localLedger = allLocalEvents();
   const stockRows = filteredStockRows(localLedger);
   const outboxValidation = state.outbox.map((event) => ({ event, validation: validateEvent(event) }));
@@ -724,13 +782,15 @@ function renderComposer(localLedger) {
               autofocus: true,
             })}
           </label>
-          <label class="field-select-wrap">
-            <span>Product</span>
+        <label class="field-select-wrap">
+          <span>Product</span>
               ${renderFieldSelect({
               name: "product_id",
               menuClassName: "field-select-menu--event-form",
               menuMode: "event-form",
-              options: getProductCatalog().map((product) => `<option value="${product.id}" ${form.product_id === product.id ? "selected" : ""}>${product.name}</option>`).join(""),
+              options: getActiveProducts()
+                .map((product) => `<option value="${product.id}" ${form.product_id === product.id ? "selected" : ""}>${product.name}</option>`)
+                .join(""),
             })}
           </label>
           ${renderActionTemplateFields(form, template, revertOptions)}
@@ -751,8 +811,10 @@ function renderComposer(localLedger) {
 }
 
 function renderProducts() {
-  const products = getProductCatalog();
+  const activeProducts = getActiveProducts();
+  const inactiveProducts = getInactiveProducts();
   const productForm = state.productForm ?? { name: "", category: "", unit: "unit", low: "0" };
+  const deactivatedCount = inactiveProducts.length;
 
   return `
     <section class="content-grid">
@@ -775,7 +837,7 @@ function renderProducts() {
           </label>
           <label>
             <span>Unit</span>
-            <input name="product-unit" type="text" value="${escapeAttr(productForm.unit)}" placeholder="Bottle / kg / case / unit" />
+            <input name="product-unit" type="text" value="${escapeAttr(productForm.unit)}" placeholder="e.g. bottle, kg, case, unit" />
           </label>
           <label>
             <span>Low Stock Alert Threshold</span>
@@ -786,37 +848,115 @@ function renderProducts() {
             <button class="button button-primary" data-action="create-product" type="button">${icon("plus")}Add Product</button>
           </div>
         </form>
-        <div class="table-wrap stock-table" style="margin-top:12px">
-          ${products.length === 0
-            ? `<div class="empty-state"><strong>No Products</strong><span>Add your first product to begin recording movement.</span></div>`
-            : `<table>
-                <thead>
-                  <tr>
-                    <th>Product</th>
-                    <th>Category</th>
-                    <th>Unit</th>
-                    <th>Low Stock</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${products
-                    .map(
-                      (product) => `
-                        <tr>
-                          <td>${product.name}</td>
-                          <td>${product.category || "Uncategorized"}</td>
-                          <td>${product.unit || "unit"}</td>
-                          <td>${product.low}</td>
-                        </tr>
-                      `,
-                    )
-                    .join("")}
-                </tbody>
-              </table>`
-          }
+        <div class="product-sections">
+          <section class="product-section">
+            <h3>Active Products (${activeProducts.length})</h3>
+            ${activeProducts.length === 0 ? `<div class="empty-state"><strong>No Active Products</strong><span>Add a product, or reactivate an inactive one.</span></div>` : renderProductTable(activeProducts, "active")}
+          </section>
+          <section class="product-section">
+            <h3>Inactive Products (${deactivatedCount})</h3>
+            ${inactiveProducts.length === 0
+      ? `<div class="empty-state"><strong>No Inactive Products</strong><span>All products are currently active.</span></div>`
+      : renderProductTable(inactiveProducts, "inactive")}
+          </section>
         </div>
       </article>
     </section>
+  `;
+}
+
+function renderProductTable(products, group) {
+  return `
+    <div class="table-wrap stock-table product-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>Category</th>
+            <th>Unit</th>
+            <th>Low Stock</th>
+            <th>Status</th>
+            <th>Last State Change</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${products
+            .map((product) => {
+              const isInactive = group === "inactive";
+              const status = isInactive ? "Inactive" : "Active";
+              const statusClass = isInactive ? "is-warning" : "is-valid";
+              const actionLabel = isInactive ? "Reactivate" : "Deactivate";
+              const actionTone = isInactive ? "button button-secondary" : "button table-action table-action-warning";
+              const actionDataAction = isInactive ? "reactivate-product" : "deactivate-product";
+              const actionDisabled = !isInactive && productLifecycleBusy === product.id;
+              const changeLabel = productLastStateLabel(product);
+
+              return `
+                <tr class="product-row ${!product.is_active ? "is-inactive" : ""}">
+                  <td>${escapeHtml(product.name)}</td>
+                  <td>${escapeHtml(product.category || "Uncategorized")}</td>
+                  <td>${escapeHtml(product.unit || "unit")}</td>
+                  <td class="numeric">${formatQuantity(product.low)}</td>
+                  <td><span class="product-status badge ${statusClass}">${status}</span></td>
+                  <td>${escapeHtml(changeLabel)}</td>
+                  <td>
+                    <button class="${actionTone}" data-action="${actionDataAction}" data-product-id="${product.id}" data-product-name="${escapeAttr(product.name)}" type="button" ${actionDisabled ? "disabled" : ""}>
+                      ${isInactive ? `${icon("check")}` : `${icon("refresh")}`}
+                      ${actionLabel}
+                    </button>
+                    ${
+                      isInactive && hasPendingProductClosureDebt(product.id)
+                        ? `<span class="table-action-subtle" aria-live="polite">Pending lifecycle updates are still in outbox.</span>`
+                        : ""
+                    }
+                  </td>
+                </tr>
+              `;
+            })
+            .join("")}
+        </tbody>
+      </table>
+      <div class="stock-cards product-cards" aria-label="Product list">
+        ${products
+          .map((product) => {
+            const isInactive = group === "inactive";
+            const status = isInactive ? "Inactive" : "Active";
+            const statusClass = isInactive ? "is-warning" : "is-valid";
+            const actionLabel = isInactive ? "Reactivate" : "Deactivate";
+            const actionTone = isInactive ? "button button-secondary" : "button table-action table-action-warning";
+            const actionDataAction = isInactive ? "reactivate-product" : "deactivate-product";
+            const actionDisabled = !isInactive && productLifecycleBusy === product.id;
+            const changeLabel = productLastStateLabel(product);
+
+            return `
+              <article class="work-card">
+                <div class="card-row">
+                  <div>
+                    <strong>${escapeHtml(product.name)}</strong>
+                    <span>${escapeHtml(product.unit || "unit")} · ${escapeHtml(product.category || "Uncategorized")}</span>
+                  </div>
+                  <span class="product-status badge ${statusClass}">${status}</span>
+                </div>
+                <dl>
+                  <div><dt>Low Stock</dt><dd>${formatQuantity(product.low)}</dd></div>
+                  <div><dt>Last State Change</dt><dd>${escapeHtml(changeLabel)}</dd></div>
+                </dl>
+                <button class="${actionTone}" data-action="${actionDataAction}" data-product-id="${product.id}" data-product-name="${escapeAttr(product.name)}" type="button" ${actionDisabled ? "disabled" : ""}>
+                  ${isInactive ? `${icon("check")}` : `${icon("refresh")}`}
+                  ${actionLabel}
+                </button>
+                ${
+                  isInactive && hasPendingProductClosureDebt(product.id)
+                    ? `<small class="table-action-subtle" aria-live="polite">Pending lifecycle updates are still in outbox.</small>`
+                    : ""
+                }
+              </article>
+            `;
+          })
+          .join("")}
+      </div>
+    </div>
   `;
 }
 
@@ -1213,7 +1353,7 @@ function renderFilters() {
             attrs: 'data-filter="product"',
             options: `
               <option value="all">All products</option>
-            ${getProductCatalog().map((product) => `<option value="${product.id}" ${state.productFilter === product.id ? "selected" : ""}>${product.name}</option>`).join("")}
+            ${getActiveProducts().map((product) => `<option value="${product.id}" ${state.productFilter === product.id ? "selected" : ""}>${product.name}</option>`).join("")}
           `,
           })}
       </label>
@@ -1799,6 +1939,14 @@ function bindEvents() {
     button.addEventListener("click", () => createRevert(button.dataset.eventId));
   });
 
+  document.querySelectorAll("[data-action='deactivate-product']").forEach((button) => {
+    button.addEventListener("click", () => deactivateProduct(button.dataset.productId));
+  });
+
+  document.querySelectorAll("[data-action='reactivate-product']").forEach((button) => {
+    button.addEventListener("click", () => reactivateProduct(button.dataset.productId));
+  });
+
   const form = document.querySelector("[data-form='event']");
   if (form) {
     form.addEventListener("input", () => {
@@ -1909,6 +2057,12 @@ function createProductFromForm() {
       category: rawCategory || "Uncategorized",
       unit: rawUnit,
       low,
+      is_active: true,
+      deactivated_at: null,
+      deactivated_by: null,
+      deactivated_reason: "",
+      reactivated_at: null,
+      reactivated_by: null,
     },
   ];
 
@@ -2269,6 +2423,204 @@ function viewTitle() {
 
 function getProductCatalog() {
   return Array.isArray(state.products) ? state.products : defaultProducts();
+}
+
+function getActiveProducts() {
+  return getProductCatalog().filter((product) => product.is_active !== false);
+}
+
+function getInactiveProducts() {
+  return getProductCatalog().filter((product) => product.is_active === false);
+}
+
+function ensureProductSelectionIntegrity() {
+  const activeProducts = getActiveProducts();
+  const activeProductIds = new Set(activeProducts.map((product) => product.id));
+
+  if (state.productFilter !== "all" && !activeProductIds.has(state.productFilter)) {
+    state.productFilter = "all";
+  }
+
+  if (!activeProductIds.has(state.form.product_id)) {
+    state.form.product_id = activeProducts[0]?.id ?? "";
+  }
+
+  if (state.selectedLocation && !locations.some((location) => location.name === state.selectedLocation)) {
+    state.selectedLocation = locations[0]?.name ?? "Main Bar";
+  }
+}
+
+function productLastStateLabel(product) {
+  if (product.is_active) {
+    return product.reactivated_at ? `Reactivated ${displayDateTime(product.reactivated_at)} by ${product.reactivated_by || "operator"}` : "Active";
+  }
+
+  const base = product.deactivated_at ? `Deactivated ${displayDateTime(product.deactivated_at)} by ${product.deactivated_by || "operator"}` : "Inactive";
+  const reason = `${product.deactivated_reason || ""}`.trim();
+  return reason ? `${base}. ${reason}` : base;
+}
+
+function displayDateTime(timestamp) {
+  if (!timestamp) return "";
+  const value = Date.parse(timestamp);
+  if (Number.isNaN(value)) return "";
+
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
+function normalizeClosureQuantity(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || Math.abs(amount) < PRODUCT_DEACTIVATE_EPSILON) return 0;
+  return Number(amount.toFixed(6));
+}
+
+function getProductDeactivationClosures(product) {
+  const stock = computeStock(allLocalEvents());
+  const balances = stock[product.id];
+  if (!balances) return [];
+
+  return Object.entries(balances)
+    .map(([location, quantity]) => {
+      const safeQuantity = normalizeClosureQuantity(quantity);
+      if (safeQuantity === 0) return null;
+
+      return {
+        location,
+        balance: safeQuantity,
+        closureQuantity: normalizeClosureQuantity(-safeQuantity),
+      };
+    })
+    .filter(Boolean);
+}
+
+function formatDeactivationClosures(closures) {
+  if (!closures.length) return "No stock remains to close.";
+
+  return closures
+    .map((entry) => `${entry.location}: ${entry.balance > 0 ? "+" : ""}${formatQuantity(entry.balance)}`)
+    .join(" | ");
+}
+
+function hasPendingProductClosureDebt(productId) {
+  return state.outbox.some(
+    (event) =>
+      event.type === "STOCK_ADJUSTMENT" &&
+      event.product_id === productId &&
+      event.reason === PRODUCT_DEACTIVATION_REASON,
+  );
+}
+
+function deactivateProduct(productId) {
+  if (!productId) return;
+  if (productLifecycleBusy === productId) return;
+
+  const product = getProductById(productId);
+  if (!product) {
+    showToast("Product not found for deactivation.", "error");
+    return;
+  }
+
+  if (!product.is_active) {
+    showToast(`"${product.name}" is already inactive.`);
+    return;
+  }
+
+  const closures = getProductDeactivationClosures(product);
+  const closurePreview = formatDeactivationClosures(closures);
+  const shouldProceed = window.confirm(
+    `Deactivate "${product.name}"?\n\nStock Closure Preview:\n${closurePreview}\n\nThis will add one STOCK_ADJUSTMENT per affected location and then mark the product inactive.`,
+  );
+  if (!shouldProceed) return;
+
+  productLifecycleBusy = productId;
+  try {
+    const actorReason = (window.prompt("Enter reason for deactivation (optional):", "") || "").trim();
+    const batchId = currentBatchId();
+    let sequence = nextSequence();
+    const closureEvents = closures.map((entry) =>
+      createInventoryEvent({
+        ...tenant,
+        event_id: nextId("deactivate"),
+        idempotency_key: nextId("idem-deactivate"),
+        sync_batch_id: batchId,
+        type: "STOCK_ADJUSTMENT",
+        product_id: product.id,
+        product_name: product.name,
+        to_location: entry.location,
+        quantity: entry.closureQuantity,
+        reason: PRODUCT_DEACTIVATION_REASON,
+        sequence_number: sequence++,
+        timestamp: Date.now(),
+        status: "queued",
+      }),
+    );
+
+    state.outbox = [...state.outbox, ...closureEvents];
+    state.products = getProductCatalog().map((current) =>
+      current.id === productId
+        ? {
+            ...current,
+            is_active: false,
+            deactivated_at: new Date().toISOString(),
+            deactivated_by: tenant.user_id,
+            deactivated_reason: actorReason || "",
+            reactivated_at: null,
+            reactivated_by: null,
+          }
+        : current,
+    );
+
+    showToast(
+      closures.length
+            ? `${product.name} deactivated and ${closures.length} balancing event(s) queued to Outbox.`
+            : `${product.name} deactivated. No balances required closing.`,
+    );
+
+    ensureProductSelectionIntegrity();
+    commit();
+  } finally {
+    productLifecycleBusy = null;
+  }
+}
+
+function reactivateProduct(productId) {
+  const product = getProductById(productId);
+  if (!product) {
+    showToast("Product not found for reactivation.", "error");
+    return;
+  }
+
+  if (product.is_active) {
+    showToast(`"${product.name}" is already active.`);
+    return;
+  }
+
+  const warning = hasPendingProductClosureDebt(productId)
+    ? "There are pending deactivation closure events for this product in outbox."
+    : "";
+
+  const shouldProceed = window.confirm(
+    `Reactivate "${product.name}"?\n\nReactivation does not create any stock movement events. Current stock (replayed) becomes immediately reusable.${warning ? `\n\n${warning}` : ""}`,
+  );
+  if (!shouldProceed) return;
+
+  state.products = getProductCatalog().map((current) =>
+    current.id === productId
+      ? {
+          ...current,
+          is_active: true,
+          reactivated_at: new Date().toISOString(),
+          reactivated_by: tenant.user_id,
+        }
+      : current,
+  );
+
+  showToast(`"${product.name}" is active again. Reactivation does not create stock movement events.`);
+  ensureProductSelectionIntegrity();
+  commit();
 }
 
 function getProductById(productId) {

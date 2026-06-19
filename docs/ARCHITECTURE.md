@@ -249,10 +249,20 @@ System is designed to prevent:
 - partial transaction commits
 - offline data loss
 
+Product lifecycle transitions are hardened through:
+
+- soft-deactivate/soft-reactivate state only,
+- closing by balancing `STOCK_ADJUSTMENT` events rather than deleting history,
+- active-product filtering in movement workflows,
+- lifecycle pre-mortem checks before state transitions.
+
 All failures resolve through:
 - batch rejection
 - retry mechanism
 - deterministic replay
+
+Related planning artifact:
+- [Product Lifecycle Pre-Mortem and Hardening Plan](./PRODUCT_LIFECYCLE_PREMORTEM.md)
 
 ---
 

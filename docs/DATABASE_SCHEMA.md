@@ -146,6 +146,12 @@ CREATE TABLE products (
     unit TEXT NOT NULL,
     cost_price NUMERIC,
     selling_price NUMERIC,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    deactivated_at TIMESTAMP,
+    deactivated_by UUID,
+    deactivated_reason TEXT,
+    reactivated_at TIMESTAMP,
+    reactivated_by UUID,
     created_at TIMESTAMP DEFAULT NOW()
 );
 ```
