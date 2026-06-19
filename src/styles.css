@@ -763,6 +763,13 @@ textarea:focus-visible {
 .connection-toggle {
   gap: 9px;
   min-width: 116px;
+  background: linear-gradient(180deg, #0c6a5f, var(--color-primary));
+  border-color: var(--color-primary-strong);
+  color: #ffffff;
+}
+
+.connection-toggle.is-on {
+  background: linear-gradient(180deg, var(--color-primary), var(--color-primary-strong));
 }
 
 .toggle-track {
@@ -770,8 +777,8 @@ textarea:focus-visible {
   width: 42px;
   height: 24px;
   border-radius: 999px;
-  background: rgba(129, 84, 0, 0.18);
-  border: 1px solid rgba(129, 84, 0, 0.24);
+  background: rgba(255, 255, 255, 0.32);
+  border: 1px solid rgba(255, 255, 255, 0.56);
   transition: background-color 180ms ease, border-color 180ms ease;
 }
 
@@ -782,18 +789,18 @@ textarea:focus-visible {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: var(--color-warning);
+  background: #ffffff;
   box-shadow: 0 3px 8px rgba(18, 43, 38, 0.22);
   transition: transform 200ms ease, background-color 180ms ease;
 }
 
 .connection-toggle.is-on .toggle-track {
-  background: rgba(22, 101, 52, 0.16);
-  border-color: rgba(22, 101, 52, 0.28);
+  background: rgba(233, 30, 60, 0.22);
+  border-color: rgba(233, 30, 60, 0.32);
 }
 
 .connection-toggle.is-on .toggle-thumb {
-  background: var(--color-success);
+  background: #ffffff;
   transform: translateX(18px);
 }
 
@@ -995,7 +1002,7 @@ textarea:focus-visible {
 
 .landing-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
 

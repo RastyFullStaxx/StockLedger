@@ -21,12 +21,16 @@ const tenant = {
   actor_name: "Mara Velasco",
 };
 
-const products = [
+const DEFAULT_PRODUCTS = [
   { id: "prod-gin", name: "Juniper Gin", category: "Spirits", unit: "bottle", low: 6 },
   { id: "prod-rum", name: "Harbor Rum", category: "Spirits", unit: "bottle", low: 5 },
   { id: "prod-lime", name: "Fresh Lime", category: "Kitchen", unit: "kg", low: 8 },
   { id: "prod-tonic", name: "Tonic Water", category: "Mixer", unit: "case", low: 7 },
 ];
+
+function defaultProducts() {
+  return DEFAULT_PRODUCTS.map((product) => ({ ...product }));
+}
 
 const locations = [
   { id: "loc-dry-store", name: "Dry Store" },
@@ -64,7 +68,7 @@ function seedEvents() {
       sync_batch_id: "batch-seed-001",
       type,
       product_id,
-      product_name: productName(product_id),
+      product_name: DEFAULT_PRODUCTS.find((product) => product.id === product_id)?.name ?? product_id,
       from_location,
       to_location,
       quantity,
@@ -82,6 +86,7 @@ function defaultState() {
     outbox: [],
     online: false,
     activeView: "home",
+    products: defaultProducts(),
     stockView: "totals",
     selectedLocation: "Main Bar",
     productFilter: "all",
@@ -100,6 +105,12 @@ function defaultState() {
       quantity: 1,
       reason: "",
       original_event_id: "",
+    },
+    productForm: {
+      name: "",
+      category: "",
+      unit: "unit",
+      low: "0",
     },
     physicalCounts: {},
   };
@@ -123,6 +134,12 @@ const screenMeta = {
     label: "Record Movement",
     kicker: "Action",
     guide: "Write what happened. Do not type a final stock number. The system will calculate stock for you.",
+  },
+  products: {
+    title: "Products",
+    label: "Products",
+    kicker: "Catalog",
+    guide: "Add new products here so they immediately appear for movement and reporting.",
   },
   outbox: {
     title: "Send Work",
@@ -274,11 +291,30 @@ function loadState() {
       ...defaultState(),
       ...parsed,
       form: { ...defaultState().form, ...(parsed.form ?? {}) },
+      productForm: { ...defaultState().productForm, ...(parsed.productForm ?? {}) },
+      products: sanitizeProducts(parsed.products),
       physicalCounts: parsed.physicalCounts ?? {},
     };
   } catch {
     return defaultState();
   }
+}
+
+function sanitizeProducts(products) {
+  if (!Array.isArray(products)) return defaultProducts();
+  return products
+    .map((product) => ({
+      id: `${product.id ?? ""}`.trim() || `prod-${nextRandomId("prod")}`,
+      name: `${product.name ?? ""}`.trim(),
+      category: `${product.category ?? ""}`.trim(),
+      unit: `${product.unit ?? "unit"}`.trim() || "unit",
+      low: Number(product.low) || 0,
+    }))
+    .filter((product) => product.name);
+}
+
+function nextRandomId(prefix) {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function saveState() {
@@ -329,6 +365,7 @@ function renderSidebar() {
   const nav = [
     ["home", screenMeta.home],
     ["dashboard", screenMeta.dashboard],
+    ["products", screenMeta.products],
     ["compose", screenMeta.compose],
     ["outbox", screenMeta.outbox],
     ["audit", screenMeta.audit],
@@ -375,12 +412,13 @@ function renderSidebar() {
         </button>
         ${
           state.accountOpen
-            ? `<div class="account-popover">
-                <button type="button" data-view="home">${icon("home")}Home</button>
-                <button type="button" data-view="dashboard">${icon("layers")}Stock Overview</button>
-                <button type="button" data-view="outbox">${icon("send")}Send Work${state.outbox.length ? `<span>${state.outbox.length}</span>` : ""}</button>
-                <button type="button" data-action="reset-demo">${icon("refresh")}Reset Demo</button>
-              </div>`
+                ? `<div class="account-popover">
+                    <button type="button" data-view="home">${icon("home")}Home</button>
+                    <button type="button" data-view="dashboard">${icon("layers")}Stock Overview</button>
+                    <button type="button" data-view="products">${icon("list")}Products</button>
+                    <button type="button" data-view="outbox">${icon("send")}Send Work${state.outbox.length ? `<span>${state.outbox.length}</span>` : ""}</button>
+                    <button type="button" data-action="reset-demo">${icon("refresh")}Reset Demo</button>
+                  </div>`
             : ""
         }
       </div>
@@ -528,6 +566,7 @@ function guideTips() {
     compose: ["Choose the action in user terms.", "Record what happened, not the final stock number.", "Write a short reason that another person can understand."],
     outbox: ["Saved work stays on this device while offline.", "Send work when the Online button is on.", "If one row has a problem, the full batch waits."],
     audit: ["Use History when a number needs explaining.", "Reverse a mistake instead of deleting it.", "The original movement remains visible."],
+    products: ["Add a product before you record movements for a new item.", "Pick a low stock threshold to trigger alerts.", "Keep product naming consistent for easy searching."],
     reconcile: ["Enter the hand count after a physical count.", "Save a correction only when there is a difference.", "Corrections keep the reason visible."],
   };
 
@@ -559,6 +598,7 @@ function renderActiveView(localLedger, stockRows, outboxValidation) {
   if (state.activeView === "outbox") return renderOutbox(outboxValidation);
   if (state.activeView === "audit") return renderAudit(localLedger);
   if (state.activeView === "reconcile") return renderReconcile(stockRows);
+  if (state.activeView === "products") return renderProducts();
   return renderDashboard(localLedger, stockRows);
 }
 
@@ -580,9 +620,9 @@ function renderLanding(localLedger, stockRows, outboxValidation) {
           </div>
         </div>
       </div>
-      <div class="landing-grid">
-        <article class="landing-card">
-          <span>${icon("layers")}</span>
+        <div class="landing-grid">
+          <article class="landing-card">
+            <span>${icon("layers")}</span>
           <h3>See The Master Stock</h3>
           <p>Total stock, per-location stock, and detailed rows stay one click apart.</p>
           <button class="table-action" data-view="dashboard" type="button">View Stock</button>
@@ -592,14 +632,20 @@ function renderLanding(localLedger, stockRows, outboxValidation) {
           <h3>Trace Every Change</h3>
           <p>History is immutable. Mistakes are reversed with a visible correction.</p>
           <button class="table-action" data-view="audit" type="button">Open History</button>
-        </article>
-        <article class="landing-card">
-          <span>${icon("send")}</span>
-          <h3>Send Work Safely</h3>
-          <p>Offline work waits locally, then sends as one batch when the connection is on.</p>
-          <button class="table-action" data-view="outbox" type="button">Check Outbox</button>
-        </article>
-      </div>
+          </article>
+          <article class="landing-card">
+            <span>${icon("send")}</span>
+            <h3>Send Work Safely</h3>
+            <p>Offline work waits locally, then sends as one batch when the connection is on.</p>
+            <button class="table-action" data-view="outbox" type="button">Check Outbox</button>
+          </article>
+          <article class="landing-card">
+            <span>${icon("list")}</span>
+            <h3>Manage Products</h3>
+            <p>Add new products so they can be used immediately in Record Movement and stock filters.</p>
+            <button class="table-action" data-view="products" type="button">Open Catalog</button>
+          </article>
+        </div>
       <article class="panel landing-recent">
         <div class="panel-header compact">
           <div>
@@ -680,11 +726,11 @@ function renderComposer(localLedger) {
           </label>
           <label class="field-select-wrap">
             <span>Product</span>
-            ${renderFieldSelect({
+              ${renderFieldSelect({
               name: "product_id",
               menuClassName: "field-select-menu--event-form",
               menuMode: "event-form",
-              options: products.map((product) => `<option value="${product.id}" ${form.product_id === product.id ? "selected" : ""}>${product.name}</option>`).join(""),
+              options: getProductCatalog().map((product) => `<option value="${product.id}" ${form.product_id === product.id ? "selected" : ""}>${product.name}</option>`).join(""),
             })}
           </label>
           ${renderActionTemplateFields(form, template, revertOptions)}
@@ -699,6 +745,76 @@ function renderComposer(localLedger) {
             <button class="button button-primary" data-action="append-event" type="button">${icon("plus")}Save Movement</button>
           </div>
         </form>
+      </article>
+    </section>
+  `;
+}
+
+function renderProducts() {
+  const products = getProductCatalog();
+  const productForm = state.productForm ?? { name: "", category: "", unit: "unit", low: "0" };
+
+  return `
+    <section class="content-grid">
+      <article class="panel panel-wide">
+        <div class="panel-header compact">
+          <div>
+            <p class="eyebrow">Catalog</p>
+            <h2>Product Management</h2>
+            <p class="section-help">Add products used across the prototype. No movement event is created for catalog changes.</p>
+          </div>
+        </div>
+        <form class="event-form" data-form="product">
+          <label>
+            <span>Product Name</span>
+            <input name="product-name" type="text" value="${escapeAttr(productForm.name)}" placeholder="e.g. Ginger Syrup" />
+          </label>
+          <label>
+            <span>Category</span>
+            <input name="product-category" type="text" value="${escapeAttr(productForm.category)}" placeholder="e.g. Mixer" />
+          </label>
+          <label>
+            <span>Unit</span>
+            <input name="product-unit" type="text" value="${escapeAttr(productForm.unit)}" placeholder="Bottle / kg / case / unit" />
+          </label>
+          <label>
+            <span>Low Stock Alert Threshold</span>
+            <input name="product-low" type="number" step="0.01" min="0" value="${escapeAttr(productForm.low)}" placeholder="e.g. 6" />
+          </label>
+          <div class="form-footer span-2">
+            <span class="section-help">New products are added to the local catalog immediately.</span>
+            <button class="button button-primary" data-action="create-product" type="button">${icon("plus")}Add Product</button>
+          </div>
+        </form>
+        <div class="table-wrap stock-table" style="margin-top:12px">
+          ${products.length === 0
+            ? `<div class="empty-state"><strong>No Products</strong><span>Add your first product to begin recording movement.</span></div>`
+            : `<table>
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th>Category</th>
+                    <th>Unit</th>
+                    <th>Low Stock</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${products
+                    .map(
+                      (product) => `
+                        <tr>
+                          <td>${product.name}</td>
+                          <td>${product.category || "Uncategorized"}</td>
+                          <td>${product.unit || "unit"}</td>
+                          <td>${product.low}</td>
+                        </tr>
+                      `,
+                    )
+                    .join("")}
+                </tbody>
+              </table>`
+          }
+        </div>
       </article>
     </section>
   `;
@@ -1097,9 +1213,9 @@ function renderFilters() {
             attrs: 'data-filter="product"',
             options: `
               <option value="all">All products</option>
-            ${products.map((product) => `<option value="${product.id}" ${state.productFilter === product.id ? "selected" : ""}>${product.name}</option>`).join("")}
+            ${getProductCatalog().map((product) => `<option value="${product.id}" ${state.productFilter === product.id ? "selected" : ""}>${product.name}</option>`).join("")}
           `,
-        })}
+          })}
       </label>
       <label class="field-select-wrap field-select-wrap--stock-overview-filter">
         <span>Location</span>
@@ -1727,6 +1843,99 @@ function bindEvents() {
       appendFormEvent();
     });
   }
+
+  const productForm = document.querySelector("[data-form='product']");
+  if (productForm) {
+    productForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      createProductFromForm();
+    });
+
+    document
+      .querySelectorAll("[data-action='create-product']")
+      .forEach((button) => button.addEventListener("click", createProductFromForm));
+
+    productForm.querySelectorAll("input").forEach((input) => {
+      input.addEventListener("input", () => {
+        state.productForm = {
+          ...state.productForm,
+          [fieldNameForProductInput(input.name)]: input.value,
+        };
+        saveState();
+      });
+    });
+  }
+}
+
+function fieldNameForProductInput(name) {
+  if (name === "product-name") return "name";
+  if (name === "product-category") return "category";
+  if (name === "product-unit") return "unit";
+  if (name === "product-low") return "low";
+  return name;
+}
+
+function createProductFromForm() {
+  const form = document.querySelector("[data-form='product']");
+  if (!form) return;
+
+  const formData = new FormData(form);
+  const rawName = `${formData.get("product-name") ?? ""}`.trim();
+  const rawCategory = `${formData.get("product-category") ?? ""}`.trim();
+  const rawUnit = `${formData.get("product-unit") ?? "unit"}`.trim() || "unit";
+  const rawLow = `${formData.get("product-low") ?? "0"}`.trim();
+
+  if (!rawName) {
+    showToast("Product name is required.", "error");
+    return;
+  }
+
+  const normalizedName = rawName;
+  const duplicateExists = getProductCatalog().some((product) => product.name.toLowerCase() === normalizedName.toLowerCase());
+  if (duplicateExists) {
+    showToast("A product with this name already exists.", "error");
+    return;
+  }
+
+  const lowValue = Number(rawLow);
+  const low = Number.isFinite(lowValue) && lowValue >= 0 ? lowValue : 0;
+  const candidateId = nextProductId(normalizedName, getProductCatalog());
+
+  state.products = [
+    ...getProductCatalog(),
+    {
+      id: candidateId,
+      name: normalizedName,
+      category: rawCategory || "Uncategorized",
+      unit: rawUnit,
+      low,
+    },
+  ];
+
+  state.form.product_id = candidateId;
+  state.productForm = {
+    name: "",
+    category: "",
+    unit: "unit",
+    low: "0",
+  };
+
+  showToast(`Product "${normalizedName}" added to the local catalog.`);
+  commit();
+}
+
+function nextProductId(name, catalog) {
+  const normalized = `${name}`.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "product";
+  const ids = new Set(catalog.map((product) => product.id));
+  let candidate = `prod-${normalized}`;
+  let suffix = 1;
+
+  while (ids.has(candidate)) {
+    candidate = `prod-${normalized}-${suffix}`;
+    suffix += 1;
+  }
+
+  return candidate;
 }
 
 function appendFormEvent() {
@@ -1903,7 +2112,7 @@ function allLocalEvents() {
 }
 
 function filteredStockRows(events) {
-  return summarizeStock(events, products, locations).filter((row) => {
+  return summarizeStock(events, getProductCatalog(), locations).filter((row) => {
     const productMatch = state.productFilter === "all" || row.product_id === state.productFilter;
     const locationMatch = state.locationFilter === "all" || row.location === state.locationFilter;
     return productMatch && locationMatch;
@@ -1911,7 +2120,7 @@ function filteredStockRows(events) {
 }
 
 function stockTotalRows(rows) {
-  return products.map((product) => {
+  return getProductCatalog().map((product) => {
     const productRows = rows.filter((row) => row.product_id === product.id);
     return {
       product_id: product.id,
@@ -2013,6 +2222,7 @@ function navIcon(view) {
   const icons = {
     home: "home",
     dashboard: "layers",
+    products: "list",
     compose: "plus",
     outbox: "send",
     audit: "history",
@@ -2048,6 +2258,7 @@ function viewTitle() {
   const titles = {
     home: "StockLedger",
     dashboard: "Stock Overview",
+    products: "Products",
     compose: "Record Movement",
     outbox: "Send Work",
     audit: "History",
@@ -2056,16 +2267,24 @@ function viewTitle() {
   return titles[state.activeView] ?? "Stock Overview";
 }
 
+function getProductCatalog() {
+  return Array.isArray(state.products) ? state.products : defaultProducts();
+}
+
+function getProductById(productId) {
+  return getProductCatalog().find((product) => product.id === productId);
+}
+
 function productName(productId) {
-  return products.find((product) => product.id === productId)?.name ?? productId;
+  return getProductById(productId)?.name ?? productId;
 }
 
 function productUnit(productId) {
-  return products.find((product) => product.id === productId)?.unit ?? "unit";
+  return getProductById(productId)?.unit ?? "unit";
 }
 
 function productLow(productId) {
-  return products.find((product) => product.id === productId)?.low ?? 0;
+  return getProductById(productId)?.low ?? 0;
 }
 
 function eventLocationText(event) {
