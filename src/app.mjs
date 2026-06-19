@@ -868,16 +868,25 @@ function renderProducts() {
 function renderProductTable(products, group) {
   return `
     <div class="table-wrap stock-table product-table-wrap">
-      <table>
+      <table class="product-table">
+        <colgroup>
+          <col class="product-col-product" />
+          <col class="product-col-category" />
+          <col class="product-col-unit" />
+          <col class="product-col-low-stock" />
+          <col class="product-col-status" />
+          <col class="product-col-state-change" />
+          <col class="product-col-action" />
+        </colgroup>
         <thead>
           <tr>
-            <th>Product</th>
-            <th>Category</th>
-            <th>Unit</th>
-            <th>Low Stock</th>
-            <th>Status</th>
-            <th>Last State Change</th>
-            <th>Action</th>
+            <th class="col-product">Product</th>
+            <th class="col-category">Category</th>
+            <th class="col-unit">Unit</th>
+            <th class="col-low-stock">Low Stock</th>
+            <th class="col-status">Status</th>
+            <th class="col-state-change">Last State Change</th>
+            <th class="col-action">Action</th>
           </tr>
         </thead>
         <tbody>
@@ -894,15 +903,14 @@ function renderProductTable(products, group) {
 
               return `
                 <tr class="product-row ${!product.is_active ? "is-inactive" : ""}">
-                  <td>${escapeHtml(product.name)}</td>
-                  <td>${escapeHtml(product.category || "Uncategorized")}</td>
-                  <td>${escapeHtml(product.unit || "unit")}</td>
-                  <td class="numeric">${formatQuantity(product.low)}</td>
-                  <td><span class="product-status badge ${statusClass}">${status}</span></td>
-                  <td>${escapeHtml(changeLabel)}</td>
-                  <td>
+                  <td class="col-product">${escapeHtml(product.name)}</td>
+                  <td class="col-category">${escapeHtml(product.category || "Uncategorized")}</td>
+                  <td class="col-unit">${escapeHtml(product.unit || "unit")}</td>
+                  <td class="col-low-stock">${formatQuantity(product.low)}</td>
+                  <td class="col-status"><span class="product-status badge ${statusClass}">${status}</span></td>
+                  <td class="col-state-change">${escapeHtml(changeLabel)}</td>
+                  <td class="col-action">
                     <button class="${actionTone}" data-action="${actionDataAction}" data-product-id="${product.id}" data-product-name="${escapeAttr(product.name)}" type="button" ${actionDisabled ? "disabled" : ""}>
-                      ${isInactive ? `${icon("check")}` : `${icon("refresh")}`}
                       ${actionLabel}
                     </button>
                     ${
@@ -943,7 +951,6 @@ function renderProductTable(products, group) {
                   <div><dt>Last State Change</dt><dd>${escapeHtml(changeLabel)}</dd></div>
                 </dl>
                 <button class="${actionTone}" data-action="${actionDataAction}" data-product-id="${product.id}" data-product-name="${escapeAttr(product.name)}" type="button" ${actionDisabled ? "disabled" : ""}>
-                  ${isInactive ? `${icon("check")}` : `${icon("refresh")}`}
                   ${actionLabel}
                 </button>
                 ${
