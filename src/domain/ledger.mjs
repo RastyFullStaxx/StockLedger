@@ -70,16 +70,8 @@ export function validateEvent(event) {
     return invalid("quantity must be a non-zero number.");
   }
 
-  if (Number(event.quantity) < 0 && !["STOCK_ADJUSTMENT"].includes(event.type)) {
+  if (Number(event.quantity) < 0 && !["STOCK_ADJUSTMENT", "STOCK_REVERT"].includes(event.type)) {
     return invalid(`${event.type} quantity must be positive.`);
-  }
-
-  if (event.type === "STOCK_IN" && !event.to_location) {
-    return invalid("STOCK_IN requires to_location.");
-  }
-
-  if (event.type === "STOCK_OUT" && !event.from_location) {
-    return invalid("STOCK_OUT requires from_location.");
   }
 
   if (event.type === "STOCK_TRANSFER" && (!event.from_location || !event.to_location)) {
@@ -90,12 +82,24 @@ export function validateEvent(event) {
     return invalid("STOCK_TRANSFER requires different source and destination locations.");
   }
 
+  if (event.type === "STOCK_IN" && !event.to_location) {
+    return invalid("STOCK_IN requires destination location.");
+  }
+
+  if (event.type === "STOCK_OUT" && !event.from_location) {
+    return invalid("STOCK_OUT requires source location.");
+  }
+
   if (event.type === "STOCK_REVERT" && !event.original_event_id) {
     return invalid("STOCK_REVERT requires original_event_id.");
   }
 
-  if (["STOCK_ADJUSTMENT", "STOCK_REVERT"].includes(event.type) && !event.from_location && !event.to_location) {
-    return invalid(`${event.type} requires a location.`);
+  if (event.type === "STOCK_ADJUSTMENT" && !event.from_location && !event.to_location) {
+    return invalid("STOCK_ADJUSTMENT requires a location.");
+  }
+
+  if (event.type === "STOCK_REVERT" && !event.from_location && !event.to_location) {
+    return invalid("STOCK_REVERT requires location from the original movement.");
   }
 
   return { valid: true };

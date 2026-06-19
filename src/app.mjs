@@ -37,6 +37,10 @@ const locations = [
 
 let state = loadState();
 let toastTimer = null;
+let shouldFocusActionOnCompose = state.activeView === "compose";
+let fieldSelectUid = 0;
+let customSelectEventsBound = false;
+const eventSelectPortalMap = new WeakMap();
 
 function seedEvents() {
   const start = Date.now() - 1000 * 60 * 60 * 4;
@@ -148,6 +152,118 @@ const eventLabels = {
   STOCK_REVERT: "Reverse Mistake",
 };
 
+const ACTION_TEMPLATES = {
+  STOCK_IN: {
+    template: "Delivery Template",
+    summary: "Product arrived into one location.",
+    help: "Use this for supplier delivery, restock, or opening stock. Choose where the stock arrived.",
+    requiredFields: ["product_id", "to_location", "quantity"],
+    sourceLabel: "Not Used",
+    destinationLabel: "Arrived At",
+    quantityLabel: "Amount Received",
+    reasonPlaceholder: "Example: supplier delivery accepted",
+    showFromLocation: false,
+    showToLocation: true,
+    showOriginalEvent: false,
+    quantityEditable: true,
+    requiresPositiveQuantity: true,
+    defaults: {
+      from_location: "",
+      to_location: "Dry Store",
+      quantity: 1,
+      original_event_id: "",
+    },
+  },
+  STOCK_OUT: {
+    template: "Usage Template",
+    summary: "Product left one location.",
+    help: "Use this when stock was sold, used, wasted, or broken. Choose where it left from.",
+    requiredFields: ["product_id", "from_location", "quantity"],
+    sourceLabel: "Left From",
+    destinationLabel: "Not Used",
+    quantityLabel: "Amount Used",
+    reasonPlaceholder: "Example: evening service use",
+    showFromLocation: true,
+    showToLocation: false,
+    showOriginalEvent: false,
+    quantityEditable: true,
+    requiresPositiveQuantity: true,
+    defaults: {
+      from_location: "Main Bar",
+      to_location: "",
+      quantity: 1,
+      original_event_id: "",
+    },
+  },
+  STOCK_TRANSFER: {
+    template: "Transfer Template",
+    summary: "Product moved between two locations.",
+    help: "Use this when stock moved from one place to another. Choose both the starting place and ending place.",
+    requiredFields: ["product_id", "from_location", "to_location", "quantity"],
+    sourceLabel: "Move From",
+    destinationLabel: "Move To",
+    quantityLabel: "Amount Moved",
+    reasonPlaceholder: "Example: moved to Main Bar for opening",
+    showFromLocation: true,
+    showToLocation: true,
+    showOriginalEvent: false,
+    quantityEditable: true,
+    requiresPositiveQuantity: true,
+    defaults: {
+      from_location: "Dry Store",
+      to_location: "Main Bar",
+      quantity: 1,
+      original_event_id: "",
+    },
+  },
+  STOCK_ADJUSTMENT: {
+    template: "Count Correction Template",
+    summary: "A hand count found a difference.",
+    help: "Use this after a hand count finds a difference. Use a plus number to add stock or a minus number to subtract stock.",
+    requiredFields: ["product_id", "to_location", "quantity"],
+    sourceLabel: "Count Location",
+    destinationLabel: "Not Used",
+    quantityLabel: "Correction Amount",
+    reasonPlaceholder: "Example: physical count difference",
+    showFromLocation: false,
+    showToLocation: true,
+    showOriginalEvent: false,
+    quantityEditable: true,
+    requiresPositiveQuantity: false,
+    defaults: {
+      from_location: "",
+      to_location: "Main Bar",
+      quantity: 1,
+      original_event_id: "",
+    },
+  },
+  STOCK_REVERT: {
+    template: "Mistake Reversal Template",
+    summary: "Cancel one earlier movement without deleting it.",
+    help: "Use this to reverse a mistake. Choose the original movement that should be cancelled.",
+    requiredFields: ["product_id", "original_event_id"],
+    sourceLabel: "Original Location",
+    destinationLabel: "Not Used",
+    quantityLabel: "Reversal Amount",
+    reasonPlaceholder: "Example: wrong product was selected",
+    showFromLocation: false,
+    showToLocation: false,
+    showOriginalEvent: true,
+    quantityEditable: false,
+    requiresPositiveQuantity: true,
+    defaults: {
+      from_location: "",
+      to_location: "",
+      quantity: 1,
+      original_event_id: "",
+    },
+  },
+};
+
+function actionTemplate(type) {
+  return ACTION_TEMPLATES[type] ?? ACTION_TEMPLATES.STOCK_OUT;
+}
+
 function loadState() {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (!saved) return defaultState();
@@ -187,6 +303,16 @@ function render() {
       ${renderToast()}
     </div>
   `;
+
+  if (state.activeView === "compose" && shouldFocusActionOnCompose) {
+    requestAnimationFrame(() => {
+      const typeField = app.querySelector("[data-select-trigger='type']");
+      if (typeField) {
+        typeField.focus();
+      }
+      shouldFocusActionOnCompose = false;
+    });
+  }
 
   bindEvents();
 }
@@ -272,21 +398,23 @@ function renderTopbar() {
         <h1>${viewTitle()}</h1>
       </div>
       <div class="topbar-actions">
+        <button class="button button-secondary" data-action="reset-demo" type="button">Reset Demo</button>
+        <span class="guide-anchor">
+          <button class="button button-secondary guide-button ${state.guideOpen ? "is-open" : ""}" data-action="toggle-guide" type="button" aria-expanded="${state.guideOpen}">
+            ${icon("spark")}
+            Guide
+            ${guideCue ? `<span class="cue-badge">${guideCue}</span>` : `<span class="cue-dot" aria-hidden="true"></span>`}
+          </button>
+          ${state.guideOpen ? renderGuideMenu() : ""}
+        </span>
         <button class="connection-toggle ${state.online ? "is-on" : ""}" data-action="toggle-online" type="button" aria-pressed="${state.online}">
           <span class="toggle-track" aria-hidden="true"><span class="toggle-thumb"></span></span>
           <span>${state.online ? "Online" : "Offline"}</span>
         </button>
-        <button class="button button-secondary guide-button ${state.guideOpen ? "is-open" : ""}" data-action="toggle-guide" type="button" aria-expanded="${state.guideOpen}">
-          ${icon("spark")}
-          Guide
-          ${guideCue ? `<span class="cue-badge">${guideCue}</span>` : `<span class="cue-dot" aria-hidden="true"></span>`}
-        </button>
-        <button class="button button-secondary" data-action="reset-demo" type="button">Reset Demo</button>
         <button class="button button-primary send-work-button ${state.outbox.length ? "has-work" : ""}" data-action="sync" type="button" ${!state.online || state.outbox.length === 0 ? "disabled" : ""}>
           ${icon("send")}
           Send Work
         </button>
-        ${state.guideOpen ? renderGuideMenu() : ""}
       </div>
     </header>
   `;
@@ -407,6 +535,10 @@ function guideTips() {
 }
 
 function renderStatusRail(localLedger, stockRows, outboxValidation) {
+  if (state.activeView === "home") {
+    return "";
+  }
+
   const negativeRows = stockRows.filter((row) => row.quantity < 0).length;
   const lowRows = stockRows.filter((row) => row.quantity >= 0 && row.quantity <= productLow(row.product_id)).length;
   const invalidOutbox = outboxValidation.filter((entry) => !entry.validation.valid).length;
@@ -445,24 +577,6 @@ function renderLanding(localLedger, stockRows, outboxValidation) {
           <div class="landing-actions">
             <button class="button button-primary" data-view="compose" type="button">${icon("plus")}Record Movement</button>
             <button class="button button-secondary" data-view="dashboard" type="button">${icon("layers")}Open Stock Overview</button>
-          </div>
-        </div>
-        <div class="landing-ledger" aria-label="Current ledger snapshot">
-          <div>
-            <span>Saved Changes</span>
-            <strong>${localLedger.length}</strong>
-          </div>
-          <div>
-            <span>Waiting to Send</span>
-            <strong>${state.outbox.length}</strong>
-          </div>
-          <div>
-            <span>Low Stock</span>
-            <strong>${lowRows.length}</strong>
-          </div>
-          <div>
-            <span>Needs Review</span>
-            <strong>${invalidOutbox}</strong>
           </div>
         </div>
       </div>
@@ -539,6 +653,7 @@ function renderComposer(localLedger) {
     .filter((event) => event.type !== "STOCK_REVERT")
     .slice(-12)
     .reverse();
+  const template = actionTemplate(form.type);
 
   return `
     <section class="content-grid composer-grid">
@@ -550,48 +665,32 @@ function renderComposer(localLedger) {
             <p class="section-help">Pick the action, product, place, and amount. The stock total updates after this is saved.</p>
           </div>
         </div>
-        ${renderEventHelp(form.type)}
         ${renderActionTemplate(form.type)}
         <form class="event-form" data-form="event">
-          <label>
-            <span>What Happened?</span>
-            <select name="type">
-              ${EVENT_TYPES.map((type) => `<option value="${type}" ${form.type === type ? "selected" : ""}>${eventLabels[type]}</option>`).join("")}
-            </select>
+          <label class="field-select-wrap field-select-wrap--emphasized">
+            <span>Action Type</span>
+            ${renderFieldSelect({
+              name: "type",
+              options: EVENT_TYPES.map((type) => `<option value="${type}" ${form.type === type ? "selected" : ""}>${eventLabels[type]}</option>`).join(""),
+              className: "field-select--emphasized",
+              menuClassName: "field-select-menu--event-form",
+              menuMode: "event-form",
+              autofocus: true,
+            })}
           </label>
-          <label>
+          <label class="field-select-wrap">
             <span>Product</span>
-            <select name="product_id">
-              ${products.map((product) => `<option value="${product.id}" ${form.product_id === product.id ? "selected" : ""}>${product.name}</option>`).join("")}
-            </select>
+            ${renderFieldSelect({
+              name: "product_id",
+              menuClassName: "field-select-menu--event-form",
+              menuMode: "event-form",
+              options: products.map((product) => `<option value="${product.id}" ${form.product_id === product.id ? "selected" : ""}>${product.name}</option>`).join(""),
+            })}
           </label>
-          ${renderLocationFields(form)}
-          <label>
-            <span>${actionCopy(form.type).quantityLabel}</span>
-            <input name="quantity" type="number" step="0.01" value="${escapeAttr(form.quantity)}" />
-          </label>
-          ${
-            form.type === "STOCK_REVERT"
-              ? `<label class="span-2">
-                  <span>Original Event</span>
-                  <select name="original_event_id">
-                    <option value="">Select event to compensate</option>
-                    ${revertOptions
-                      .map(
-                        (event) => `
-                          <option value="${event.event_id}" ${form.original_event_id === event.event_id ? "selected" : ""}>
-                            ${event.sequence_number} - ${eventLabels[event.type] ?? event.type} - ${productName(event.product_id)} - ${formatQuantity(event.quantity)}
-                          </option>
-                        `,
-                      )
-                      .join("")}
-                  </select>
-                </label>`
-              : ""
-          }
+          ${renderActionTemplateFields(form, template, revertOptions)}
           <label class="span-2">
             <span>Reason</span>
-            <textarea name="reason" rows="3" placeholder="${actionCopy(form.type).reasonPlaceholder}">${escapeHtml(form.reason)}</textarea>
+            <textarea name="reason" rows="3" placeholder="${template.reasonPlaceholder}">${escapeHtml(form.reason)}</textarea>
           </label>
           <div class="form-footer span-2">
             <div class="validation ${validation.valid ? "is-valid" : "is-error"}">
@@ -605,63 +704,184 @@ function renderComposer(localLedger) {
   `;
 }
 
-function renderLocationFields(form) {
-  const copy = actionCopy(form.type);
-  const fromVisible = ["STOCK_OUT", "STOCK_TRANSFER"].includes(form.type);
-  const toVisible = ["STOCK_IN", "STOCK_TRANSFER", "STOCK_ADJUSTMENT"].includes(form.type);
-  const revertVisible = form.type === "STOCK_REVERT";
-
-  if (revertVisible) {
-    return `
-      <label>
-        <span>${copy.sourceLabel}</span>
-        <select name="from_location">
-          <option value="">Use Original Location</option>
-          ${locations.map((location) => `<option value="${location.name}" ${form.from_location === location.name ? "selected" : ""}>${location.name}</option>`).join("")}
-        </select>
-      </label>
-    `;
-  }
+function renderActionTemplateFields(form, template, revertOptions) {
+  const originalEvent = template.showOriginalEvent ? findEventForRevert(form.original_event_id) : null;
 
   return `
-    ${
-      fromVisible
-        ? `<label>
-            <span>${copy.sourceLabel}</span>
-            <select name="from_location">
-              <option value="">Choose Starting Place</option>
-              ${locations.map((location) => `<option value="${location.name}" ${form.from_location === location.name ? "selected" : ""}>${location.name}</option>`).join("")}
-            </select>
-          </label>`
+      ${renderMovementLocationField(template.showFromLocation, template.sourceLabel, form.from_location, "from_location")}
+      ${renderMovementLocationField(template.showToLocation, template.destinationLabel, form.to_location, "to_location")}
+      ${
+        template.showOriginalEvent
+          ? `<label class="span-2 field-select-wrap">
+               <span>Original Event</span>
+               ${renderFieldSelect({
+                 name: "original_event_id",
+                 menuClassName: "field-select-menu--event-form",
+                 menuMode: "event-form",
+                 options: `
+                <option value="">Select event to compensate</option>
+               ${revertOptions
+                 .map(
+                   (event) => `
+                     <option value="${event.event_id}" ${form.original_event_id === event.event_id ? "selected" : ""}>
+                       ${event.sequence_number} - ${eventLabels[event.type] ?? event.type} - ${productName(event.product_id)} - ${formatQuantity(event.quantity)}
+                     </option>
+                   `,
+                 )
+                 .join("")}
+               `.trim(),
+               })}             
+           </label>`
         : ""
     }
     ${
-      toVisible
+      template.quantityEditable
         ? `<label>
-            <span>${copy.destinationLabel}</span>
-            <select name="to_location">
-              <option value="">Choose Ending Place</option>
-              ${locations.map((location) => `<option value="${location.name}" ${form.to_location === location.name ? "selected" : ""}>${location.name}</option>`).join("")}
-            </select>
-          </label>`
-        : ""
+             <span>${template.quantityLabel}</span>
+             <input name="quantity" type="number" step="0.01" value="${escapeAttr(form.quantity)}" />
+           </label>`
+        : `<label class="span-2">
+             <span>${template.quantityLabel}</span>
+             <p>${renderRevertAmountHelp(originalEvent)}</p>
+           </label>`
     }
   `;
 }
 
-function renderEventHelp(type) {
-  const copy = actionCopy(type);
+function renderMovementLocationField(visible, label, selectedLocation, fieldName) {
+  if (!visible) return "";
 
   return `
-    <div class="form-guide">
-      <strong>${eventLabels[type] ?? "Record Movement"}</strong>
-      <span>${copy.help}</span>
+    <label class="field-select-wrap">
+      <span>${label}</span>
+      ${renderFieldSelect({
+        name: fieldName,
+        menuClassName: "field-select-menu--event-form",
+        menuMode: "event-form",
+        options: `
+          <option value="">Choose Place</option>
+          ${locations.map((location) => `<option value="${location.name}" ${selectedLocation === location.name ? "selected" : ""}>${location.name}</option>`).join("")}
+        `,
+      })}
+    </label>
+  `;
+}
+
+function extractFieldSelectOptions(optionHtml) {
+  const raw = optionHtml || "";
+  const optionPattern = /<option\b([^>]*)>([\s\S]*?)<\/option>/g;
+  const entries = [];
+  let match;
+
+  while ((match = optionPattern.exec(raw)) !== null) {
+    const attrText = match[1] || "";
+    const valueMatch = attrText.match(/value=\"([^\"]*)\"/) || attrText.match(/value='([^']*)'/);
+    if (!valueMatch) continue;
+
+    const labelText = match[2]?.replace(/<[^>]*>/g, "").trim();
+    entries.push({
+      value: valueMatch[1],
+      label: labelText,
+      selected: /\bselected\b/.test(attrText),
+      disabled: /\bdisabled\b/.test(attrText),
+    });
+  }
+
+  return entries;
+}
+
+function renderFieldSelect({
+  name,
+  options,
+  attrs = "",
+  className = "",
+  placeholder = "",
+  autofocus = false,
+  menuStyle = "styled",
+  menuClassName = "",
+  menuMode = "",
+}) {
+  const normalizedClassName = [className].filter(Boolean).join(" ");
+  const normalizedMenuClassName = [menuClassName].filter(Boolean).join(" ");
+  const menuClass = menuStyle === "plain" ? "field-select--normal-menu" : "field-select--styled-menu";
+  const selectClass = `field-select ${menuClass} ${normalizedClassName}`.trim();
+  const parsedOptions = extractFieldSelectOptions(options);
+  const selectedOption =
+    parsedOptions.find((entry) => entry.selected) ??
+    parsedOptions[0] ??
+    { value: "", label: placeholder || "" };
+  const resolvedValue = escapeAttr(selectedOption.value || "");
+  const resolvedLabel = escapeHtml(selectedOption.label || placeholder || "");
+  const baseAttrs = [ `name="${escapeAttr(name)}"`, `class="${selectClass}"`, attrs ].filter(Boolean).join(" ");
+
+  if (menuStyle === "plain") {
+    return `
+      <select ${baseAttrs}>
+        ${placeholder ? `<option value="">${escapeHtml(placeholder)}</option>` : ""}
+        ${options}
+      </select>
+    `;
+  }
+
+  const menuId = `field-select-menu-${String(++fieldSelectUid).padStart(4, "0")}`;
+  const hasExplicitSelection = parsedOptions.some((entry) => entry.selected);
+  const optionsForMenu = extractFieldSelectOptions(options)
+    .map(
+      (entry, index) =>
+        `<li role="option" class="field-select-menu-option ${entry.disabled ? "is-disabled" : ""}" data-select-option data-value="${escapeAttr(entry.value)}" data-label="${escapeAttr(entry.label)}" ${entry.disabled ? "aria-disabled=\"true\"" : ""} ${(entry.selected || (!hasExplicitSelection && index === 0)) ? "aria-selected=\"true\"" : ""}>${escapeHtml(entry.label)}</li>`,
+    )
+    .join("");
+
+  return `
+    <div class="field-select-custom-shell" data-custom-select>
+      <button
+        type="button"
+        class="field-select-trigger"
+        id="${menuId}-trigger"
+        data-select-trigger="${escapeAttr(name)}"
+        data-select-target="${menuId}"
+        data-select-name="${escapeAttr(name)}"
+        aria-haspopup="listbox"
+        aria-expanded="false"
+        ${autofocus ? "autofocus" : ""}
+      >
+      <span class="field-select-trigger-label">${resolvedLabel}</span>
+        <span
+          class="field-select-trigger-arrow"
+          aria-hidden="true"
+          style="top: 50%; transform: translateY(-50%);"
+        >▾</span>
+      </button>
+      <input type="hidden" data-select-input="${escapeAttr(name)}" ${baseAttrs} value="${resolvedValue}" />
+      <ul
+        id="${menuId}"
+        class="field-select-menu${normalizedMenuClassName ? ` ${normalizedMenuClassName}` : ""}"
+        role="listbox"
+        data-select-menu
+        data-select-name="${escapeAttr(name)}"
+        data-select-menu-mode="${escapeAttr(menuMode)}"
+        aria-labelledby="${menuId}-trigger"
+      >
+        ${placeholder
+          ? `<li class="field-select-menu-option" data-select-option data-value="" data-label="${escapeAttr(placeholder)}">${escapeHtml(placeholder)}</li>`
+          : ""}
+        ${optionsForMenu}
+      </ul>
     </div>
   `;
 }
 
+function renderRevertAmountHelp(originalEvent) {
+  if (!originalEvent) {
+    return "Select an original movement to derive this amount.";
+  }
+
+  const quantity = formatQuantity(Math.abs(Number(originalEvent.quantity)));
+  return `${quantity} ${productUnit(originalEvent.product_id)} of ${productName(originalEvent.product_id)} will be reversed.`;
+}
+
 function renderActionTemplate(type) {
-  const copy = actionCopy(type);
+  const copy = actionTemplate(type);
 
   return `
     <div class="template-strip" aria-label="Action Template">
@@ -671,56 +891,10 @@ function renderActionTemplate(type) {
   `;
 }
 
-function actionCopy(type) {
-  const copies = {
-    STOCK_IN: {
-      template: "Delivery Template",
-      summary: "Product arrived into one location.",
-      help: "Use this for supplier delivery, restock, or opening stock. Choose where the stock arrived.",
-      sourceLabel: "Not Used",
-      destinationLabel: "Arrived At",
-      quantityLabel: "Amount Received",
-      reasonPlaceholder: "Example: supplier delivery accepted",
-    },
-    STOCK_OUT: {
-      template: "Usage Template",
-      summary: "Product left one location.",
-      help: "Use this when stock was sold, used, wasted, or broken. Choose where it left from.",
-      sourceLabel: "Left From",
-      destinationLabel: "Not Used",
-      quantityLabel: "Amount Used",
-      reasonPlaceholder: "Example: evening service use",
-    },
-    STOCK_TRANSFER: {
-      template: "Transfer Template",
-      summary: "Product moved between two locations.",
-      help: "Use this when stock moved from one place to another. Choose both the starting place and ending place.",
-      sourceLabel: "Move From",
-      destinationLabel: "Move To",
-      quantityLabel: "Amount Moved",
-      reasonPlaceholder: "Example: moved to Main Bar for opening",
-    },
-    STOCK_ADJUSTMENT: {
-      template: "Count Correction Template",
-      summary: "A hand count found a difference.",
-      help: "Use this after a hand count finds a difference. Use a plus number to add stock or a minus number to subtract stock.",
-      sourceLabel: "Count Location",
-      destinationLabel: "Count Location",
-      quantityLabel: "Correction Amount",
-      reasonPlaceholder: "Example: physical count difference",
-    },
-    STOCK_REVERT: {
-      template: "Mistake Reversal Template",
-      summary: "Cancel one earlier movement without deleting it.",
-      help: "Use this to reverse a mistake. Choose the original movement that should be cancelled.",
-      sourceLabel: "Original Location",
-      destinationLabel: "Not Used",
-      quantityLabel: "Amount to Reverse",
-      reasonPlaceholder: "Example: wrong product was selected",
-    },
-  };
+function findEventForRevert(eventId) {
+  if (!eventId) return null;
 
-  return copies[type] ?? copies.STOCK_OUT;
+  return allLocalEvents().find((event) => event.event_id === eventId && event.type !== "STOCK_REVERT");
 }
 
 function renderOutbox(outboxValidation) {
@@ -911,20 +1085,36 @@ function renderReconcile(stockRows) {
 
 function renderFilters() {
   return `
-    <div class="filters">
-      <label>
+      <div class="filters">
+        <label class="field-select-wrap field-select-wrap--stock-overview-filter">
         <span>Product</span>
-        <select data-filter="product">
-          <option value="all">All products</option>
-          ${products.map((product) => `<option value="${product.id}" ${state.productFilter === product.id ? "selected" : ""}>${product.name}</option>`).join("")}
-        </select>
+        ${renderFieldSelect({
+            name: "product-filter",
+            menuStyle: "styled",
+            className: "field-select--stock-overview-filter",
+            menuClassName: "field-select-menu--stock-overview-filter",
+            menuMode: "stock-overview-filter",
+            attrs: 'data-filter="product"',
+            options: `
+              <option value="all">All products</option>
+            ${products.map((product) => `<option value="${product.id}" ${state.productFilter === product.id ? "selected" : ""}>${product.name}</option>`).join("")}
+          `,
+        })}
       </label>
-      <label>
+      <label class="field-select-wrap field-select-wrap--stock-overview-filter">
         <span>Location</span>
-        <select data-filter="location">
-          <option value="all">All locations</option>
-          ${locations.map((location) => `<option value="${location.name}" ${state.locationFilter === location.name ? "selected" : ""}>${location.name}</option>`).join("")}
-        </select>
+        ${renderFieldSelect({
+          name: "location-filter",
+          menuStyle: "styled",
+          className: "field-select--stock-overview-filter",
+          menuClassName: "field-select-menu--stock-overview-filter",
+          menuMode: "stock-overview-filter",
+          attrs: 'data-filter="location"',
+          options: `
+            <option value="all">All locations</option>
+            ${locations.map((location) => `<option value="${location.name}" ${state.locationFilter === location.name ? "selected" : ""}>${location.name}</option>`).join("")}
+          `,
+        })}
       </label>
     </div>
   `;
@@ -934,13 +1124,19 @@ function renderStockControls() {
   return `
     <div class="stock-controls" aria-label="Stock View Options">
       <div class="stock-filter-slot">
-        ${
-          state.stockView === "location"
-            ? `<label class="compact-select">
-                <span>Location</span>
-                <select data-filter="selected-location">
-                  ${locations.map((location) => `<option value="${location.name}" ${state.selectedLocation === location.name ? "selected" : ""}>${location.name}</option>`).join("")}
-                </select>
+        ${ 
+            state.stockView === "location"
+              ? `<label class="compact-select field-select-wrap field-select-wrap--stock-overview-filter">
+                  <span>Location</span>
+                  ${renderFieldSelect({
+                    name: "selected-location-filter",
+                    menuStyle: "styled",
+                    className: "field-select--stock-overview-filter",
+                    menuClassName: "field-select-menu--stock-overview-filter",
+                    menuMode: "stock-overview-filter",
+                    attrs: 'data-filter="selected-location"',
+                  options: locations.map((location) => `<option value="${location.name}" ${state.selectedLocation === location.name ? "selected" : ""}>${location.name}</option>`).join(""),
+                })}
               </label>`
             : ""
         }
@@ -1234,7 +1430,12 @@ function metricCard(label, value, hint) {
 function bindEvents() {
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
-      state.activeView = button.dataset.view;
+      const nextView = button.dataset.view;
+      if (nextView === "compose") {
+        shouldFocusActionOnCompose = true;
+      }
+
+      state.activeView = nextView;
       state.guideOpen = false;
       state.accountOpen = false;
       commit();
@@ -1286,6 +1487,159 @@ function bindEvents() {
     });
   });
 
+  if (!customSelectEventsBound) {
+    document.addEventListener("click", (event) => {
+      const activeOption = event.target.closest("[data-select-option]");
+      const activeTrigger = event.target.closest("[data-select-trigger]");
+
+      const restoreEventMenuPortal = (menu) => {
+        const portalState = eventSelectPortalMap.get(menu);
+        if (!portalState) return;
+
+        const { shell, placeholder } = portalState;
+        if (placeholder?.parentNode && shell?.isConnected) {
+          shell.insertBefore(menu, placeholder);
+          placeholder.remove();
+        }
+
+        eventSelectPortalMap.delete(menu);
+      };
+
+      const closeMenus = () => {
+        document.querySelectorAll("[data-select-menu]").forEach((menu) => {
+          restoreEventMenuPortal(menu);
+          menu.classList.remove("is-open");
+          menu.style.right = "";
+          menu.style.bottom = "";
+          menu.style.position = "";
+          menu.style.left = "";
+          menu.style.top = "";
+          menu.style.minWidth = "";
+          menu.style.width = "";
+          menu.style.maxHeight = "";
+          menu.style.transform = "";
+          menu.style.zIndex = "";
+        });
+        document.querySelectorAll("[data-select-trigger]").forEach((trigger) => trigger.setAttribute("aria-expanded", "false"));
+      };
+
+      if (activeOption) {
+        event.preventDefault();
+        const menu = activeOption.closest("[data-select-menu]");
+        const triggerName = menu?.dataset.selectName ?? "";
+        const trigger = document.querySelector(`[data-select-trigger="${triggerName}"]`);
+        const input = document.querySelector(`[data-select-input="${triggerName}"]`);
+        const label = trigger?.querySelector(".field-select-trigger-label");
+
+        if (!menu || activeOption.classList.contains("is-disabled") || !trigger || !input || !label) return;
+
+        const value = activeOption.dataset.value ?? "";
+        const title = activeOption.dataset.label ?? activeOption.textContent.trim();
+
+        menu.querySelectorAll("[data-select-option]").forEach((option) => {
+          option.setAttribute("aria-selected", option === activeOption ? "true" : "false");
+        });
+
+        trigger.setAttribute("aria-expanded", "false");
+        restoreEventMenuPortal(menu);
+        menu.classList.remove("is-open");
+        input.value = value;
+        label.textContent = title;
+
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        return;
+      }
+
+      if (activeTrigger) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const triggerName = activeTrigger.dataset.selectName;
+        const shell = activeTrigger.closest("[data-custom-select]");
+        const menu = shell?.querySelector(`[data-select-menu][data-select-name="${triggerName}"]`);
+        if (!menu) return;
+
+        const willOpen = !menu.classList.contains("is-open");
+        closeMenus();
+        if (!willOpen) return;
+
+        const triggerRect = activeTrigger.getBoundingClientRect();
+        const menuMinHeight = 72;
+        const menuMaxCap = 260;
+        const menuMode = menu.dataset.selectMenuMode;
+
+        const isEventMenu = menu.classList.contains("field-select-menu--event-form") || menuMode === "event-form";
+        const isFilterMenu =
+          menuMode === "stock-overview-filter" ||
+          menu.classList.contains("field-select-menu--stock-overview-filter");
+
+        if (isEventMenu) {
+          if (shell && !eventSelectPortalMap.has(menu)) {
+            const placeholder = document.createComment("");
+            shell.insertBefore(placeholder, menu);
+            document.body.appendChild(menu);
+            eventSelectPortalMap.set(menu, { shell, placeholder });
+          }
+
+          const roomBelow = Math.max(0, Math.floor(window.innerHeight - Math.floor(triggerRect.bottom + 6) - 8));
+          const menuWidth = Math.max(160, Math.floor(triggerRect.width));
+          const menuLeft = Math.max(0, Math.min(Math.floor(triggerRect.left), Math.max(0, Math.floor(window.innerWidth - menuWidth - 4))));
+          const menuTop = Math.floor(triggerRect.bottom + 6);
+          const menuMaxHeight = Math.min(menuMaxCap, Math.max(menuMinHeight, roomBelow));
+
+          menu.style.position = "fixed";
+          menu.style.left = `${menuLeft}px`;
+          menu.style.top = `${menuTop}px`;
+          menu.style.width = `${menuWidth}px`;
+          menu.style.minWidth = `${menuWidth}px`;
+          menu.style.right = "";
+          menu.style.bottom = "";
+          menu.style.transform = "";
+          menu.style.maxHeight = `${menuMaxHeight}px`;
+        } else if (isFilterMenu) {
+          const filterRoomBelow = Math.max(0, Math.floor(window.innerHeight - (triggerRect.bottom + 6) - 8));
+          menu.style.position = "absolute";
+          menu.style.left = "0";
+          menu.style.top = "";
+          menu.style.bottom = "";
+          menu.style.width = `${Math.max(160, Math.floor(triggerRect.width))}px`;
+          menu.style.minWidth = `${Math.max(160, Math.floor(triggerRect.width))}px`;
+          menu.style.transform = "";
+          menu.style.right = "";
+          menu.style.bottom = "";
+          menu.style.right = "";
+          menu.style.maxHeight = `${Math.min(menuMaxCap, Math.max(menuMinHeight, filterRoomBelow))}px`;
+        } else {
+          const menuLeft = Math.max(0, Math.floor(triggerRect.left));
+          const menuTop = Math.floor(triggerRect.bottom + 6);
+          const menuWidth = Math.max(160, Math.floor(triggerRect.width));
+
+          menu.style.position = "fixed";
+          menu.style.left = `${menuLeft}px`;
+          menu.style.top = `${menuTop}px`;
+          menu.style.width = `${menuWidth}px`;
+          menu.style.minWidth = `${menuWidth}px`;
+          const menuRoomBelow = Math.max(0, Math.floor(window.innerHeight - (triggerRect.bottom + 6) - 8));
+          menu.style.maxHeight = `${Math.min(menuMaxCap, Math.max(menuMinHeight, menuRoomBelow))}px`;
+        }
+
+        menu.style.zIndex = "2147483000";
+
+        activeTrigger.setAttribute("aria-expanded", "true");
+        menu.classList.add("is-open");
+        return;
+      }
+
+      const inCustomSelect = event.target.closest("[data-custom-select]");
+      if (!inCustomSelect) {
+        closeMenus();
+      }
+    });
+
+    customSelectEventsBound = true;
+  }
+
   document.querySelectorAll("[data-filter='product']").forEach((select) => {
     select.addEventListener("change", () => {
       state.productFilter = select.value;
@@ -1334,13 +1688,13 @@ function bindEvents() {
     form.addEventListener("input", () => {
       const data = new FormData(form);
       state.form = {
-        type: data.get("type"),
+        ...state.form,
         product_id: data.get("product_id"),
-        from_location: data.get("from_location") ?? "",
-        to_location: data.get("to_location") ?? "",
+        from_location: data.get("from_location") ?? state.form.from_location ?? "",
+        to_location: data.get("to_location") ?? state.form.to_location ?? "",
         quantity: data.get("quantity"),
         reason: data.get("reason") ?? "",
-        original_event_id: data.get("original_event_id") ?? "",
+        original_event_id: data.get("original_event_id") ?? state.form.original_event_id ?? "",
       };
       saveState();
     });
@@ -1348,16 +1702,18 @@ function bindEvents() {
     form.addEventListener("change", () => {
       const previousType = state.form.type;
       const data = new FormData(form);
+      const nextType = data.get("type") ?? previousType;
+
       state.form = {
         ...state.form,
-        type: data.get("type"),
+        type: nextType,
         product_id: data.get("product_id"),
         from_location: data.get("from_location") ?? "",
         to_location: data.get("to_location") ?? "",
         original_event_id: data.get("original_event_id") ?? "",
       };
 
-      if (previousType !== state.form.type) {
+      if (previousType !== nextType) {
         normalizeFormForType();
         commit();
         return;
@@ -1386,7 +1742,9 @@ function appendFormEvent() {
   state.outbox.push(event);
   showToast(`${eventLabels[event.type]} saved locally. Send work when online.`);
   state.form.quantity = 1;
+  state.form.original_event_id = "";
   state.form.reason = "";
+  normalizeFormForType();
   state.activeView = "outbox";
   commit();
 }
@@ -1471,6 +1829,30 @@ function createRevert(eventId) {
 
 function buildEventFromForm() {
   const form = state.form;
+  const template = actionTemplate(form.type);
+
+  if (form.type === "STOCK_REVERT") {
+    const original = findEventForRevert(form.original_event_id);
+    return createInventoryEvent({
+      ...tenant,
+      event_id: nextId("event"),
+      idempotency_key: nextId("idem"),
+      sync_batch_id: currentBatchId(),
+      type: "STOCK_REVERT",
+      product_id: original ? original.product_id : form.product_id,
+      product_name: productName(original ? original.product_id : form.product_id),
+      from_location: original ? original.from_location : null,
+      to_location: original ? original.to_location : null,
+      quantity: original ? Math.abs(Number(original.quantity)) : 1,
+      original_event_id: form.original_event_id || null,
+      reason: form.reason.trim() || "Operational event",
+      sequence_number: nextSequence(),
+      timestamp: Date.now(),
+      status: "queued",
+    });
+  }
+
+  const quantityValue = template.requiresPositiveQuantity ? Math.abs(Number(form.quantity || 0)) : Number(form.quantity || 0);
   return createInventoryEvent({
     ...tenant,
     event_id: nextId("event"),
@@ -1481,7 +1863,7 @@ function buildEventFromForm() {
     product_name: productName(form.product_id),
     from_location: form.from_location || null,
     to_location: form.to_location || null,
-    quantity: Number(form.quantity),
+    quantity: quantityValue,
     original_event_id: form.original_event_id || null,
     reason: form.reason.trim() || "Operational event",
     sequence_number: nextSequence(),
@@ -1500,21 +1882,19 @@ function previewEventValidation() {
 }
 
 function normalizeFormForType() {
-  if (state.form.type === "STOCK_IN") {
-    state.form.from_location = "";
-    state.form.to_location ||= "Dry Store";
-  }
-  if (state.form.type === "STOCK_OUT") {
-    state.form.from_location ||= "Main Bar";
-    state.form.to_location = "";
-  }
-  if (state.form.type === "STOCK_TRANSFER") {
-    state.form.from_location ||= "Dry Store";
-    state.form.to_location ||= "Main Bar";
-  }
-  if (state.form.type === "STOCK_ADJUSTMENT") {
-    state.form.from_location = "";
-    state.form.to_location ||= "Main Bar";
+  const template = actionTemplate(state.form.type);
+  const defaults = template.defaults ?? {};
+  state.form.from_location = template.showFromLocation ? state.form.from_location || defaults.from_location || "" : "";
+  state.form.to_location = template.showToLocation ? state.form.to_location || defaults.to_location || "" : "";
+  state.form.original_event_id = template.showOriginalEvent ? state.form.original_event_id || defaults.original_event_id || "" : "";
+
+  if (template.quantityEditable) {
+    const parsedQuantity = Number(state.form.quantity);
+    if (!Number.isFinite(parsedQuantity) || parsedQuantity === 0) {
+      state.form.quantity = defaults.quantity ?? 1;
+    }
+  } else {
+    state.form.quantity = defaults.quantity ?? 1;
   }
 }
 

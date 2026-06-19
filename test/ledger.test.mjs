@@ -73,6 +73,52 @@ test("validation rejects impossible event shapes with actionable reasons", () =>
   });
 });
 
+test("validation rejects STOCK_IN without destination location", () => {
+  const input = createInventoryEvent({
+    ...base,
+    type: "STOCK_IN",
+    to_location: null,
+    quantity: 3,
+    sequence_number: 1,
+  });
+
+  assert.deepEqual(validateEvent(input), {
+    valid: false,
+    reason: "STOCK_IN requires destination location.",
+  });
+});
+
+test("validation rejects STOCK_OUT without source location", () => {
+  const output = createInventoryEvent({
+    ...base,
+    type: "STOCK_OUT",
+    from_location: null,
+    quantity: 3,
+    sequence_number: 1,
+  });
+
+  assert.deepEqual(validateEvent(output), {
+    valid: false,
+    reason: "STOCK_OUT requires source location.",
+  });
+});
+
+test("validation rejects STOCK_TRANSFER when source and destination are the same", () => {
+  const transfer = createInventoryEvent({
+    ...base,
+    type: "STOCK_TRANSFER",
+    from_location: "Dry Store",
+    to_location: "Dry Store",
+    quantity: 2,
+    sequence_number: 1,
+  });
+
+  assert.deepEqual(validateEvent(transfer), {
+    valid: false,
+    reason: "STOCK_TRANSFER requires different source and destination locations.",
+  });
+});
+
 test("sync batch is atomic and preserves ledger when one event is invalid", () => {
   const existing = [
     createInventoryEvent({ ...base, type: "STOCK_IN", to_location: "Main Bar", quantity: 10, sequence_number: 1 }),
@@ -114,6 +160,59 @@ test("sync batch ignores idempotent duplicates and commits only new events", () 
   assert.equal(result.processed_count, 1);
   assert.equal(result.duplicate_count, 1);
   assert.equal(result.ledger.length, 2);
+});
+
+test("STOCK_REVERT ignores its own quantity and reverses original event impact", () => {
+  const original = createInventoryEvent({
+    ...base,
+    type: "STOCK_OUT",
+    from_location: "Main Bar",
+    quantity: 5,
+    sequence_number: 2,
+  });
+  const events = [
+    createInventoryEvent({ ...base, type: "STOCK_IN", to_location: "Main Bar", quantity: 10, sequence_number: 1 }),
+    original,
+    createInventoryEvent({
+      ...base,
+      type: "STOCK_REVERT",
+      from_location: "Main Bar",
+      to_location: null,
+      quantity: 1,
+      original_event_id: original.event_id,
+      sequence_number: 3,
+    }),
+  ];
+  const stock = computeStock(events);
+
+  assert.equal(stock["product-gin"]["Main Bar"], 10);
+});
+
+test("STOCK_ADJUSTMENT accepts both negative and positive quantity", () => {
+  assert.equal(
+    validateEvent(
+      createInventoryEvent({
+        ...base,
+        type: "STOCK_ADJUSTMENT",
+        to_location: "Main Bar",
+        quantity: -2,
+        sequence_number: 1,
+      }),
+    ).valid,
+    true,
+  );
+  assert.equal(
+    validateEvent(
+      createInventoryEvent({
+        ...base,
+        type: "STOCK_ADJUSTMENT",
+        to_location: "Main Bar",
+        quantity: 2,
+        sequence_number: 2,
+      }),
+    ).valid,
+    true,
+  );
 });
 
 test("audit trail exposes deterministic order and event impact details", () => {
