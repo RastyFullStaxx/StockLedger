@@ -36,6 +36,7 @@ const locations = [
 ];
 
 let state = loadState();
+let toastTimer = null;
 
 function seedEvents() {
   const start = Date.now() - 1000 * 60 * 60 * 4;
@@ -76,12 +77,15 @@ function defaultState() {
     serverLedger: seedEvents(),
     outbox: [],
     online: false,
-    activeView: "dashboard",
+    activeView: "home",
     stockView: "totals",
     selectedLocation: "Main Bar",
     productFilter: "all",
     locationFilter: "all",
     message: "",
+    toast: null,
+    accountOpen: false,
+    sidebarCollapsed: false,
     lastSync: null,
     guideOpen: false,
     form: {
@@ -98,6 +102,12 @@ function defaultState() {
 }
 
 const screenMeta = {
+  home: {
+    title: "StockLedger",
+    label: "Home",
+    kicker: "Ledger",
+    guide: "Start here when you want the shortest path into the local prototype.",
+  },
   dashboard: {
     title: "Stock Overview",
     label: "Stock Overview",
@@ -156,7 +166,8 @@ function loadState() {
 }
 
 function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  const { toast, accountOpen, ...persistedState } = state;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(persistedState));
 }
 
 function render() {
@@ -166,13 +177,14 @@ function render() {
   const outboxValidation = state.outbox.map((event) => ({ event, validation: validateEvent(event) }));
 
   app.innerHTML = `
-    <div class="app-shell">
+    <div class="app-shell ${state.sidebarCollapsed ? "is-sidebar-collapsed" : ""}">
       ${renderSidebar()}
       <main class="workspace">
         ${renderTopbar()}
         ${renderStatusRail(localLedger, stockRows, outboxValidation)}
         ${renderActiveView(localLedger, stockRows, outboxValidation)}
       </main>
+      ${renderToast()}
     </div>
   `;
 
@@ -189,6 +201,7 @@ document.addEventListener("click", (event) => {
 
 function renderSidebar() {
   const nav = [
+    ["home", screenMeta.home],
     ["dashboard", screenMeta.dashboard],
     ["compose", screenMeta.compose],
     ["outbox", screenMeta.outbox],
@@ -199,11 +212,14 @@ function renderSidebar() {
   return `
     <aside class="sidebar" aria-label="Primary navigation">
       <div class="brand-lockup">
-        <div class="brand-mark" aria-hidden="true">SL</div>
-        <div>
-          <p class="brand-name">StockLedger</p>
-          <p class="brand-subtitle"Power in Audit</p>
+        <div class="brand-mark" aria-hidden="true"><img src="/logo.svg" alt="" /></div>
+        <div class="brand-copy">
+          <p class="brand-name"><span>Stock</span><span>Ledger</span></p>
+          <p class="brand-subtitle">Power in Audit</p>
         </div>
+        <button class="sidebar-toggle" data-action="toggle-sidebar" type="button" aria-label="${state.sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}" aria-pressed="${state.sidebarCollapsed}">
+          ${icon(state.sidebarCollapsed ? "panelOpen" : "panelClose")}
+        </button>
       </div>
       <nav class="nav-list">
         ${nav
@@ -221,10 +237,26 @@ function renderSidebar() {
           )
           .join("")}
       </nav>
-      <div class="tenant-card">
-        <p class="eyebrow">Current Site</p>
-        <strong>${tenant.client_name}</strong>
-        <span>${tenant.device_name}</span>
+      <div class="account-menu">
+        <button class="account-trigger" data-action="toggle-account" type="button" aria-expanded="${state.accountOpen}">
+          <span class="account-avatar" aria-hidden="true">NH</span>
+          <span>
+            <small>Current Site</small>
+            <strong>${tenant.client_name}</strong>
+            <em>${tenant.device_name}</em>
+          </span>
+          ${icon("chevron")}
+        </button>
+        ${
+          state.accountOpen
+            ? `<div class="account-popover">
+                <button type="button" data-view="home">${icon("home")}Home</button>
+                <button type="button" data-view="dashboard">${icon("layers")}Stock Overview</button>
+                <button type="button" data-view="outbox">${icon("send")}Send Work${state.outbox.length ? `<span>${state.outbox.length}</span>` : ""}</button>
+                <button type="button" data-action="reset-demo">${icon("refresh")}Reset Demo</button>
+              </div>`
+            : ""
+        }
       </div>
     </aside>
   `;
@@ -232,6 +264,7 @@ function renderSidebar() {
 
 function renderTopbar() {
   const meta = screenMeta[state.activeView] ?? screenMeta.dashboard;
+  const guideCue = guideCueCount();
   return `
     <header class="topbar">
       <div>
@@ -239,16 +272,17 @@ function renderTopbar() {
         <h1>${viewTitle()}</h1>
       </div>
       <div class="topbar-actions">
-        <button class="segmented ${state.online ? "is-on" : ""}" data-action="toggle-online" type="button" aria-pressed="${state.online}">
-          <span class="status-dot"></span>
-          ${state.online ? "Online" : "Offline"}
+        <button class="connection-toggle ${state.online ? "is-on" : ""}" data-action="toggle-online" type="button" aria-pressed="${state.online}">
+          <span class="toggle-track" aria-hidden="true"><span class="toggle-thumb"></span></span>
+          <span>${state.online ? "Online" : "Offline"}</span>
         </button>
         <button class="button button-secondary guide-button ${state.guideOpen ? "is-open" : ""}" data-action="toggle-guide" type="button" aria-expanded="${state.guideOpen}">
           ${icon("spark")}
           Guide
+          ${guideCue ? `<span class="cue-badge">${guideCue}</span>` : `<span class="cue-dot" aria-hidden="true"></span>`}
         </button>
         <button class="button button-secondary" data-action="reset-demo" type="button">Reset Demo</button>
-        <button class="button button-primary" data-action="sync" type="button" ${!state.online || state.outbox.length === 0 ? "disabled" : ""}>
+        <button class="button button-primary send-work-button ${state.outbox.length ? "has-work" : ""}" data-action="sync" type="button" ${!state.online || state.outbox.length === 0 ? "disabled" : ""}>
           ${icon("send")}
           Send Work
         </button>
@@ -256,6 +290,51 @@ function renderTopbar() {
       </div>
     </header>
   `;
+}
+
+function guideCueCount() {
+  return guideNotifications().length;
+}
+
+function guideNotifications() {
+  const stockRows = filteredStockRows(allLocalEvents());
+  const lowRows = stockRows.filter((row) => row.quantity >= 0 && row.quantity <= productLow(row.product_id));
+  const negativeRows = stockRows.filter((row) => row.quantity < 0);
+  const notifications = [];
+
+  if (state.outbox.length > 0) {
+    notifications.push({
+      tone: state.online ? "success" : "warning",
+      title: `${state.outbox.length} Work Item${state.outbox.length === 1 ? "" : "s"} Waiting`,
+      text: state.online ? "Send saved work now." : "Work is safe locally. Go online to send it.",
+    });
+  }
+
+  negativeRows.forEach((row) => {
+    notifications.push({
+      tone: "error",
+      title: `${row.product_name} Needs Review`,
+      text: `${row.location} is below zero. Check history before reporting.`,
+    });
+  });
+
+  lowRows.slice(0, 6).forEach((row) => {
+    notifications.push({
+      tone: row.quantity === 0 ? "error" : "warning",
+      title: `${row.product_name} Needs Restock`,
+      text: `${row.location}: ${formatQuantity(row.quantity)} ${productUnit(row.product_id)} left.`,
+    });
+  });
+
+  if (notifications.length === 0) {
+    notifications.push({
+      tone: "success",
+      title: "No Urgent Notifications",
+      text: "Stock levels and saved work look clear right now.",
+    });
+  }
+
+  return notifications;
 }
 
 function renderGuideMenu() {
@@ -266,6 +345,7 @@ function renderGuideMenu() {
     negativeRows: filteredStockRows(allLocalEvents()).filter((row) => row.quantity < 0).length,
   });
   const tips = guideTips();
+  const notifications = guideNotifications();
 
   return `
     <div class="guide-menu" role="dialog" aria-label="Page Guide">
@@ -277,6 +357,19 @@ function renderGuideMenu() {
         <button class="icon-button" data-action="toggle-guide" type="button" aria-label="Close Guide">${icon("close")}</button>
       </div>
       <p>${meta.guide}</p>
+      <div class="guide-alerts">
+        <span>Notifications</span>
+        ${notifications
+          .map(
+            (item) => `
+              <article class="guide-alert is-${item.tone}">
+                <strong>${item.title}</strong>
+                <small>${item.text}</small>
+              </article>
+            `,
+          )
+          .join("")}
+      </div>
       <div class="guide-next">
         <span>Suggested Next Action</span>
         <strong>${action.title}</strong>
@@ -286,6 +379,17 @@ function renderGuideMenu() {
       <ul>
         ${tips.map((tip) => `<li>${tip}</li>`).join("")}
       </ul>
+    </div>
+  `;
+}
+
+function renderToast() {
+  if (!state.toast?.message) return "";
+
+  return `
+    <div class="toast ${state.toast.type === "error" ? "is-error" : ""}" role="status" aria-live="polite">
+      ${state.toast.type === "error" ? icon("alert") : icon("check")}
+      <span>${state.toast.message}</span>
     </div>
   `;
 }
@@ -314,22 +418,98 @@ function renderStatusRail(localLedger, stockRows, outboxValidation) {
       ${metricCard("Low Stock", lowRows, "Review before service")}
       ${metricCard("Needs Review", negativeRows + invalidOutbox, "Fix before reports")}
     </section>
-    ${
-      state.message
-        ? `<div class="notice ${state.message.includes("not sent") || state.message.includes("offline") ? "is-error" : ""}" role="status" aria-live="polite">
-            ${state.message}
-          </div>`
-        : ""
-    }
   `;
 }
 
 function renderActiveView(localLedger, stockRows, outboxValidation) {
+  if (state.activeView === "home") return renderLanding(localLedger, stockRows, outboxValidation);
   if (state.activeView === "compose") return renderComposer(localLedger);
   if (state.activeView === "outbox") return renderOutbox(outboxValidation);
   if (state.activeView === "audit") return renderAudit(localLedger);
   if (state.activeView === "reconcile") return renderReconcile(stockRows);
   return renderDashboard(localLedger, stockRows);
+}
+
+function renderLanding(localLedger, stockRows, outboxValidation) {
+  const lowRows = stockRows.filter((row) => row.quantity >= 0 && row.quantity <= productLow(row.product_id));
+  const invalidOutbox = outboxValidation.filter((entry) => !entry.validation.valid).length;
+  const recentRows = replayAuditTrail(localLedger).reverse().slice(0, 4);
+
+  return `
+    <section class="landing-shell" aria-label="StockLedger Home">
+      <div class="landing-hero">
+        <div class="landing-copy">
+          <p class="eyebrow">Local Audit Prototype</p>
+          <h2>Inventory That Explains Every Number.</h2>
+          <p>Record movements, keep work safe offline, and replay the ledger when a count needs proof.</p>
+          <div class="landing-actions">
+            <button class="button button-primary" data-view="compose" type="button">${icon("plus")}Record Movement</button>
+            <button class="button button-secondary" data-view="dashboard" type="button">${icon("layers")}Open Stock Overview</button>
+          </div>
+        </div>
+        <div class="landing-ledger" aria-label="Current ledger snapshot">
+          <div>
+            <span>Saved Changes</span>
+            <strong>${localLedger.length}</strong>
+          </div>
+          <div>
+            <span>Waiting to Send</span>
+            <strong>${state.outbox.length}</strong>
+          </div>
+          <div>
+            <span>Low Stock</span>
+            <strong>${lowRows.length}</strong>
+          </div>
+          <div>
+            <span>Needs Review</span>
+            <strong>${invalidOutbox}</strong>
+          </div>
+        </div>
+      </div>
+      <div class="landing-grid">
+        <article class="landing-card">
+          <span>${icon("layers")}</span>
+          <h3>See The Master Stock</h3>
+          <p>Total stock, per-location stock, and detailed rows stay one click apart.</p>
+          <button class="table-action" data-view="dashboard" type="button">View Stock</button>
+        </article>
+        <article class="landing-card">
+          <span>${icon("history")}</span>
+          <h3>Trace Every Change</h3>
+          <p>History is immutable. Mistakes are reversed with a visible correction.</p>
+          <button class="table-action" data-view="audit" type="button">Open History</button>
+        </article>
+        <article class="landing-card">
+          <span>${icon("send")}</span>
+          <h3>Send Work Safely</h3>
+          <p>Offline work waits locally, then sends as one batch when the connection is on.</p>
+          <button class="table-action" data-view="outbox" type="button">Check Outbox</button>
+        </article>
+      </div>
+      <article class="panel landing-recent">
+        <div class="panel-header compact">
+          <div>
+            <p class="eyebrow">Recent Ledger</p>
+            <h2>Last Movements</h2>
+          </div>
+          <button class="table-action" data-view="audit" type="button">View All</button>
+        </div>
+        <div class="landing-timeline">
+          ${recentRows
+            .map(
+              (entry) => `
+                <div>
+                  <span>${eventLabels[entry.type] ?? entry.type}</span>
+                  <strong>${entry.product_name}</strong>
+                  <small>${entry.location} &middot; ${entry.delta > 0 ? "+" : ""}${formatQuantity(entry.delta)} ${productUnit(entry.product_id)}</small>
+                </div>
+              `,
+            )
+            .join("")}
+        </div>
+      </article>
+    </section>
+  `;
 }
 
 function renderDashboard(localLedger, stockRows) {
@@ -342,6 +522,8 @@ function renderDashboard(localLedger, stockRows) {
             <h2>${stockViewTitle()}</h2>
             <p class="section-help">${stockViewHelp()}</p>
           </div>
+        </div>
+        <div class="stock-control-row">
           ${renderStockControls()}
         </div>
         ${renderStockView(stockRows)}
@@ -369,6 +551,7 @@ function renderComposer(localLedger) {
           </div>
         </div>
         ${renderEventHelp(form.type)}
+        ${renderActionTemplate(form.type)}
         <form class="event-form" data-form="event">
           <label>
             <span>What Happened?</span>
@@ -384,7 +567,7 @@ function renderComposer(localLedger) {
           </label>
           ${renderLocationFields(form)}
           <label>
-            <span>Quantity</span>
+            <span>${actionCopy(form.type).quantityLabel}</span>
             <input name="quantity" type="number" step="0.01" value="${escapeAttr(form.quantity)}" />
           </label>
           ${
@@ -408,7 +591,7 @@ function renderComposer(localLedger) {
           }
           <label class="span-2">
             <span>Reason</span>
-            <textarea name="reason" rows="3" placeholder="Example: evening service use, supplier delivery, or physical count difference">${escapeHtml(form.reason)}</textarea>
+            <textarea name="reason" rows="3" placeholder="${actionCopy(form.type).reasonPlaceholder}">${escapeHtml(form.reason)}</textarea>
           </label>
           <div class="form-footer span-2">
             <div class="validation ${validation.valid ? "is-valid" : "is-error"}">
@@ -423,6 +606,7 @@ function renderComposer(localLedger) {
 }
 
 function renderLocationFields(form) {
+  const copy = actionCopy(form.type);
   const fromVisible = ["STOCK_OUT", "STOCK_TRANSFER"].includes(form.type);
   const toVisible = ["STOCK_IN", "STOCK_TRANSFER", "STOCK_ADJUSTMENT"].includes(form.type);
   const revertVisible = form.type === "STOCK_REVERT";
@@ -430,7 +614,7 @@ function renderLocationFields(form) {
   if (revertVisible) {
     return `
       <label>
-        <span>Location</span>
+        <span>${copy.sourceLabel}</span>
         <select name="from_location">
           <option value="">Use Original Location</option>
           ${locations.map((location) => `<option value="${location.name}" ${form.from_location === location.name ? "selected" : ""}>${location.name}</option>`).join("")}
@@ -443,7 +627,7 @@ function renderLocationFields(form) {
     ${
       fromVisible
         ? `<label>
-            <span>Where From?</span>
+            <span>${copy.sourceLabel}</span>
             <select name="from_location">
               <option value="">Choose Starting Place</option>
               ${locations.map((location) => `<option value="${location.name}" ${form.from_location === location.name ? "selected" : ""}>${location.name}</option>`).join("")}
@@ -454,7 +638,7 @@ function renderLocationFields(form) {
     ${
       toVisible
         ? `<label>
-            <span>Where To?</span>
+            <span>${copy.destinationLabel}</span>
             <select name="to_location">
               <option value="">Choose Ending Place</option>
               ${locations.map((location) => `<option value="${location.name}" ${form.to_location === location.name ? "selected" : ""}>${location.name}</option>`).join("")}
@@ -466,21 +650,77 @@ function renderLocationFields(form) {
 }
 
 function renderEventHelp(type) {
-  const help = {
-    STOCK_IN: ["Use this for deliveries or restock.", "Choose where the stock arrived."],
-    STOCK_OUT: ["Use this when stock was used, sold, wasted, or broken.", "Choose where it left from."],
-    STOCK_TRANSFER: ["Use this when stock moved from one place to another.", "Choose both the starting place and ending place."],
-    STOCK_ADJUSTMENT: ["Use this after a hand count finds a difference.", "Use a plus number to add stock or a minus number to subtract stock."],
-    STOCK_REVERT: ["Use this to reverse a mistake.", "Choose the original movement that should be cancelled."],
-  };
-  const [title, text] = help[type] ?? ["Record the movement.", "Fill the required fields before saving."];
+  const copy = actionCopy(type);
 
   return `
     <div class="form-guide">
       <strong>${eventLabels[type] ?? "Record Movement"}</strong>
-      <span>${title} ${text}</span>
+      <span>${copy.help}</span>
     </div>
   `;
+}
+
+function renderActionTemplate(type) {
+  const copy = actionCopy(type);
+
+  return `
+    <div class="template-strip" aria-label="Action Template">
+      <span>${copy.template}</span>
+      <strong>${copy.summary}</strong>
+    </div>
+  `;
+}
+
+function actionCopy(type) {
+  const copies = {
+    STOCK_IN: {
+      template: "Delivery Template",
+      summary: "Product arrived into one location.",
+      help: "Use this for supplier delivery, restock, or opening stock. Choose where the stock arrived.",
+      sourceLabel: "Not Used",
+      destinationLabel: "Arrived At",
+      quantityLabel: "Amount Received",
+      reasonPlaceholder: "Example: supplier delivery accepted",
+    },
+    STOCK_OUT: {
+      template: "Usage Template",
+      summary: "Product left one location.",
+      help: "Use this when stock was sold, used, wasted, or broken. Choose where it left from.",
+      sourceLabel: "Left From",
+      destinationLabel: "Not Used",
+      quantityLabel: "Amount Used",
+      reasonPlaceholder: "Example: evening service use",
+    },
+    STOCK_TRANSFER: {
+      template: "Transfer Template",
+      summary: "Product moved between two locations.",
+      help: "Use this when stock moved from one place to another. Choose both the starting place and ending place.",
+      sourceLabel: "Move From",
+      destinationLabel: "Move To",
+      quantityLabel: "Amount Moved",
+      reasonPlaceholder: "Example: moved to Main Bar for opening",
+    },
+    STOCK_ADJUSTMENT: {
+      template: "Count Correction Template",
+      summary: "A hand count found a difference.",
+      help: "Use this after a hand count finds a difference. Use a plus number to add stock or a minus number to subtract stock.",
+      sourceLabel: "Count Location",
+      destinationLabel: "Count Location",
+      quantityLabel: "Correction Amount",
+      reasonPlaceholder: "Example: physical count difference",
+    },
+    STOCK_REVERT: {
+      template: "Mistake Reversal Template",
+      summary: "Cancel one earlier movement without deleting it.",
+      help: "Use this to reverse a mistake. Choose the original movement that should be cancelled.",
+      sourceLabel: "Original Location",
+      destinationLabel: "Not Used",
+      quantityLabel: "Amount to Reverse",
+      reasonPlaceholder: "Example: wrong product was selected",
+    },
+  };
+
+  return copies[type] ?? copies.STOCK_OUT;
 }
 
 function renderOutbox(outboxValidation) {
@@ -504,11 +744,11 @@ function renderOutbox(outboxValidation) {
                 <table>
                   <thead>
                     <tr>
-                      <th>No.</th>
+                      <th class="numeric">No.</th>
                       <th>Action</th>
                       <th>Product</th>
                       <th>Location</th>
-                      <th>Amount</th>
+                      <th class="numeric">Amount</th>
                       <th>Duplicate Check</th>
                       <th>Status</th>
                     </tr>
@@ -518,7 +758,7 @@ function renderOutbox(outboxValidation) {
                       .map(
                         ({ event, validation }) => `
                           <tr>
-                            <td>${event.sequence_number}</td>
+                            <td class="numeric">${event.sequence_number}</td>
                             <td><span class="type-pill">${eventLabels[event.type]}</span></td>
                             <td>${productName(event.product_id)}</td>
                             <td>${eventLocationText(event)}</td>
@@ -595,9 +835,9 @@ function renderReconcile(stockRows) {
               <tr>
                 <th>Product</th>
                 <th>Location</th>
-                <th>System Count</th>
+                <th class="numeric">System Count</th>
                 <th>Hand Count</th>
-                <th>Difference</th>
+                <th class="numeric">Difference</th>
                 <th>Action</th>
               </tr>
             </thead>
@@ -693,22 +933,24 @@ function renderFilters() {
 function renderStockControls() {
   return `
     <div class="stock-controls" aria-label="Stock View Options">
+      <div class="stock-filter-slot">
+        ${
+          state.stockView === "location"
+            ? `<label class="compact-select">
+                <span>Location</span>
+                <select data-filter="selected-location">
+                  ${locations.map((location) => `<option value="${location.name}" ${state.selectedLocation === location.name ? "selected" : ""}>${location.name}</option>`).join("")}
+                </select>
+              </label>`
+            : ""
+        }
+        ${state.stockView === "detail" ? renderFilters() : ""}
+      </div>
       <div class="view-switch" role="group" aria-label="Choose Stock View">
         ${stockViewButton("totals", "Total Stock", "layers")}
         ${stockViewButton("location", "By Location", "map")}
         ${stockViewButton("detail", "Detailed List", "list")}
       </div>
-      ${
-        state.stockView === "location"
-          ? `<label class="compact-select">
-              <span>Location</span>
-              <select data-filter="selected-location">
-                ${locations.map((location) => `<option value="${location.name}" ${state.selectedLocation === location.name ? "selected" : ""}>${location.name}</option>`).join("")}
-              </select>
-            </label>`
-          : ""
-      }
-      ${state.stockView === "detail" ? renderFilters() : ""}
     </div>
   `;
 }
@@ -747,9 +989,9 @@ function renderMasterStockTable(rows) {
         <thead>
           <tr>
             <th>Product</th>
-            <th>Total Stock</th>
+            <th class="numeric">Total Stock</th>
             <th>Unit</th>
-            <th>Locations With Stock</th>
+            <th class="numeric">Locations With Stock</th>
             <th>Status</th>
           </tr>
         </thead>
@@ -761,7 +1003,7 @@ function renderMasterStockTable(rows) {
                   <td>${row.product_name}</td>
                   <td class="numeric">${formatQuantity(row.quantity)}</td>
                   <td>${productUnit(row.product_id)}</td>
-                  <td>${row.location_count}</td>
+                  <td class="numeric">${row.location_count}</td>
                   <td>${stockState(row)}</td>
                 </tr>
               `,
@@ -799,7 +1041,7 @@ function renderLocationStockTable(rows) {
           <tr>
             <th>Product</th>
             <th>Location</th>
-            <th>Quantity</th>
+            <th class="numeric">Quantity</th>
             <th>Unit</th>
             <th>Status</th>
           </tr>
@@ -850,7 +1092,7 @@ function renderStockTable(rows) {
           <tr>
             <th>Product</th>
             <th>Location</th>
-            <th>Quantity</th>
+            <th class="numeric">Quantity</th>
             <th>Unit</th>
             <th>Status</th>
           </tr>
@@ -906,12 +1148,12 @@ function renderAuditTable(events, limit = null, compact = false) {
       <table>
         <thead>
           <tr>
-            <th>No.</th>
+            <th class="numeric">No.</th>
             <th>Action</th>
             <th>Product</th>
             <th>Location</th>
-            <th>Change</th>
-            <th>New balance</th>
+            <th class="numeric">Change</th>
+            <th class="numeric">New Balance</th>
             <th>Actor</th>
             ${compact ? "" : "<th>Batch</th><th>Fix</th>"}
           </tr>
@@ -921,7 +1163,7 @@ function renderAuditTable(events, limit = null, compact = false) {
             .map(
               (entry) => `
                 <tr>
-                  <td>${entry.sequence_number}</td>
+                  <td class="numeric">${entry.sequence_number}</td>
                   <td><span class="type-pill">${eventLabels[entry.type] ?? entry.type}</span></td>
                   <td>${entry.product_name}</td>
                   <td>${entry.location}</td>
@@ -994,6 +1236,7 @@ function bindEvents() {
     button.addEventListener("click", () => {
       state.activeView = button.dataset.view;
       state.guideOpen = false;
+      state.accountOpen = false;
       commit();
     });
   });
@@ -1005,10 +1248,25 @@ function bindEvents() {
     });
   });
 
+  document.querySelectorAll("[data-action='toggle-account']").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.accountOpen = !state.accountOpen;
+      commit();
+    });
+  });
+
+  document.querySelectorAll("[data-action='toggle-sidebar']").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.sidebarCollapsed = !state.sidebarCollapsed;
+      state.accountOpen = false;
+      commit();
+    });
+  });
+
   document.querySelectorAll("[data-action='toggle-online']").forEach((button) => {
     button.addEventListener("click", () => {
       state.online = !state.online;
-      state.message = state.online ? "You are online. You can send saved work now." : "You are offline. New work will stay saved on this device.";
+      showToast(state.online ? "Online. You can send saved work now." : "Offline. New work stays saved on this device.");
       commit();
     });
   });
@@ -1120,13 +1378,13 @@ function appendFormEvent() {
   const validation = validateEvent(event);
 
   if (!validation.valid) {
-    state.message = validation.reason;
+    showToast(simpleValidationReason(validation.reason), "error");
     commit();
     return;
   }
 
   state.outbox.push(event);
-  state.message = `${eventLabels[event.type]} saved locally. Send work when online.`;
+  showToast(`${eventLabels[event.type]} saved locally. Send work when online.`);
   state.form.quantity = 1;
   state.form.reason = "";
   state.activeView = "outbox";
@@ -1135,14 +1393,14 @@ function appendFormEvent() {
 
 function syncOutbox() {
   if (!state.online) {
-    state.message = "Work was not sent because the device is offline. Switch to Online first.";
+    showToast("Work was not sent. Switch to Online first.", "error");
     commit();
     return;
   }
 
   const result = applySyncBatch(state.serverLedger, state.outbox);
   if (!result.success) {
-    state.message = `Work was not sent. Fix the highlighted saved movement, then send again.`;
+    showToast("Work was not sent. Fix the highlighted saved movement, then send again.", "error");
     commit();
     return;
   }
@@ -1150,7 +1408,7 @@ function syncOutbox() {
   state.serverLedger = result.ledger;
   state.outbox = [];
   state.lastSync = new Date(result.server_timestamp).toISOString();
-  state.message = `${result.processed_count} saved movement(s) sent successfully. The stock list is now updated.`;
+  showToast(`${result.processed_count} saved movement(s) sent successfully. The stock list is now updated.`);
   commit();
 }
 
@@ -1179,7 +1437,7 @@ function reconcileCount(key) {
 
   state.outbox.push(event);
   delete state.physicalCounts[key];
-  state.message = "Count difference saved as a correction. The old history was not changed.";
+  showToast("Count difference saved as a correction. The old history was not changed.");
   state.activeView = "outbox";
   commit();
 }
@@ -1206,7 +1464,7 @@ function createRevert(eventId) {
   });
 
   state.outbox.push(event);
-  state.message = "Mistake reversal saved. The original record still stays visible in history.";
+  showToast("Mistake reversal saved. The original record still stays visible in history.");
   state.activeView = "outbox";
   commit();
 }
@@ -1324,6 +1582,15 @@ function countKey(row) {
   return `${row.product_id}::${row.location}`;
 }
 
+function showToast(message, type = "success") {
+  state.toast = { message, type, created_at: Date.now() };
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    state.toast = null;
+    commit();
+  }, 3600);
+}
+
 function nextAction(context = {}) {
   const issueCount = (context.lowRows ?? 0) + (context.invalidOutbox ?? 0) + (context.negativeRows ?? 0);
 
@@ -1364,6 +1631,7 @@ function nextAction(context = {}) {
 
 function navIcon(view) {
   const icons = {
+    home: "home",
     dashboard: "layers",
     compose: "plus",
     outbox: "send",
@@ -1385,6 +1653,12 @@ function icon(name) {
     list: '<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>',
     spark: '<path d="M12 2l1.6 5.4L19 9l-5.4 1.6L12 16l-1.6-5.4L5 9l5.4-1.6L12 2Z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z"/>',
     close: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+    chevron: '<path d="m6 9 6 6 6-6"/>',
+    refresh: '<path d="M21 12a9 9 0 0 1-15.5 6.2"/><path d="M3 12A9 9 0 0 1 18.5 5.8"/><path d="M3 19v-5h5"/><path d="M21 5v5h-5"/>',
+    alert: '<path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/>',
+    panelClose: '<path d="M3 5h18v14H3z"/><path d="M9 5v14"/><path d="m16 10-2 2 2 2"/>',
+    panelOpen: '<path d="M3 5h18v14H3z"/><path d="M9 5v14"/><path d="m14 10 2 2-2 2"/>',
+    home: '<path d="m3 11 9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',
   };
 
   return `<svg class="icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${paths[name] ?? paths.layers}</svg>`;
@@ -1392,6 +1666,7 @@ function icon(name) {
 
 function viewTitle() {
   const titles = {
+    home: "StockLedger",
     dashboard: "Stock Overview",
     compose: "Record Movement",
     outbox: "Send Work",

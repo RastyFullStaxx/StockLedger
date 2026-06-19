@@ -25,6 +25,8 @@ try {
   await page.evaluate(() => localStorage.clear());
   await page.reload({ waitUntil: "networkidle" });
 
+  await page.getByRole("heading", { name: "StockLedger" }).waitFor();
+  await page.getByRole("button", { name: /Open Stock Overview/ }).click();
   await page.getByRole("heading", { name: "Stock Overview" }).waitFor();
   await page.getByRole("button", { name: /Action\s+Record Movement/ }).click();
   await page.getByRole("heading", { name: "Record Movement" }).waitFor();
