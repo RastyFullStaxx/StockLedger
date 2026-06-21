@@ -1,5 +1,4 @@
 import {
-  EVENT_TYPES,
   applySyncBatch,
   computeStock,
   createInventoryEvent,
@@ -16,6 +15,16 @@ const STORAGE_KEY = "stockledger-local-prototype-state-v1";
 const PRODUCT_DEACTIVATE_EPSILON = 0.0001;
 const PRODUCT_DEACTIVATION_REASON = "Product deactivated; balances auto-closed by system";
 const PRODUCT_EVENT_PREFIX = "PRODUCT_";
+const ACTION_EVENT_TYPES = [
+  "STOCK_IN",
+  "STOCK_OUT",
+  "STOCK_TRANSFER",
+  "STOCK_ADJUSTMENT",
+  "STOCK_REVERT",
+  "PRODUCT_CREATED",
+  "PRODUCT_DEACTIVATED",
+  "PRODUCT_REACTIVATED",
+];
 const tenant = {
   client_id: "tenant-northstar-hospitality",
   client_name: "Northstar Hospitality",
@@ -351,22 +360,16 @@ const screenMeta = {
     guide: "Start here. Check total stock first, then look at one location when you need detail.",
   },
   compose: {
-    title: "Record Movement",
+    title: "Stock Actions",
     kicker: "Actions",
-    label: "Record Movement",
-    guide: "Write what happened. For a physical count, enter what you counted — the system calculates the correction for you.",
+    label: "Stock Actions",
+    guide: "Record stock work, product lifecycle work, and send the pending batch from one place.",
   },
   products: {
     title: "Products",
     kicker: "Catalog",
     label: "Products",
-    guide: "Add new products here so they immediately appear for movement and reporting.",
-  },
-  outbox: {
-    title: "Send Work",
-    kicker: "Sync",
-    label: "Send Work",
-    guide: "These events are saved on this device. When online, send them together as one safe batch.",
+    guide: "Use this as a catalog view. Product changes are prepared in Stock Actions so they enter the same work queue.",
   },
   audit: {
     title: "Audit",
@@ -377,22 +380,21 @@ const screenMeta = {
 };
 
 const eventLabels = {
-  STOCK_IN: "Add Delivery",
-  STOCK_OUT: "Record Use",
+  STOCK_IN: "Stock In",
+  STOCK_OUT: "Stock Use",
   STOCK_TRANSFER: "Move Stock",
-  STOCK_ADJUSTMENT: "Correct Count",
-  STOCK_REVERT: "Reverse Mistake",
-  PRODUCT_CREATED: "Product Created",
-  PRODUCT_DEACTIVATED: "Product Deactivated",
-  PRODUCT_REACTIVATED: "Product Reactivated",
+  STOCK_ADJUSTMENT: "Correct Stock Count",
+  STOCK_REVERT: "Reverse a Record",
+  PRODUCT_CREATED: "Enroll Product",
+  PRODUCT_DEACTIVATED: "Suspend Product",
+  PRODUCT_REACTIVATED: "Reactivate Product",
 };
 
-const STOCK_EVENT_TYPES = EVENT_TYPES.filter((type) => !type.startsWith(PRODUCT_EVENT_PREFIX));
 const REVERTIBLE_EVENT_TYPES = new Set(["STOCK_IN", "STOCK_OUT", "STOCK_TRANSFER", "STOCK_ADJUSTMENT"]);
 
 const ACTION_TEMPLATES = {
   STOCK_IN: {
-    template: "Delivery Template",
+    template: "Stock In Template",
     summary: "Product arrived into one location.",
     help: "Use this for supplier delivery, restock, or opening stock. Choose where the stock arrived.",
     requiredFields: ["product_id", "to_location", "quantity"],
@@ -413,7 +415,7 @@ const ACTION_TEMPLATES = {
     },
   },
   STOCK_OUT: {
-    template: "Usage Template",
+    template: "Stock Use Template",
     summary: "Product left one location.",
     help: "Use this when stock was sold, used, wasted, or broken. Choose where it left from.",
     requiredFields: ["product_id", "from_location", "quantity"],
@@ -455,7 +457,7 @@ const ACTION_TEMPLATES = {
     },
   },
   STOCK_ADJUSTMENT: {
-    template: "Count Correction Template",
+    template: "Correct Stock Count Template",
     summary: "A hand count found a difference.",
     help: "Choose the product and location you counted. Enter what you physically counted — the system shows the current count and calculates the difference for you.",
     requiredFields: ["product_id", "to_location", "quantity"],
@@ -478,7 +480,7 @@ const ACTION_TEMPLATES = {
     },
   },
   STOCK_REVERT: {
-    template: "Mistake Reversal Template",
+    template: "Reverse a Record Template",
     summary: "Cancel one earlier movement without deleting it.",
     help: "Use this to reverse a mistake. Choose the original movement that should be cancelled.",
     requiredFields: ["product_id", "original_event_id"],
@@ -495,6 +497,45 @@ const ACTION_TEMPLATES = {
       from_location: "",
       to_location: "",
       quantity: 1,
+      original_event_id: "",
+    },
+  },
+  PRODUCT_CREATED: {
+    template: "Product Enrollment Template",
+    summary: "Add a product to the catalog before stock work references it.",
+    help: "Use this for a new product. Enrollment is saved to the same work queue as inventory records.",
+    kind: "product-create",
+    reasonPlaceholder: "Example: new seasonal item",
+    defaults: {
+      from_location: "",
+      to_location: "",
+      quantity: 0,
+      original_event_id: "",
+    },
+  },
+  PRODUCT_DEACTIVATED: {
+    template: "Product Suspension Template",
+    summary: "Suspend a product and close any replayed stock balance.",
+    help: "Use this when a product should stop appearing in stock work. Any non-zero balance is queued as grouped closure work.",
+    kind: "product-suspend",
+    reasonPlaceholder: "Example: seasonal item removed from menu",
+    defaults: {
+      from_location: "",
+      to_location: "",
+      quantity: 0,
+      original_event_id: "",
+    },
+  },
+  PRODUCT_REACTIVATED: {
+    template: "Product Reactivation Template",
+    summary: "Return a suspended product to active use.",
+    help: "Use this when a suspended product should be selectable again. Reactivation does not create stock movement.",
+    kind: "product-reactivate",
+    reasonPlaceholder: "Example: seasonal item returned",
+    defaults: {
+      from_location: "",
+      to_location: "",
+      quantity: 0,
       original_event_id: "",
     },
   },
@@ -519,7 +560,7 @@ function loadState() {
     };
     delete next.physicalCounts;
     delete next.selectedReconcileRowKey;
-    if (next.activeView === "reconcile") next.activeView = "compose";
+    if (next.activeView === "reconcile" || next.activeView === "outbox") next.activeView = "compose";
     return next;
   } catch {
     return defaultState();
@@ -616,14 +657,6 @@ function restoreFocusSnapshot(app, snapshot) {
   }
 }
 
-document.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-action='append-event']");
-  if (!button) return;
-
-  event.preventDefault();
-  appendFormEvent();
-});
-
 function renderSidebar() {
   const navItems = [
     ["home", screenMeta.home],
@@ -631,7 +664,6 @@ function renderSidebar() {
     ["products", screenMeta.products],
     ["compose", screenMeta.compose],
     ["audit", screenMeta.audit],
-    ["outbox", screenMeta.outbox],
   ];
 
   return `
@@ -666,7 +698,7 @@ function renderSidebar() {
                   <span>
                     <span class="nav-item-title">${item.label}</span>
                   </span>
-                  ${key === "outbox" && state.outbox.length ? `<strong>${state.outbox.length}</strong>` : ""}
+                  ${key === "compose" && state.outbox.length ? `<strong>${state.outbox.length}</strong>` : ""}
                 </button>
               `,
             )
@@ -828,10 +860,9 @@ function renderToast() {
 function guideTips() {
   const tips = {
     dashboard: ["Use Total Stock for the master count.", "Use By Location to check one store room, bar, or kitchen.", "Open Detailed List only when you need every product-location row."],
-    compose: ["Choose the action in user terms.", "Record what happened, not the final stock number.", "For Correct Count, enter what you counted — the system shows the current count and calculates the difference.", "Write a short reason that another person can understand."],
-    outbox: ["Saved work stays on this device while offline.", "Send work when the Online button is on.", "If one row has a problem, the full batch waits."],
-    audit: ["Use History when a number needs explaining.", "Reverse a mistake instead of deleting it.", "The original movement remains visible."],
-    products: ["Add a product before you record movements for a new item.", "Pick a low stock threshold to trigger alerts.", "Keep product naming consistent for easy searching."],
+    compose: ["Choose the action in user terms.", "Record what happened, not the final stock number.", "For Correct Stock Count, enter what you counted — the system shows the current count and calculates the difference.", "Send pending work from the Work to Send panel."],
+    audit: ["Use History when a number needs explaining.", "Prepare a reverse record instead of deleting history.", "The original movement remains visible."],
+    products: ["Use Products as a catalog view.", "Enroll, suspend, or reactivate products from Stock Actions.", "Keep product naming consistent for easy searching."],
   };
 
   return tips[state.activeView] ?? tips.dashboard;
@@ -854,8 +885,7 @@ function renderStatusRail(localLedger, stockRows, outboxValidation) {
 
 function renderActiveView(localLedger, stockRows, outboxValidation) {
   if (state.activeView === "home") return renderLanding(localLedger, stockRows, outboxValidation);
-  if (state.activeView === "compose") return renderComposer(localLedger);
-  if (state.activeView === "outbox") return renderOutbox(outboxValidation);
+  if (state.activeView === "compose" || state.activeView === "outbox") return renderComposer(localLedger, outboxValidation);
   if (state.activeView === "audit") return renderAudit(localLedger);
   if (state.activeView === "products") return renderProducts();
   return renderDashboard(localLedger, stockRows, outboxValidation);
@@ -873,7 +903,7 @@ function renderLanding(localLedger, stockRows, outboxValidation) {
           <h2>Inventory That Explains Every Number.</h2>
           <p>Record movements, keep work safe offline, and replay the ledger when a count needs proof.</p>
           <div class="landing-actions">
-            <button class="button button-primary" data-view="compose" type="button">${icon("plus")}Record Movement</button>
+            <button class="button button-primary" data-view="compose" type="button">${icon("plus")}Stock Actions</button>
             <button class="button button-secondary" data-view="dashboard" type="button">${icon("layers")}Open Stock Overview</button>
           </div>
         </div>
@@ -891,8 +921,8 @@ function renderLanding(localLedger, stockRows, outboxValidation) {
           </article>
           <article class="landing-card">
             <span>${icon("send")}</span>
-            <h3>Send Work Safely</h3>
-            <button class="table-action" data-view="outbox" type="button">Check Outbox</button>
+            <h3>Send Saved Work</h3>
+            <button class="table-action" data-view="compose" type="button">Open Stock Actions</button>
           </article>
           <article class="landing-card">
             <span>${icon("list")}</span>
@@ -936,7 +966,7 @@ function renderDashboard(localLedger, stockRows, outboxValidation) {
   `;
 }
 
-function renderComposer(localLedger) {
+function renderComposer(localLedger, outboxValidation) {
   const form = state.form;
   const validation = previewEventValidation();
   const revertOptions = sortEvents(localLedger)
@@ -944,9 +974,11 @@ function renderComposer(localLedger) {
     .slice(-12)
     .reverse();
   const template = actionTemplate(form.type);
+  const isStockAction = !template.kind;
+  const canPreviewValidation = isStockAction;
 
   return `
-    <section class="content-grid composer-grid">
+    <section class="content-grid stock-actions-grid">
       <article class="panel panel-wide">
         ${renderActionTemplate(form.type)}
         <form class="event-form" data-form="event">
@@ -954,37 +986,23 @@ function renderComposer(localLedger) {
             <span>Action Type</span>
             ${renderFieldSelect({
               name: "type",
-              options: STOCK_EVENT_TYPES.map((type) => `<option value="${type}" ${form.type === type ? "selected" : ""}>${eventLabels[type]}</option>`).join(""),
+              options: ACTION_EVENT_TYPES.map((type) => `<option value="${type}" ${form.type === type ? "selected" : ""}>${eventLabels[type]}</option>`).join(""),
               className: "field-select--emphasized",
               menuClassName: "field-select-menu--event-form",
               menuMode: "event-form",
               autofocus: true,
             })}
           </label>
-        <label class="field-select-wrap">
-          <span>Product</span>
-              ${renderFieldSelect({
-              name: "product_id",
-              menuClassName: "field-select-menu--event-form",
-              menuMode: "event-form",
-              options: getActiveProducts()
-                .map((product) => `<option value="${product.id}" ${form.product_id === product.id ? "selected" : ""}>${product.name}</option>`)
-                .join(""),
-            })}
-          </label>
-          ${renderActionTemplateFields(form, template, revertOptions)}
-          <label class="form-field-span-2">
-            <span>Reason</span>
-            <textarea name="reason" rows="3" placeholder="${template.reasonPlaceholder}">${escapeHtml(form.reason)}</textarea>
-          </label>
+          ${renderActionFields(form, template, revertOptions)}
           <div class="form-footer form-field-span-2">
-            <div class="validation ${validation.valid ? "is-valid" : "is-error"}">
-              ${validation.valid ? "Ready to Save on This Device." : simpleValidationReason(validation.reason)}
+            <div class="validation ${canPreviewValidation ? (validation.valid ? "is-valid" : "is-error") : "is-valid"}">
+              ${canPreviewValidation ? (validation.valid ? "Ready to Save on This Device." : simpleValidationReason(validation.reason)) : "Ready to Save on This Device."}
             </div>
-            <button class="button button-primary" data-action="append-event" type="button">${icon("plus")}Save Movement</button>
+            <button class="button button-primary" data-action="append-event" type="button">${icon("plus")}Save Action</button>
           </div>
         </form>
       </article>
+      ${renderWorkQueue(outboxValidation)}
     </section>
   `;
 }
@@ -992,7 +1010,6 @@ function renderComposer(localLedger) {
 function renderProducts() {
   const activeProducts = getActiveProducts();
   const inactiveProducts = getInactiveProducts();
-  const productForm = state.productForm ?? { name: "", category: "", unit: "unit", low: "0" };
 
   const activePagination = paginateRows(activeProducts, state.activeProductsPage);
   state.activeProductsPage = activePagination.page;
@@ -1001,28 +1018,12 @@ function renderProducts() {
 
   return `
     <section class="content-grid">
-      <article class="panel panel-wide">
-        <form class="event-form" data-form="product">
-          <label>
-            <span>Product Name</span>
-            <input name="product-name" type="text" value="${escapeAttr(productForm.name)}" placeholder="e.g. Ginger Syrup" />
-          </label>
-          <label>
-            <span>Category</span>
-            <input name="product-category" type="text" value="${escapeAttr(productForm.category)}" placeholder="e.g. Mixer" />
-          </label>
-          <label>
-            <span>Unit</span>
-            <input name="product-unit" type="text" value="${escapeAttr(productForm.unit)}" placeholder="e.g. bottle, kg, case, unit" />
-          </label>
-          <label>
-            <span>Low Stock Alert Threshold</span>
-            <input name="product-low" type="number" step="0.01" min="0" value="${escapeAttr(productForm.low)}" placeholder="e.g. 6" />
-          </label>
-          <div class="form-footer form-field-span-2">
-            <button class="button button-primary" data-action="create-product" type="button">${icon("plus")}Add Product</button>
-          </div>
-        </form>
+      <article class="panel panel-wide catalog-callout">
+        <div>
+          <h2>Catalog View</h2>
+          <p>Use Stock Actions to enroll, suspend, or reactivate products so those changes join the same work queue as stock records.</p>
+        </div>
+        <button class="button button-primary" data-view="compose" type="button">${icon("plus")}Open Stock Actions</button>
       </article>
       <article class="panel panel-wide panel--flush-table">
         <div class="panel-header">
@@ -1051,7 +1052,6 @@ function renderProductTable(products, group, pagination) {
           <col class="product-col-low-stock" />
           <col class="product-col-status" />
           <col class="product-col-state-change" />
-          <col class="product-col-action" />
         </colgroup>
         <thead>
           <tr>
@@ -1061,19 +1061,14 @@ function renderProductTable(products, group, pagination) {
             <th class="col-low-stock">Low Stock</th>
             <th class="col-status">Status</th>
             <th class="col-state-change">Last State Change</th>
-            <th class="col-action">Action</th>
           </tr>
         </thead>
         <tbody>
           ${products
             .map((product) => {
               const isInactive = group === "inactive";
-              const status = isInactive ? "Inactive" : "Active";
+              const status = isInactive ? "Suspended" : "Active";
               const statusClass = isInactive ? "is-warning" : "is-valid";
-              const actionLabel = isInactive ? "Reactivate" : "Deactivate";
-              const actionTone = isInactive ? "button button-secondary" : "button table-action table-action-warning";
-              const actionDataAction = isInactive ? "reactivate-product" : "deactivate-product";
-              const actionDisabled = !isInactive && productLifecycleBusy === product.id;
               const changeLabel = productLastStateLabel(product);
 
               return `
@@ -1084,16 +1079,6 @@ function renderProductTable(products, group, pagination) {
                   <td class="col-low-stock">${formatQuantity(product.low)}</td>
                   <td class="col-status"><span class="product-status badge ${statusClass}">${status}</span></td>
                   <td class="col-state-change">${escapeHtml(changeLabel)}</td>
-                  <td class="col-action">
-                    <button class="${actionTone}" data-action="${actionDataAction}" data-product-id="${product.id}" data-product-name="${escapeAttr(product.name)}" type="button" ${actionDisabled ? "disabled" : ""}>
-                      ${actionLabel}
-                    </button>
-                    ${
-                      isInactive && hasPendingProductClosureDebt(product.id)
-                        ? `<span class="table-action-subtle" aria-live="polite">Pending lifecycle updates are still in outbox.</span>`
-                        : ""
-                    }
-                  </td>
                 </tr>
               `;
             })
@@ -1104,12 +1089,8 @@ function renderProductTable(products, group, pagination) {
         ${products
           .map((product) => {
             const isInactive = group === "inactive";
-            const status = isInactive ? "Inactive" : "Active";
+            const status = isInactive ? "Suspended" : "Active";
             const statusClass = isInactive ? "is-warning" : "is-valid";
-            const actionLabel = isInactive ? "Reactivate" : "Deactivate";
-            const actionTone = isInactive ? "button button-secondary" : "button table-action table-action-warning";
-            const actionDataAction = isInactive ? "reactivate-product" : "deactivate-product";
-            const actionDisabled = !isInactive && productLifecycleBusy === product.id;
             const changeLabel = productLastStateLabel(product);
 
             return `
@@ -1124,12 +1105,9 @@ function renderProductTable(products, group, pagination) {
                   <div><dt>Low Stock</dt><dd>${formatQuantity(product.low)}</dd></div>
                   <div><dt>Last State Change</dt><dd>${escapeHtml(changeLabel)}</dd></div>
                 </dl>
-                <button class="${actionTone}" data-action="${actionDataAction}" data-product-id="${product.id}" data-product-name="${escapeAttr(product.name)}" type="button" ${actionDisabled ? "disabled" : ""}>
-                  ${actionLabel}
-                </button>
                 ${
                   isInactive && hasPendingProductClosureDebt(product.id)
-                    ? `<small class="table-action-subtle" aria-live="polite">Pending lifecycle updates are still in outbox.</small>`
+                    ? `<small class="table-action-subtle" aria-live="polite">Pending lifecycle updates are still in Work to Send.</small>`
                     : ""
                 }
               </article>
@@ -1139,6 +1117,89 @@ function renderProductTable(products, group, pagination) {
       </div>
       ${renderTablePagination(group === "inactive" ? "inactive-products" : "active-products", pagination, products.length)}
     </div>
+  `;
+}
+
+function renderActionFields(form, template, revertOptions) {
+  if (template.kind === "product-create") return renderProductCreateFields();
+  if (template.kind === "product-suspend") return renderProductLifecycleFields("active", template);
+  if (template.kind === "product-reactivate") return renderProductLifecycleFields("inactive", template);
+
+  return `
+    <label class="field-select-wrap">
+      <span>Product</span>
+      ${renderFieldSelect({
+        name: "product_id",
+        menuClassName: "field-select-menu--event-form",
+        menuMode: "event-form",
+        options: getActiveProducts()
+          .map((product) => `<option value="${product.id}" ${form.product_id === product.id ? "selected" : ""}>${product.name}</option>`)
+          .join(""),
+      })}
+    </label>
+    ${renderActionTemplateFields(form, template, revertOptions)}
+    <label class="form-field-span-2">
+      <span>Reason</span>
+      <textarea name="reason" rows="3" placeholder="${template.reasonPlaceholder}">${escapeHtml(form.reason)}</textarea>
+    </label>
+  `;
+}
+
+function renderProductCreateFields() {
+  const productForm = state.productForm ?? { name: "", category: "", unit: "unit", low: "0" };
+
+  return `
+    <label>
+      <span>Product Name</span>
+      <input name="product-name" type="text" value="${escapeAttr(productForm.name)}" placeholder="e.g. Ginger Syrup" />
+    </label>
+    <label>
+      <span>Category</span>
+      <input name="product-category" type="text" value="${escapeAttr(productForm.category)}" placeholder="e.g. Mixer" />
+    </label>
+    <label>
+      <span>Unit</span>
+      <input name="product-unit" type="text" value="${escapeAttr(productForm.unit)}" placeholder="e.g. bottle, kg, case, unit" />
+    </label>
+    <label>
+      <span>Low Stock Alert Threshold</span>
+      <input name="product-low" type="number" step="0.01" min="0" value="${escapeAttr(productForm.low)}" placeholder="e.g. 6" />
+    </label>
+  `;
+}
+
+function renderProductLifecycleFields(scope, template) {
+  const products = scope === "inactive" ? getInactiveProducts() : getActiveProducts();
+  const selectedProduct = products.find((product) => product.id === state.form.product_id) ?? products[0] ?? null;
+  const closures = template.kind === "product-suspend" && selectedProduct ? getProductDeactivationClosures(selectedProduct) : [];
+
+  return `
+    <label class="field-select-wrap form-field-span-2">
+      <span>Product</span>
+      ${renderFieldSelect({
+        name: "product_id",
+        menuClassName: "field-select-menu--event-form",
+        menuMode: "event-form",
+        options:
+          products.length === 0
+            ? `<option value="">No ${scope === "inactive" ? "suspended" : "active"} products available</option>`
+            : products
+                .map((product) => `<option value="${product.id}" ${(selectedProduct?.id ?? state.form.product_id) === product.id ? "selected" : ""}>${product.name}</option>`)
+                .join(""),
+      })}
+    </label>
+    ${
+      template.kind === "product-suspend"
+        ? `<div class="panel form-field-span-2 product-action-preview">
+            <span>Closure Preview</span>
+            <strong>${selectedProduct ? formatDeactivationClosures(closures) : "Choose a product"}</strong>
+          </div>`
+        : ""
+    }
+    <label class="form-field-span-2">
+      <span>Reason</span>
+      <textarea name="reason" rows="3" placeholder="${template.reasonPlaceholder}">${escapeHtml(state.form.reason)}</textarea>
+    </label>
   `;
 }
 
@@ -1390,23 +1451,67 @@ function findEventForRevert(eventId) {
   return allLocalEvents().find((event) => event.event_id === eventId && event.type !== "STOCK_REVERT");
 }
 
-function renderOutbox(outboxValidation) {
-  const pagination = paginateRows(outboxValidation, state.outboxPage);
+function workQueueItems(outboxValidation) {
+  const grouped = new Map();
+
+  outboxValidation.forEach(({ event, validation }) => {
+    const workItemId = event.work_item_id || event.event_id;
+    if (!grouped.has(workItemId)) {
+      grouped.set(workItemId, {
+        work_item_id: workItemId,
+        events: [],
+        validations: [],
+      });
+    }
+
+    const item = grouped.get(workItemId);
+    item.events.push(event);
+    item.validations.push(validation);
+  });
+
+  return [...grouped.values()].map((item) => {
+    const primary =
+      item.events.find((event) => event.type === "PRODUCT_DEACTIVATED") ??
+      item.events.find((event) => event.type.startsWith(PRODUCT_EVENT_PREFIX)) ??
+      item.events[0];
+    const invalid = item.validations.find((validation) => !validation.valid);
+    const isGrouped = item.events.length > 1;
+
+    return {
+      ...item,
+      sequence_number: Math.min(...item.events.map((event) => Number(event.sequence_number))),
+      label: eventLabels[primary.type] ?? primary.type,
+      product_name: escapeHtml(productName(primary.product_id)),
+      location: isGrouped ? "Grouped work" : escapeHtml(eventLocationText(primary)),
+      amount: isGrouped ? "Grouped work" : formatQuantity(primary.quantity),
+      detail: isGrouped ? `Grouped work: ${item.events.length} events` : `<code>${escapeHtml(primary.idempotency_key)}</code>`,
+      valid: !invalid,
+      status: invalid ? simpleValidationReason(invalid.reason) : "Ready",
+    };
+  });
+}
+
+function renderWorkQueue(outboxValidation) {
+  const workItems = workQueueItems(outboxValidation);
+  const pagination = paginateRows(workItems, state.outboxPage);
   state.outboxPage = pagination.page;
   const pageItems = pagination.pageRows;
 
   return `
-    <section class="content-grid">
-      <article class="panel panel-wide panel--flush-table">
-        <div class="panel-header">
+      <aside class="panel panel-wide panel--flush-table work-queue-panel" aria-label="Work to Send">
+        <div class="panel-header work-queue-header">
+          <div>
+            <h2>Work to Send</h2>
+            <p>${state.outbox.length} event${state.outbox.length === 1 ? "" : "s"} in ${workItems.length} work item${workItems.length === 1 ? "" : "s"}</p>
+          </div>
           <button class="button button-primary" data-action="sync" type="button" ${!state.online || state.outbox.length === 0 ? "disabled" : ""}>
             ${icon("send")}Send Saved Work
           </button>
         </div>
         ${
           state.outbox.length === 0
-            ? `<div class="empty-state"><strong>No Saved Work Waiting</strong></div>`
-            : `<div class="table-wrap outbox-table">
+            ? `<div class="empty-state"><strong>No Work Waiting</strong></div>`
+            : `<div class="table-wrap outbox-table work-queue-table">
                 <table>
                   <thead>
                   <tr>
@@ -1415,7 +1520,7 @@ function renderOutbox(outboxValidation) {
                     <th>Product</th>
                     <th>Location</th>
                     <th class="table-cell--numeric">Amount</th>
-                    <th>Duplicate Check</th>
+                    <th>Batch Detail</th>
                     <th>Status</th>
                     <th>Action</th>
                   </tr>
@@ -1423,17 +1528,17 @@ function renderOutbox(outboxValidation) {
                   <tbody>
                     ${pageItems
                       .map(
-                        ({ event, validation }) => `
+                        (item) => `
                           <tr>
-                            <td class="table-cell--numeric">${event.sequence_number}</td>
-                            <td><span class="type-pill">${eventLabels[event.type]}</span></td>
-                            <td>${productName(event.product_id)}</td>
-                            <td>${eventLocationText(event)}</td>
-                            <td class="table-cell--numeric">${formatQuantity(event.quantity)}</td>
-                            <td><code>${event.idempotency_key}</code></td>
-                            <td><span class="badge ${validation.valid ? "is-valid" : "is-error"}">${validation.valid ? "Ready" : simpleValidationReason(validation.reason)}</span></td>
+                            <td class="table-cell--numeric">${item.sequence_number}</td>
+                            <td><span class="type-pill">${item.label}</span></td>
+                            <td>${item.product_name}</td>
+                            <td>${item.location}</td>
+                            <td class="table-cell--numeric">${item.amount}</td>
+                            <td>${item.detail}</td>
+                            <td><span class="badge ${item.valid ? "is-valid" : "is-error"}">${item.valid ? "Ready" : item.status}</span></td>
                             <td>
-                              <button class="table-action" data-action="undo-outbox-event" data-event-id="${event.event_id}" type="button">Undo</button>
+                              <button class="table-action" data-action="undo-work-item" data-work-item-id="${item.work_item_id}" type="button">Undo</button>
                             </td>
                           </tr>
                         `,
@@ -1444,21 +1549,21 @@ function renderOutbox(outboxValidation) {
                 <div class="outbox-cards" aria-label="Saved work list">
                   ${pageItems
                     .map(
-                      ({ event, validation }) => `
+                      (item) => `
                         <article class="panel-list-card">
                           <div class="kv-row">
                             <div>
-                              <span>No. ${event.sequence_number}</span>
-                              <strong>${eventLabels[event.type]}</strong>
+                              <span>No. ${item.sequence_number}</span>
+                              <strong>${item.label}</strong>
                             </div>
-                            <span class="badge ${validation.valid ? "is-valid" : "is-error"}">${validation.valid ? "Ready" : simpleValidationReason(validation.reason)}</span>
+                            <span class="badge ${item.valid ? "is-valid" : "is-error"}">${item.valid ? "Ready" : item.status}</span>
                           </div>
                           <dl>
-                            <div><dt>Product</dt><dd>${productName(event.product_id)}</dd></div>
-                            <div><dt>Location</dt><dd>${eventLocationText(event)}</dd></div>
-                            <div><dt>Amount</dt><dd>${formatQuantity(event.quantity)}</dd></div>
-                            <div><dt>Duplicate Check</dt><dd><code>${event.idempotency_key}</code></dd></div>
-                            <div><dt>Action</dt><dd><button class="table-action" data-action="undo-outbox-event" data-event-id="${event.event_id}" type="button">Undo</button></dd></div>
+                            <div><dt>Product</dt><dd>${item.product_name}</dd></div>
+                            <div><dt>Location</dt><dd>${item.location}</dd></div>
+                            <div><dt>Amount</dt><dd>${item.amount}</dd></div>
+                            <div><dt>Batch Detail</dt><dd>${item.detail}</dd></div>
+                            <div><dt>Action</dt><dd><button class="table-action" data-action="undo-work-item" data-work-item-id="${item.work_item_id}" type="button">Undo</button></dd></div>
                           </dl>
                         </article>
                       `,
@@ -1468,8 +1573,7 @@ function renderOutbox(outboxValidation) {
                 ${renderTablePagination("outbox", pagination, pageItems.length)}
               </div>`
         }
-      </article>
-    </section>
+      </aside>
   `;
 }
 
@@ -1804,7 +1908,7 @@ function renderAuditTable(events, limit = null, compact = false) {
                       ? ""
                       : `<td><code>${entry.sync_batch_id}</code></td>
                         <td>
-                          <button class="table-action" data-action="quick-revert" data-event-id="${entry.event_id}" type="button" ${!isRevertibleEvent(entry.type) ? "disabled" : ""}>Reverse</button>
+                          <button class="table-action" data-action="prepare-revert" data-event-id="${entry.event_id}" type="button" ${!isRevertibleEvent(entry.type) || hasReversalForEvent(entry.event_id) ? "disabled" : ""}>Prepare reverse record</button>
                         </td>`
                   }
                 </tr>
@@ -1836,8 +1940,8 @@ function renderAuditTable(events, limit = null, compact = false) {
                   compact
                     ? ""
                     : `<div>
-                        <button class="table-action" data-action="quick-revert" data-event-id="${entry.event_id}" type="button" ${!isRevertibleEvent(entry.type) ? "disabled" : ""}>
-                          Reverse
+                        <button class="table-action" data-action="prepare-revert" data-event-id="${entry.event_id}" type="button" ${!isRevertibleEvent(entry.type) || hasReversalForEvent(entry.event_id) ? "disabled" : ""}>
+                          Prepare reverse record
                         </button>
                       </div>`
                 }
@@ -1916,6 +2020,16 @@ function bindEvents() {
     button.addEventListener("click", () => {
       if (button.disabled) return;
       syncOutbox();
+    });
+  });
+
+  document.querySelectorAll("[data-action='append-event']").forEach((button) => {
+    button.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+    });
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      appendFormEvent();
     });
   });
 
@@ -2147,29 +2261,28 @@ function bindEvents() {
     });
   });
 
-  document.querySelectorAll("[data-action='quick-revert']").forEach((button) => {
-    button.addEventListener("click", () => createRevert(button.dataset.eventId));
+  document.querySelectorAll("[data-action='prepare-revert']").forEach((button) => {
+    button.addEventListener("click", () => prepareRevert(button.dataset.eventId));
   });
 
-  document.querySelectorAll("[data-action='undo-outbox-event']").forEach((button) => {
-    button.addEventListener("click", () => undoOutboxEvent(button.dataset.eventId));
-  });
-
-  document.querySelectorAll("[data-action='deactivate-product']").forEach((button) => {
-    button.addEventListener("click", () => deactivateProduct(button.dataset.productId));
-  });
-
-  document.querySelectorAll("[data-action='reactivate-product']").forEach((button) => {
-    button.addEventListener("click", () => reactivateProduct(button.dataset.productId));
+  document.querySelectorAll("[data-action='undo-work-item']").forEach((button) => {
+    button.addEventListener("click", () => undoWorkItem(button.dataset.workItemId));
   });
 
   const form = document.querySelector("[data-form='event']");
   if (form) {
     form.addEventListener("input", (event) => {
       const data = new FormData(form);
+      state.productForm = {
+        ...state.productForm,
+        name: data.get("product-name") ?? state.productForm.name,
+        category: data.get("product-category") ?? state.productForm.category,
+        unit: data.get("product-unit") ?? state.productForm.unit,
+        low: data.get("product-low") ?? state.productForm.low,
+      };
       state.form = {
         ...state.form,
-        product_id: data.get("product_id"),
+        product_id: data.get("product_id") ?? state.form.product_id,
         from_location: data.get("from_location") ?? state.form.from_location ?? "",
         to_location: data.get("to_location") ?? state.form.to_location ?? "",
         quantity: data.has("quantity") ? data.get("quantity") : state.form.quantity,
@@ -2215,28 +2328,6 @@ function bindEvents() {
     });
   }
 
-  const productForm = document.querySelector("[data-form='product']");
-  if (productForm) {
-    productForm.addEventListener("submit", (event) => {
-      event.preventDefault();
-      createProductFromForm();
-    });
-
-    document
-      .querySelectorAll("[data-action='create-product']")
-      .forEach((button) => button.addEventListener("click", createProductFromForm));
-
-    productForm.querySelectorAll("input").forEach((input) => {
-      input.addEventListener("input", () => {
-        state.productForm = {
-          ...state.productForm,
-          [fieldNameForProductInput(input.name)]: input.value,
-        };
-        saveState();
-      });
-    });
-  }
-
   bindTabMotion();
   flushQueuedTabMotion();
 }
@@ -2249,15 +2340,12 @@ function fieldNameForProductInput(name) {
   return name;
 }
 
-function createProductFromForm() {
-  const form = document.querySelector("[data-form='product']");
-  if (!form) return;
-
-  const formData = new FormData(form);
-  const rawName = `${formData.get("product-name") ?? ""}`.trim();
-  const rawCategory = `${formData.get("product-category") ?? ""}`.trim();
-  const rawUnit = `${formData.get("product-unit") ?? "unit"}`.trim() || "unit";
-  const rawLow = `${formData.get("product-low") ?? "0"}`.trim();
+function createProductFromAction() {
+  const productForm = state.productForm ?? { name: "", category: "", unit: "unit", low: "0" };
+  const rawName = `${productForm.name ?? ""}`.trim();
+  const rawCategory = `${productForm.category ?? ""}`.trim();
+  const rawUnit = `${productForm.unit ?? "unit"}`.trim() || "unit";
+  const rawLow = `${productForm.low ?? "0"}`.trim();
 
   if (!rawName) {
     showToast("Product name is required.", "error");
@@ -2274,20 +2362,24 @@ function createProductFromForm() {
   const lowValue = Number(rawLow);
   const low = Number.isFinite(lowValue) && lowValue >= 0 ? lowValue : 0;
   const candidateId = nextProductId(normalizedName, getProductCatalog());
-  const createEvent = createInventoryEvent({
-    ...tenant,
-    event_id: nextId("product-created"),
-    idempotency_key: nextId("idem-product-created"),
-    sync_batch_id: currentBatchId(),
-    type: "PRODUCT_CREATED",
-    product_id: candidateId,
-    product_name: normalizedName,
-    quantity: 0,
-    reason: `Product added to catalog: ${normalizedName}`,
-    sequence_number: nextSequence(),
-    timestamp: Date.now(),
-    status: "queued",
-  });
+  const workItemId = nextId("work-product-created");
+  const createEvent = withWorkItem(
+    createInventoryEvent({
+      ...tenant,
+      event_id: nextId("product-created"),
+      idempotency_key: nextId("idem-product-created"),
+      sync_batch_id: currentBatchId(),
+      type: "PRODUCT_CREATED",
+      product_id: candidateId,
+      product_name: normalizedName,
+      quantity: 0,
+      reason: `Product enrolled: ${normalizedName}`,
+      sequence_number: nextSequence(),
+      timestamp: Date.now(),
+      status: "queued",
+    }),
+    workItemId,
+  );
 
   state.products = [
     ...getProductCatalog(),
@@ -2315,7 +2407,7 @@ function createProductFromForm() {
     low: "0",
   };
 
-  showToast(`Product "${normalizedName}" added to the local catalog.`);
+  showToast(`Product "${normalizedName}" enrolled locally. Send work when online.`);
   commit();
 }
 
@@ -2334,6 +2426,22 @@ function nextProductId(name, catalog) {
 }
 
 function appendFormEvent() {
+  const template = actionTemplate(state.form.type);
+  if (template.kind === "product-create") {
+    createProductFromAction();
+    return;
+  }
+
+  if (template.kind === "product-suspend") {
+    suspendProductFromAction();
+    return;
+  }
+
+  if (template.kind === "product-reactivate") {
+    reactivateProductFromAction();
+    return;
+  }
+
   const event = buildEventFromForm();
   const validation = validateEvent(event);
 
@@ -2350,7 +2458,6 @@ function appendFormEvent() {
   state.form.original_event_id = "";
   state.form.reason = "";
   normalizeFormForType();
-  state.activeView = "outbox";
   commit();
 }
 
@@ -2375,20 +2482,76 @@ function syncOutbox() {
   commit();
 }
 
-function undoOutboxEvent(eventId) {
-  const event = state.outbox.find((candidate) => candidate.event_id === eventId);
-  if (!event) return;
+function undoWorkItem(workItemId) {
+  const events = state.outbox.filter((candidate) => (candidate.work_item_id || candidate.event_id) === workItemId);
+  if (events.length === 0) return;
 
-  const shouldUndo = window.confirm(`Remove ${eventLabels[event.type] ?? event.type} from Send Work queue?`);
+  const primary =
+    events.find((event) => event.type === "PRODUCT_DEACTIVATED") ??
+    events.find((event) => event.type.startsWith(PRODUCT_EVENT_PREFIX)) ??
+    events[0];
+  const label = eventLabels[primary.type] ?? primary.type;
+
+  if (primary.type === "PRODUCT_CREATED" && hasPendingProductDependencies(primary.product_id, workItemId)) {
+    showToast("Remove pending stock work for this new product before undoing enrollment.", "error");
+    return;
+  }
+
+  const shouldUndo = window.confirm(`Remove ${label} from Work to Send?`);
   if (!shouldUndo) return;
 
-  state.outbox = state.outbox.filter((candidate) => candidate.event_id !== eventId);
-  showToast(`${eventLabels[event.type] ?? event.type} removed from Send Work queue.`);
+  state.outbox = state.outbox.filter((candidate) => (candidate.work_item_id || candidate.event_id) !== workItemId);
+  rollbackLocalProductStateForUndo(primary);
+  showToast(`${label} removed from Work to Send.`);
   commit();
 }
 
+function hasPendingProductDependencies(productId, workItemId) {
+  return state.outbox.some(
+    (event) => event.product_id === productId && (event.work_item_id || event.event_id) !== workItemId,
+  );
+}
 
-function createRevert(eventId) {
+function rollbackLocalProductStateForUndo(primaryEvent) {
+  if (primaryEvent.type === "PRODUCT_CREATED") {
+    const existsOnServer = state.serverLedger.some((event) => event.product_id === primaryEvent.product_id);
+    if (!existsOnServer) {
+      state.products = getProductCatalog().filter((product) => product.id !== primaryEvent.product_id);
+    }
+    return;
+  }
+
+  if (primaryEvent.type === "PRODUCT_DEACTIVATED") {
+    state.products = getProductCatalog().map((product) =>
+      product.id === primaryEvent.product_id
+        ? {
+            ...product,
+            is_active: true,
+            deactivated_at: null,
+            deactivated_by: null,
+            deactivated_reason: "",
+          }
+        : product,
+    );
+    return;
+  }
+
+  if (primaryEvent.type === "PRODUCT_REACTIVATED") {
+    state.products = getProductCatalog().map((product) =>
+      product.id === primaryEvent.product_id
+        ? {
+            ...product,
+            is_active: false,
+            reactivated_at: null,
+            reactivated_by: null,
+          }
+        : product,
+    );
+  }
+}
+
+
+function prepareRevert(eventId) {
   const original = allLocalEvents().find((event) => event.event_id === eventId);
   if (!original || original.type === "STOCK_REVERT") return;
   if (!isRevertibleEvent(original.type)) {
@@ -2396,27 +2559,30 @@ function createRevert(eventId) {
     return;
   }
 
-  const event = createInventoryEvent({
-    ...tenant,
-    event_id: nextId("revert"),
-    idempotency_key: nextId("idem-revert"),
-    sync_batch_id: currentBatchId(),
+  if (hasReversalForEvent(original.event_id)) {
+    showToast("A reverse record already exists or is waiting to send for this record.", "error");
+    return;
+  }
+
+  state.form = {
+    ...state.form,
     type: "STOCK_REVERT",
     product_id: original.product_id,
-    product_name: productName(original.product_id),
-    from_location: original.from_location,
-    to_location: original.to_location,
-    quantity: Math.abs(Number(original.quantity)),
+    from_location: "",
+    to_location: "",
+    quantity: 1,
+    physical_count: "",
+    reason: "",
     original_event_id: original.event_id,
-    reason: `Compensating event for ${original.event_id}`,
-    sequence_number: nextSequence(),
-    timestamp: Date.now(),
-  });
-
-  state.outbox.push(event);
-  showToast("Mistake reversal saved. The original record still stays visible in history.");
-  state.activeView = "outbox";
+  };
+  state.activeView = "compose";
+  shouldFocusActionOnCompose = true;
+  showToast("Reverse a Record is ready for review. Add a reason, then save the action.");
   commit();
+}
+
+function hasReversalForEvent(eventId) {
+  return allLocalEvents().some((event) => event.type === "STOCK_REVERT" && event.original_event_id === eventId);
 }
 
 function isRevertibleEvent(eventType) {
@@ -2426,26 +2592,30 @@ function isRevertibleEvent(eventType) {
 function buildEventFromForm() {
   const form = state.form;
   const template = actionTemplate(form.type);
+  const workItemId = nextId("work");
 
   if (form.type === "STOCK_REVERT") {
     const original = findEventForRevert(form.original_event_id);
-    return createInventoryEvent({
-      ...tenant,
-      event_id: nextId("event"),
-      idempotency_key: nextId("idem"),
-      sync_batch_id: currentBatchId(),
-      type: "STOCK_REVERT",
-      product_id: original ? original.product_id : form.product_id,
-      product_name: productName(original ? original.product_id : form.product_id),
-      from_location: original ? original.from_location : null,
-      to_location: original ? original.to_location : null,
-      quantity: original ? Math.abs(Number(original.quantity)) : 1,
-      original_event_id: form.original_event_id || null,
-      reason: form.reason.trim() || "Operational event",
-      sequence_number: nextSequence(),
-      timestamp: Date.now(),
-      status: "queued",
-    });
+    return withWorkItem(
+      createInventoryEvent({
+        ...tenant,
+        event_id: nextId("event"),
+        idempotency_key: nextId("idem"),
+        sync_batch_id: currentBatchId(),
+        type: "STOCK_REVERT",
+        product_id: original ? original.product_id : form.product_id,
+        product_name: productName(original ? original.product_id : form.product_id),
+        from_location: original ? original.from_location : null,
+        to_location: original ? original.to_location : null,
+        quantity: original ? Math.abs(Number(original.quantity)) : 1,
+        original_event_id: form.original_event_id || null,
+        reason: form.reason.trim() || "Operational event",
+        sequence_number: nextSequence(),
+        timestamp: Date.now(),
+        status: "queued",
+      }),
+      workItemId,
+    );
   }
 
   const quantityValue = template.isPhysicalCount
@@ -2456,23 +2626,26 @@ function buildEventFromForm() {
   const defaultReason = template.isPhysicalCount && currentSystemCount(form) !== null
     ? `Physical count ${formatQuantity(Number(form.physical_count || 0))} vs system ${formatQuantity(currentSystemCount(form))}`
     : "Operational event";
-  return createInventoryEvent({
-    ...tenant,
-    event_id: nextId("event"),
-    idempotency_key: nextId("idem"),
-    sync_batch_id: currentBatchId(),
-    type: form.type,
-    product_id: form.product_id,
-    product_name: productName(form.product_id),
-    from_location: form.from_location || null,
-    to_location: form.to_location || null,
-    quantity: quantityValue,
-    original_event_id: form.original_event_id || null,
-    reason: form.reason.trim() || defaultReason,
-    sequence_number: nextSequence(),
-    timestamp: Date.now(),
-    status: "queued",
-  });
+  return withWorkItem(
+    createInventoryEvent({
+      ...tenant,
+      event_id: nextId("event"),
+      idempotency_key: nextId("idem"),
+      sync_batch_id: currentBatchId(),
+      type: form.type,
+      product_id: form.product_id,
+      product_name: productName(form.product_id),
+      from_location: form.from_location || null,
+      to_location: form.to_location || null,
+      quantity: quantityValue,
+      original_event_id: form.original_event_id || null,
+      reason: form.reason.trim() || defaultReason,
+      sequence_number: nextSequence(),
+      timestamp: Date.now(),
+      status: "queued",
+    }),
+    workItemId,
+  );
 }
 
 function previewEventValidation() {
@@ -2487,6 +2660,14 @@ function previewEventValidation() {
 function normalizeFormForType() {
   const template = actionTemplate(state.form.type);
   const defaults = template.defaults ?? {};
+  const selectableProducts = template.kind === "product-reactivate" ? getInactiveProducts() : getActiveProducts();
+
+  if (state.form.type === "PRODUCT_CREATED") {
+    state.form.product_id = "";
+  } else if (!selectableProducts.some((product) => product.id === state.form.product_id)) {
+    state.form.product_id = selectableProducts[0]?.id ?? "";
+  }
+
   state.form.from_location = template.showFromLocation ? state.form.from_location || defaults.from_location || "" : "";
   state.form.to_location = template.showToLocation ? state.form.to_location || defaults.to_location || "" : "";
   state.form.original_event_id = template.showOriginalEvent ? state.form.original_event_id || defaults.original_event_id || "" : "";
@@ -2597,6 +2778,13 @@ function nextId(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function withWorkItem(event, workItemId) {
+  return {
+    ...event,
+    work_item_id: workItemId,
+  };
+}
+
 function showToast(message, type = "success") {
   state.toast = { message, type, created_at: Date.now() };
   clearTimeout(toastTimer);
@@ -2613,8 +2801,8 @@ function nextAction(context = {}) {
     return {
       title: "Send Saved Work",
       text: "There are local changes ready to send. Send them before making reports.",
-      button: "Open Send Work",
-      view: "outbox",
+      button: "Open Stock Actions",
+      view: "compose",
     };
   }
 
@@ -2622,8 +2810,8 @@ function nextAction(context = {}) {
     return {
       title: "Keep Working. Send Later.",
       text: "Your changes are saved on this device. Go online when you are ready to send them.",
-      button: "View Saved Work",
-      view: "outbox",
+      button: "Open Stock Actions",
+      view: "compose",
     };
   }
 
@@ -2637,9 +2825,9 @@ function nextAction(context = {}) {
   }
 
   return {
-    title: "Record the Next Movement",
-    text: "When stock arrives, moves, or gets used, record what happened.",
-    button: "Record Movement",
+    title: "Open Stock Actions",
+    text: "When stock or product catalog work happens, prepare it in the action workspace.",
+    button: "Stock Actions",
     view: "compose",
   };
 }
@@ -2650,7 +2838,6 @@ function navIcon(view) {
     dashboard: "layers",
     products: "list",
     compose: "plus",
-    outbox: "send",
     audit: "history",
   };
 
@@ -2688,8 +2875,7 @@ function viewTitle() {
     home: "StockLedger",
     dashboard: "Stock Overview",
     products: "Products",
-    compose: "Record Movement",
-    outbox: "Send Work",
+    compose: "Stock Actions",
     audit: "History",
   };
   return titles[state.activeView] ?? "Stock Overview";
@@ -2715,7 +2901,15 @@ function ensureProductSelectionIntegrity() {
     state.productFilter = "all";
   }
 
-  if (!activeProductIds.has(state.form.product_id)) {
+  if (state.form.type === "PRODUCT_CREATED") {
+    state.form.product_id = "";
+  } else if (state.form.type === "PRODUCT_REACTIVATED") {
+    const inactiveProducts = getInactiveProducts();
+    const inactiveProductIds = new Set(inactiveProducts.map((product) => product.id));
+    if (!inactiveProductIds.has(state.form.product_id)) {
+      state.form.product_id = inactiveProducts[0]?.id ?? "";
+    }
+  } else if (!activeProductIds.has(state.form.product_id)) {
     state.form.product_id = activeProducts[0]?.id ?? "";
   }
 
@@ -2729,7 +2923,7 @@ function productLastStateLabel(product) {
     return product.reactivated_at ? `Reactivated ${displayDateTime(product.reactivated_at)} by ${product.reactivated_by || "operator"}` : "Active";
   }
 
-  const base = product.deactivated_at ? `Deactivated ${displayDateTime(product.deactivated_at)} by ${product.deactivated_by || "operator"}` : "Inactive";
+  const base = product.deactivated_at ? `Suspended ${displayDateTime(product.deactivated_at)} by ${product.deactivated_by || "operator"}` : "Suspended";
   const reason = `${product.deactivated_reason || ""}`.trim();
   return reason ? `${base}. ${reason}` : base;
 }
@@ -2787,63 +2981,71 @@ function hasPendingProductClosureDebt(productId) {
   );
 }
 
-function deactivateProduct(productId) {
+function suspendProductFromAction() {
+  const productId = state.form.product_id;
   if (!productId) return;
   if (productLifecycleBusy === productId) return;
 
   const product = getProductById(productId);
   if (!product) {
-    showToast("Product not found for deactivation.", "error");
+    showToast("Product not found for suspension.", "error");
     return;
   }
 
   if (!product.is_active) {
-    showToast(`"${product.name}" is already inactive.`);
+    showToast(`"${product.name}" is already suspended.`);
     return;
   }
 
   const closures = getProductDeactivationClosures(product);
   const closurePreview = formatDeactivationClosures(closures);
   const shouldProceed = window.confirm(
-    `Deactivate "${product.name}"?\n\nStock Closure Preview:\n${closurePreview}\n\nThis will add one STOCK_ADJUSTMENT per affected location and then mark the product inactive.`,
+    `Suspend "${product.name}"?\n\nStock Closure Preview:\n${closurePreview}\n\nThis will add one STOCK_ADJUSTMENT per affected location and then mark the product inactive.`,
   );
   if (!shouldProceed) return;
 
   productLifecycleBusy = productId;
   try {
-  const actorReason = (window.prompt("Enter reason for deactivation (optional):", "") || "").trim();
-  const batchId = currentBatchId();
-  let sequence = nextSequence();
-  const lifecycleEvent = createInventoryEvent({
-    ...tenant,
-    event_id: nextId("deactivate"),
-    idempotency_key: nextId("idem-deactivate"),
-    sync_batch_id: batchId,
-    type: "PRODUCT_DEACTIVATED",
-    product_id: product.id,
-    product_name: product.name,
-    quantity: 0,
-    reason: actorReason ? `Product deactivated: ${actorReason}` : "Product deactivated",
-    sequence_number: sequence++,
-    timestamp: Date.now(),
-    status: "queued",
-  });
-  const closureEvents = closures.map((entry) =>
-    createInventoryEvent({
-      ...tenant,
-        event_id: nextId("deactivate"),
-        idempotency_key: nextId("idem-deactivate"),
+    const actorReason = `${state.form.reason ?? ""}`.trim();
+    const batchId = currentBatchId();
+    const workItemId = nextId("work-product-suspended");
+    let sequence = nextSequence();
+    const lifecycleEvent = withWorkItem(
+      createInventoryEvent({
+        ...tenant,
+        event_id: nextId("suspend"),
+        idempotency_key: nextId("idem-suspend"),
         sync_batch_id: batchId,
-        type: "STOCK_ADJUSTMENT",
+        type: "PRODUCT_DEACTIVATED",
         product_id: product.id,
         product_name: product.name,
-        to_location: entry.location,
-        quantity: entry.closureQuantity,
-        reason: PRODUCT_DEACTIVATION_REASON,
+        quantity: 0,
+        reason: actorReason ? `Product suspended: ${actorReason}` : "Product suspended",
         sequence_number: sequence++,
         timestamp: Date.now(),
         status: "queued",
       }),
+      workItemId,
+    );
+    const closureEvents = closures.map((entry) =>
+      withWorkItem(
+        createInventoryEvent({
+          ...tenant,
+          event_id: nextId("suspend-closure"),
+          idempotency_key: nextId("idem-suspend-closure"),
+          sync_batch_id: batchId,
+          type: "STOCK_ADJUSTMENT",
+          product_id: product.id,
+          product_name: product.name,
+          to_location: entry.location,
+          quantity: entry.closureQuantity,
+          reason: PRODUCT_DEACTIVATION_REASON,
+          sequence_number: sequence++,
+          timestamp: Date.now(),
+          status: "queued",
+        }),
+        workItemId,
+      ),
     );
 
     state.outbox = [...state.outbox, lifecycleEvent, ...closureEvents];
@@ -2863,10 +3065,11 @@ function deactivateProduct(productId) {
 
     showToast(
       closures.length
-            ? `${product.name} deactivated and ${closures.length} balancing event(s) queued to Outbox.`
-            : `${product.name} deactivated. No balances required closing.`,
+        ? `${product.name} suspended and ${closures.length} balancing event(s) queued.`
+        : `${product.name} suspended. No balances required closing.`,
     );
 
+    state.form.reason = "";
     ensureProductSelectionIntegrity();
     commit();
   } finally {
@@ -2874,7 +3077,8 @@ function deactivateProduct(productId) {
   }
 }
 
-function reactivateProduct(productId) {
+function reactivateProductFromAction() {
+  const productId = state.form.product_id;
   const product = getProductById(productId);
   if (!product) {
     showToast("Product not found for reactivation.", "error");
@@ -2887,28 +3091,32 @@ function reactivateProduct(productId) {
   }
 
   const warning = hasPendingProductClosureDebt(productId)
-    ? "There are pending deactivation closure events for this product in outbox."
+    ? "There are pending suspension closure events for this product in Work to Send."
     : "";
 
   const shouldProceed = window.confirm(
     `Reactivate "${product.name}"?\n\nReactivation does not create any stock movement events. Current stock (replayed) becomes immediately reusable.${warning ? `\n\n${warning}` : ""}`,
   );
   if (!shouldProceed) return;
-  const actorReason = (window.prompt("Enter reason for reactivation (optional):", "") || "").trim();
-  const reactivationEvent = createInventoryEvent({
-    ...tenant,
-    event_id: nextId("reactivate"),
-    idempotency_key: nextId("idem-reactivate"),
-    sync_batch_id: currentBatchId(),
-    type: "PRODUCT_REACTIVATED",
-    product_id: product.id,
-    product_name: product.name,
-    quantity: 0,
-    reason: actorReason ? `Product reactivated: ${actorReason}` : "Product reactivated",
-    sequence_number: nextSequence(),
-    timestamp: Date.now(),
-    status: "queued",
-  });
+  const actorReason = `${state.form.reason ?? ""}`.trim();
+  const workItemId = nextId("work-product-reactivated");
+  const reactivationEvent = withWorkItem(
+    createInventoryEvent({
+      ...tenant,
+      event_id: nextId("reactivate"),
+      idempotency_key: nextId("idem-reactivate"),
+      sync_batch_id: currentBatchId(),
+      type: "PRODUCT_REACTIVATED",
+      product_id: product.id,
+      product_name: product.name,
+      quantity: 0,
+      reason: actorReason ? `Product reactivated: ${actorReason}` : "Product reactivated",
+      sequence_number: nextSequence(),
+      timestamp: Date.now(),
+      status: "queued",
+    }),
+    workItemId,
+  );
 
   state.products = getProductCatalog().map((current) =>
     current.id === productId
@@ -2923,6 +3131,7 @@ function reactivateProduct(productId) {
   state.outbox = [...state.outbox, reactivationEvent];
 
   showToast(`"${product.name}" is active again. Reactivation does not create stock movement events.`);
+  state.form.reason = "";
   ensureProductSelectionIntegrity();
   commit();
 }

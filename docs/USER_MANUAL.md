@@ -69,25 +69,22 @@ It shows:
 
 The numbers are calculated from saved movements.
 
-### Record Movement
+### Stock Actions
 
-Use this screen when something happens to stock.
+Use this screen when you need to prepare work.
 
 Examples:
 
-- delivery arrived
+- stock came in
 - stock was used
 - stock moved to another place
 - a hand count found a difference
-- a mistake needs to be reversed
-
-### Send Work
-
-Use this screen to send local work.
+- a previous record needs to be reversed
+- a product needs to be enrolled, suspended, or reactivated
 
 If the device is offline, work stays safely saved on the device.
 
-When the device is online, click `Send Work` or `Send Saved Work`.
+The left side is the action form. The right side is `Work to Send`.
 
 Important: saved work is sent as one batch. If one movement has a problem, the whole batch is stopped so stock history stays clean.
 
@@ -105,19 +102,17 @@ It shows:
 - person who recorded it
 - batch reference
 
-If a movement was wrong, use `Reverse`. The old movement stays visible, and the system adds a new movement that cancels it.
+If a movement was wrong, use `Prepare reverse record`. This opens `Stock Actions` with `Reverse a Record` selected. Review it and write a reason before saving.
 
-### Count Check
+### Products
 
-Use this screen after a physical count.
+Use this screen to review the product catalog.
 
-Enter the number you counted by hand. If the hand count is different from the system count, click `Save Correction`.
+Enroll, suspend, and reactivate products from `Stock Actions` so product work joins the same batch as stock work.
 
-The system does not hide the old number. It adds a correction movement so the reason stays visible.
+## 5. Stock Actions
 
-## 5. The Five Actions
-
-### Add Delivery
+### Stock In
 
 Use this when stock comes in.
 
@@ -129,7 +124,7 @@ Example:
 
 Choose where the stock arrived.
 
-### Record Use
+### Stock Use
 
 Use this when stock leaves a place.
 
@@ -157,23 +152,13 @@ Choose both places:
 - `Where From?`
 - `Where To?`
 
-### Correct Count
+### Correct Stock Count
 
 Use this when a hand count is different from the system count.
 
-Use a plus number to add stock:
+Enter the number you counted by hand. The system shows the current count and calculates the correction.
 
-```text
-+2
-```
-
-Use a minus number to subtract stock:
-
-```text
--1
-```
-
-### Reverse Mistake
+### Reverse a Record
 
 Use this when a previous movement was wrong.
 
@@ -181,28 +166,42 @@ Choose the original movement. StockLedger will add a new reversing movement.
 
 The original record is not deleted.
 
-## 6. Record a Movement
+### Enroll Product
 
-Go to `Record Movement`.
+Use this when a product should be added to the catalog.
+
+After saving, the product appears locally and the enrollment waits in `Work to Send`.
+
+### Suspend Product
+
+Use this when a product should stop appearing in stock actions.
+
+If the product still has replayed stock, StockLedger queues grouped closure work so the stock balance is closed through audit-visible records.
+
+### Reactivate Product
+
+Use this when a suspended product should be selectable again.
+
+Reactivation does not create stock movement.
+
+## 6. Prepare and Send Work
+
+Go to `Stock Actions`.
 
 Fill in the form:
 
-1. Choose `What Happened?`
+1. Choose `Action Type`.
 2. Choose the product.
 3. Choose the needed place or places.
 4. Enter the quantity.
 5. Write the reason.
-6. Click `Save Movement`.
+6. Click `Save Action`.
 
-After saving, the movement goes to `Send Work`.
+After saving, the item appears in `Work to Send` on the right side.
 
-## 7. Send Work
+If the top account menu says `Offline`, open it and switch to `Online`.
 
-Go to `Send Work`.
-
-If the top button says `Offline`, click it once so it says `Online`.
-
-Then click `Send Work` or `Send Saved Work`.
+Then click `Send Saved Work` in `Work to Send`.
 
 If sending works, the system shows:
 
@@ -212,7 +211,9 @@ saved movement(s) sent successfully
 
 If sending does not work, read the message on screen and fix the highlighted movement.
 
-## 8. Good Reasons to Write
+You can undo only work that has not been sent yet. After sending, use `Reverse a Record` or `Correct Stock Count`.
+
+## 7. Good Reasons to Write
 
 Use short, clear reasons.
 
@@ -224,6 +225,7 @@ Evening service use
 Moved to Main Bar for opening
 Physical count difference
 Correcting wrong product entry
+Seasonal product suspended
 ```
 
 Avoid vague reasons:
@@ -235,60 +237,61 @@ adjusted
 fixed
 ```
 
-## 9. If You Make a Mistake
+## 8. If You Make a Mistake
 
 Do not delete history.
 
 Use one of these:
 
-- `Reverse` if one old movement was wrong.
-- `Correct Count` if the current stock does not match the hand count.
+- `Reverse a Record` if one old movement was wrong.
+- `Correct Stock Count` if the current stock does not match the hand count.
 
 This keeps the audit trail honest.
 
-## 10. Offline Work
+## 9. Offline Work
 
 You can keep working while offline.
 
 When offline:
 
-- new movements are saved on this device
-- movements wait in `Send Work`
-- stock on this device includes the saved movements
+- new work is saved on this device
+- work waits in `Work to Send`
+- stock on this device includes the saved stock movements
 - nothing is sent until the device is online
 
 When online:
 
-- click `Send Work`
+- click `Send Saved Work`
 - the server accepts the whole batch or rejects the whole batch
 - duplicate movements are ignored safely
 
-## 11. Daily Work Pattern
+## 10. Daily Work Pattern
 
 Use this simple order:
 
 1. Open `Stock Overview`.
 2. Check `Total Stock`.
 3. Check `By Location` if you need one area.
-4. Record deliveries, use, moves, or count corrections.
-5. Go to `Send Work`.
-6. Switch to `Online`.
-7. Click `Send Work`.
-8. Use `History` if something looks wrong.
+4. Open `Stock Actions`.
+5. Prepare stock or product work.
+6. Check `Work to Send`.
+7. Switch to `Online`.
+8. Click `Send Saved Work`.
+9. Use `History` if something looks wrong.
 
-## 12. Words Used in the System
+## 11. Words Used in the System
 
 | Word | Meaning |
 | --- | --- |
 | Movement | Something that happened to stock |
-| Batch | A group of saved movements sent together |
-| Outbox | Work saved on this device and waiting to send |
+| Work to Send | Work saved on this device and waiting to send |
+| Batch | A group of saved work sent together |
 | History | The full list of stock movements |
 | Correction | A new movement that fixes a count difference |
 | Reverse | A new movement that cancels an earlier mistake |
 | Duplicate Check | A safety key that prevents sending the same movement twice |
 
-## 13. Remember
+## 12. Remember
 
 - Record what happened.
 - Do not overwrite final stock.

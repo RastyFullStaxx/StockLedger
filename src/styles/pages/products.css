@@ -29,8 +29,7 @@
   --product-col-3: 11.24%;
   --product-col-4: 10.11%;
   --product-col-5: 11.24%;
-  --product-col-6: 13.48%;
-  --product-col-7: 13.48%;
+  --product-col-6: 27.46%;
 }
 
 .product-table-wrap .product-table th,
@@ -49,14 +48,12 @@
 .product-table-wrap .product-table .product-col-low-stock,
 .product-table-wrap .product-table .product-col-status,
 .product-table-wrap .product-table .product-col-state-change,
-.product-table-wrap .product-table .product-col-action,
 .product-table-wrap .product-table .col-product,
 .product-table-wrap .product-table .col-category,
 .product-table-wrap .product-table .col-unit,
 .product-table-wrap .product-table .col-low-stock,
 .product-table-wrap .product-table .col-status,
-.product-table-wrap .product-table .col-state-change,
-.product-table-wrap .product-table .col-action {
+.product-table-wrap .product-table .col-state-change {
   min-width: 0;
 }
 
@@ -84,28 +81,7 @@
   width: var(--product-col-6);
 }
 
-.product-table-wrap .product-table col.product-col-action {
-  width: var(--product-col-7);
-}
-
 .product-table-wrap .product-table .col-low-stock,
-.product-table-wrap .product-table .col-status,
-.product-table-wrap .product-table .col-action {
+.product-table-wrap .product-table .col-status {
   text-align: center;
-}
-
-.product-table-wrap .product-table td.col-action {
-  text-align: center;
-}
-
-.product-table-wrap .product-table .col-action button,
-.product-table-wrap .product-table .col-action .button,
-.product-table-wrap .product-table .col-action .table-action {
-  width: min(100%, 11rem);
-  max-width: 100%;
-  margin-left: auto;
-  margin-right: auto;
-  justify-content: center;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
