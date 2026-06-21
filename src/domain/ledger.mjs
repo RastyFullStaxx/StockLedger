@@ -4,14 +4,20 @@ export const EVENT_TYPES = Object.freeze([
   "STOCK_TRANSFER",
   "STOCK_ADJUSTMENT",
   "STOCK_REVERT",
+  "PRODUCT_CREATED",
+  "PRODUCT_DEACTIVATED",
+  "PRODUCT_REACTIVATED",
 ]);
 
 const LOCATION_NOT_APPLICABLE = "Unassigned";
+const PRODUCT_AUDIT_EVENT_TYPES = new Set(["PRODUCT_CREATED", "PRODUCT_DEACTIVATED", "PRODUCT_REACTIVATED"]);
+const AUDIT_LOCATION = "Catalog";
 
 export function createInventoryEvent(input) {
   const timestamp = input.timestamp ?? Date.now();
   const sequence = Number(input.sequence_number ?? 1);
   const eventId = input.event_id ?? stableId("event", input.type, timestamp, sequence, input.product_id);
+  const quantity = input.quantity ?? 0;
 
   return {
     event_id: eventId,
@@ -22,7 +28,7 @@ export function createInventoryEvent(input) {
     product_id: input.product_id,
     from_location: input.from_location ?? null,
     to_location: input.to_location ?? null,
-    quantity: Number(input.quantity),
+    quantity: Number(quantity),
     timestamp,
     sequence_number: sequence,
     idempotency_key: input.idempotency_key ?? stableId("idem", eventId, input.sync_batch_id ?? "local"),
@@ -66,7 +72,17 @@ export function validateEvent(event) {
     return invalid(`Unsupported event type: ${event.type}.`);
   }
 
-  if (!Number.isFinite(Number(event.quantity)) || Number(event.quantity) === 0) {
+  const quantity = Number(event.quantity);
+
+  if (!Number.isFinite(quantity)) {
+    return invalid("quantity must be a finite number.");
+  }
+
+  if (PRODUCT_AUDIT_EVENT_TYPES.has(event.type) && quantity !== 0) {
+    return invalid("Product lifecycle events require quantity of 0.");
+  }
+
+  if (!PRODUCT_AUDIT_EVENT_TYPES.has(event.type) && quantity === 0) {
     return invalid("quantity must be a non-zero number.");
   }
 
@@ -126,7 +142,28 @@ export function replayAuditTrail(events) {
   const trail = [];
 
   for (const event of ordered) {
-    for (const impact of eventImpacts(event, eventById)) {
+    const impacts = eventImpacts(event, eventById);
+    if (impacts.length === 0) {
+      trail.push({
+        event_id: event.event_id,
+        type: event.type,
+        product_id: event.product_id,
+        product_name: event.product_name,
+        location: auditLocation(event),
+        delta: 0,
+        running_balance: null,
+        timestamp: event.timestamp,
+        sequence_number: event.sequence_number,
+        actor_name: event.actor_name,
+        device_name: event.device_name,
+        sync_batch_id: event.sync_batch_id,
+        idempotency_key: event.idempotency_key,
+        reason: event.reason,
+      });
+      continue;
+    }
+
+    for (const impact of impacts) {
       const product = event.product_id;
       const location = impact.location;
       balances[product] ??= {};
@@ -267,6 +304,10 @@ function eventImpacts(event, eventById) {
     return [{ location: event.to_location ?? event.from_location ?? LOCATION_NOT_APPLICABLE, delta: quantity }];
   }
 
+  if (PRODUCT_AUDIT_EVENT_TYPES.has(event.type)) {
+    return [];
+  }
+
   if (event.type === "STOCK_REVERT") {
     const original = eventById.get(event.original_event_id);
     if (!original) {
@@ -280,6 +321,14 @@ function eventImpacts(event, eventById) {
   }
 
   return [];
+}
+
+function auditLocation(event) {
+  if (PRODUCT_AUDIT_EVENT_TYPES.has(event.type)) {
+    return AUDIT_LOCATION;
+  }
+
+  return LOCATION_NOT_APPLICABLE;
 }
 
 function addStock(stock, productId, location, delta) {

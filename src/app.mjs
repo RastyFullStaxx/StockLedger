@@ -8,12 +8,14 @@ import {
   summarizeStock,
   validateEvent,
 } from "./domain/ledger.mjs";
+import { animate } from "motion";
 
 import "./styles.css";
 
 const STORAGE_KEY = "stockledger-local-prototype-state-v1";
 const PRODUCT_DEACTIVATE_EPSILON = 0.0001;
 const PRODUCT_DEACTIVATION_REASON = "Product deactivated; balances auto-closed by system";
+const PRODUCT_EVENT_PREFIX = "PRODUCT_";
 const tenant = {
   client_id: "tenant-northstar-hospitality",
   client_name: "Northstar Hospitality",
@@ -96,6 +98,109 @@ let shouldFocusActionOnCompose = state.activeView === "compose";
 let fieldSelectUid = 0;
 let customSelectEventsBound = false;
 const eventSelectPortalMap = new WeakMap();
+const shouldReduceMotion = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+const tabMotionQueue = {
+  activeView: null,
+  stockView: null,
+};
+
+function animateTabPress(button) {
+  if (shouldReduceMotion || !button) return;
+  animate(
+    button,
+    {
+      scale: [1, 0.98, 1],
+      y: [0, 1, 0],
+    },
+    {
+      duration: 0.16,
+      ease: "easeOut",
+    },
+  );
+}
+
+function animateTabActivate(button) {
+  if (shouldReduceMotion || !button) return;
+  animate(
+    button,
+    {
+      scale: [0.99, 1.01, 1],
+      y: [2, 0],
+    },
+    {
+      duration: 0.24,
+      ease: "easeOut",
+    },
+  );
+}
+
+function animateTabHover(button, hovered) {
+  if (shouldReduceMotion || !button) return;
+  animate(
+    button,
+    {
+      y: hovered ? -1 : 0,
+      scale: hovered ? 1.01 : 1,
+    },
+    {
+      duration: 0.16,
+      ease: "easeOut",
+    },
+  );
+}
+
+function flushQueuedTabMotion() {
+  if (shouldReduceMotion) {
+    tabMotionQueue.activeView = null;
+    tabMotionQueue.stockView = null;
+    return;
+  }
+
+  if (tabMotionQueue.activeView === state.activeView) {
+    const nextTab = document.querySelector(`.nav-item[data-view="${CSS.escape(tabMotionQueue.activeView)}"]`);
+    if (nextTab) animateTabActivate(nextTab);
+    tabMotionQueue.activeView = null;
+  } else {
+    tabMotionQueue.activeView = null;
+  }
+
+  if (tabMotionQueue.stockView === state.stockView) {
+    const nextStockTab = document.querySelector(`.view-option[data-stock-view="${CSS.escape(tabMotionQueue.stockView)}"]`);
+    if (nextStockTab) animateTabActivate(nextStockTab);
+    tabMotionQueue.stockView = null;
+  } else {
+    tabMotionQueue.stockView = null;
+  }
+}
+
+function bindTabMotion() {
+  if (shouldReduceMotion) return;
+
+  const bindSimplePressMotion = (button) => {
+    button.addEventListener("pointerdown", () => animateTabPress(button), { passive: true });
+    button.addEventListener("click", (event) => {
+      if (event.detail === 0) {
+        animateTabPress(button);
+      }
+    });
+  };
+
+  document.querySelectorAll(".nav-item").forEach((button) => {
+    bindSimplePressMotion(button);
+    button.addEventListener("pointerenter", () => animateTabHover(button, true), { passive: true });
+    button.addEventListener("pointerleave", () => animateTabHover(button, false), { passive: true });
+  });
+
+  document.querySelectorAll(".view-option").forEach((button) => {
+    bindSimplePressMotion(button);
+    button.addEventListener("pointerenter", () => animateTabHover(button, true), { passive: true });
+    button.addEventListener("pointerleave", () => animateTabHover(button, false), { passive: true });
+  });
+
+  document.querySelectorAll("[data-view]:not(.nav-item):not(.view-option)").forEach((button) => {
+    bindSimplePressMotion(button);
+  });
+}
 
 function seedEvents() {
   const start = Date.now() - 1000 * 60 * 60 * 4;
@@ -142,6 +247,7 @@ function defaultState() {
     selectedLocation: "Main Bar",
     productFilter: "all",
     locationFilter: "all",
+    stockSearch: "",
     message: "",
     toast: null,
     accountOpen: false,
@@ -170,44 +276,44 @@ function defaultState() {
 const screenMeta = {
   home: {
     title: "StockLedger",
+    kicker: "Home",
     label: "Home",
-    kicker: "Ledger",
     guide: "Start here when you want the shortest path into the local prototype.",
   },
   dashboard: {
     title: "Stock Overview",
-    label: "Stock Overview",
     kicker: "Inventory",
+    label: "Stock Overview",
     guide: "Start here. Check total stock first, then look at one location when you need detail.",
   },
   compose: {
     title: "Record Movement",
+    kicker: "Actions",
     label: "Record Movement",
-    kicker: "Action",
     guide: "Write what happened. Do not type a final stock number. The system will calculate stock for you.",
   },
   products: {
     title: "Products",
-    label: "Products",
     kicker: "Catalog",
+    label: "Products",
     guide: "Add new products here so they immediately appear for movement and reporting.",
   },
   outbox: {
     title: "Send Work",
-    label: "Send Work",
     kicker: "Sync",
+    label: "Send Work",
     guide: "These events are saved on this device. When online, send them together as one safe batch.",
   },
   audit: {
     title: "History",
-    label: "History",
     kicker: "Audit",
+    label: "History",
     guide: "Use this when a number looks wrong. It shows who recorded each change and how stock was affected.",
   },
   reconcile: {
     title: "Count Check",
-    label: "Count Check",
     kicker: "Reconcile",
+    label: "Count Check",
     guide: "After a physical count, enter what you counted. Differences become correction events, not hidden edits.",
   },
 };
@@ -218,7 +324,13 @@ const eventLabels = {
   STOCK_TRANSFER: "Move Stock",
   STOCK_ADJUSTMENT: "Correct Count",
   STOCK_REVERT: "Reverse Mistake",
+  PRODUCT_CREATED: "Product Created",
+  PRODUCT_DEACTIVATED: "Product Deactivated",
+  PRODUCT_REACTIVATED: "Product Reactivated",
 };
+
+const STOCK_EVENT_TYPES = EVENT_TYPES.filter((type) => !type.startsWith(PRODUCT_EVENT_PREFIX));
+const REVERTIBLE_EVENT_TYPES = new Set(["STOCK_IN", "STOCK_OUT", "STOCK_TRANSFER", "STOCK_ADJUSTMENT"]);
 
 const ACTION_TEMPLATES = {
   STOCK_IN: {
@@ -436,7 +548,6 @@ function renderSidebar() {
         <div class="brand-mark" aria-hidden="true"><img src="/logo.svg" alt="" /></div>
         <div class="brand-copy">
           <p class="brand-name"><span>Stock</span><span>Ledger</span></p>
-          <p class="brand-subtitle">Power in Audit</p>
         </div>
         <button class="sidebar-toggle" data-action="toggle-sidebar" type="button" aria-label="${state.sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}" aria-pressed="${state.sidebarCollapsed}">
           ${icon(state.sidebarCollapsed ? "panelOpen" : "panelClose")}
@@ -490,11 +601,12 @@ function renderTopbar() {
   return `
     <header class="topbar">
       <div>
-        <p class="eyebrow">${meta.kicker}</p>
         <h1>${viewTitle()}</h1>
       </div>
       <div class="topbar-actions">
-        <button class="button button-secondary" data-action="reset-demo" type="button">Reset Demo</button>
+        <button class="icon-button" data-action="reset-demo" type="button" aria-label="Reset demo">
+          ${icon("refresh")}
+        </button>
         <span class="guide-anchor">
           <button class="button button-secondary guide-button ${state.guideOpen ? "is-open" : ""}" data-action="toggle-guide" type="button" aria-expanded="${state.guideOpen}">
             ${icon("spark")}
@@ -642,10 +754,10 @@ function renderStatusRail(localLedger, stockRows, outboxValidation) {
 
   return `
     <section class="status-grid" aria-label="Ledger status">
-      ${metricCard("Saved Changes", localLedger.length, "Recorded movements")}
-      ${metricCard("Waiting to Send", state.outbox.length, state.online ? "Ready now" : "Saved locally")}
-      ${metricCard("Low Stock", lowRows, "Review before service")}
-      ${metricCard("Needs Review", negativeRows + invalidOutbox, "Fix before reports")}
+      ${metricCard("Saved Changes", localLedger.length)}
+      ${metricCard("Waiting to Send", state.outbox.length)}
+      ${metricCard("Low Stock", lowRows)}
+      ${metricCard("Needs Review", negativeRows + invalidOutbox)}
     </section>
   `;
 }
@@ -669,7 +781,6 @@ function renderLanding(localLedger, stockRows, outboxValidation) {
     <section class="landing-shell" aria-label="StockLedger Home">
       <div class="landing-hero">
         <div class="landing-copy">
-          <p class="eyebrow">Local Audit Prototype</p>
           <h2>Inventory That Explains Every Number.</h2>
           <p>Record movements, keep work safe offline, and replay the ledger when a count needs proof.</p>
           <div class="landing-actions">
@@ -681,33 +792,28 @@ function renderLanding(localLedger, stockRows, outboxValidation) {
         <div class="landing-grid">
           <article class="landing-card">
             <span>${icon("layers")}</span>
-          <h3>See The Master Stock</h3>
-          <p>Total stock, per-location stock, and detailed rows stay one click apart.</p>
-          <button class="table-action" data-view="dashboard" type="button">View Stock</button>
-        </article>
-        <article class="landing-card">
-          <span>${icon("history")}</span>
-          <h3>Trace Every Change</h3>
-          <p>History is immutable. Mistakes are reversed with a visible correction.</p>
-          <button class="table-action" data-view="audit" type="button">Open History</button>
+            <h3>See The Master Stock</h3>
+            <button class="table-action" data-view="dashboard" type="button">View Stock</button>
+          </article>
+          <article class="landing-card">
+            <span>${icon("history")}</span>
+            <h3>Trace Every Change</h3>
+            <button class="table-action" data-view="audit" type="button">Open History</button>
           </article>
           <article class="landing-card">
             <span>${icon("send")}</span>
             <h3>Send Work Safely</h3>
-            <p>Offline work waits locally, then sends as one batch when the connection is on.</p>
             <button class="table-action" data-view="outbox" type="button">Check Outbox</button>
           </article>
           <article class="landing-card">
             <span>${icon("list")}</span>
             <h3>Manage Products</h3>
-            <p>Add new products so they can be used immediately in Record Movement and stock filters.</p>
             <button class="table-action" data-view="products" type="button">Open Catalog</button>
           </article>
         </div>
       <article class="panel landing-recent">
         <div class="panel-header compact">
           <div>
-            <p class="eyebrow">Recent Ledger</p>
             <h2>Last Movements</h2>
           </div>
           <button class="table-action" data-view="audit" type="button">View All</button>
@@ -736,9 +842,7 @@ function renderDashboard(localLedger, stockRows) {
       <article class="panel panel-wide">
         <div class="panel-header">
           <div>
-            <p class="eyebrow">Main View</p>
             <h2>${stockViewTitle()}</h2>
-            <p class="section-help">${stockViewHelp()}</p>
           </div>
         </div>
         <div class="stock-control-row">
@@ -754,7 +858,7 @@ function renderComposer(localLedger) {
   const form = state.form;
   const validation = previewEventValidation();
   const revertOptions = sortEvents(localLedger)
-    .filter((event) => event.type !== "STOCK_REVERT")
+    .filter((event) => isRevertibleEvent(event.type))
     .slice(-12)
     .reverse();
   const template = actionTemplate(form.type);
@@ -764,9 +868,7 @@ function renderComposer(localLedger) {
       <article class="panel panel-wide">
         <div class="panel-header compact">
           <div>
-            <p class="eyebrow">Movement</p>
             <h2>Record One Movement</h2>
-            <p class="section-help">Pick the action, product, place, and amount. The stock total updates after this is saved.</p>
           </div>
         </div>
         ${renderActionTemplate(form.type)}
@@ -775,7 +877,7 @@ function renderComposer(localLedger) {
             <span>Action Type</span>
             ${renderFieldSelect({
               name: "type",
-              options: EVENT_TYPES.map((type) => `<option value="${type}" ${form.type === type ? "selected" : ""}>${eventLabels[type]}</option>`).join(""),
+              options: STOCK_EVENT_TYPES.map((type) => `<option value="${type}" ${form.type === type ? "selected" : ""}>${eventLabels[type]}</option>`).join(""),
               className: "field-select--emphasized",
               menuClassName: "field-select-menu--event-form",
               menuMode: "event-form",
@@ -821,9 +923,7 @@ function renderProducts() {
       <article class="panel panel-wide">
         <div class="panel-header compact">
           <div>
-            <p class="eyebrow">Catalog</p>
             <h2>Product Management</h2>
-            <p class="section-help">Add products used across the prototype. No movement event is created for catalog changes.</p>
           </div>
         </div>
         <form class="event-form" data-form="product">
@@ -844,19 +944,18 @@ function renderProducts() {
             <input name="product-low" type="number" step="0.01" min="0" value="${escapeAttr(productForm.low)}" placeholder="e.g. 6" />
           </label>
           <div class="form-footer span-2">
-            <span class="section-help">New products are added to the local catalog immediately.</span>
             <button class="button button-primary" data-action="create-product" type="button">${icon("plus")}Add Product</button>
           </div>
         </form>
         <div class="product-sections">
-          <section class="product-section">
-            <h3>Active Products (${activeProducts.length})</h3>
-            ${activeProducts.length === 0 ? `<div class="empty-state"><strong>No Active Products</strong><span>Add a product, or reactivate an inactive one.</span></div>` : renderProductTable(activeProducts, "active")}
+        <section class="product-section">
+          <h3>Active Products (${activeProducts.length})</h3>
+            ${activeProducts.length === 0 ? `<div class="empty-state"><strong>No Active Products</strong></div>` : renderProductTable(activeProducts, "active")}
           </section>
           <section class="product-section">
             <h3>Inactive Products (${deactivatedCount})</h3>
             ${inactiveProducts.length === 0
-      ? `<div class="empty-state"><strong>No Inactive Products</strong><span>All products are currently active.</span></div>`
+      ? `<div class="empty-state"><strong>No Inactive Products</strong></div>`
       : renderProductTable(inactiveProducts, "inactive")}
           </section>
         </div>
@@ -942,7 +1041,6 @@ function renderProductTable(products, group) {
                 <div class="card-row">
                   <div>
                     <strong>${escapeHtml(product.name)}</strong>
-                    <span>${escapeHtml(product.unit || "unit")} · ${escapeHtml(product.category || "Uncategorized")}</span>
                   </div>
                   <span class="product-status badge ${statusClass}">${status}</span>
                 </div>
@@ -1166,9 +1264,7 @@ function renderOutbox(outboxValidation) {
       <article class="panel panel-wide">
         <div class="panel-header">
           <div>
-            <p class="eyebrow">Saved Locally</p>
             <h2>Work Waiting to Send</h2>
-            <p class="section-help">Send all saved movements together. If one movement has a problem, none are sent.</p>
           </div>
           <button class="button button-primary" data-action="sync" type="button" ${!state.online || state.outbox.length === 0 ? "disabled" : ""}>
             ${icon("send")}Send Saved Work
@@ -1176,19 +1272,20 @@ function renderOutbox(outboxValidation) {
         </div>
         ${
           state.outbox.length === 0
-            ? `<div class="empty-state"><strong>No Saved Work Waiting</strong><span>Record a movement first. It will appear here before it is sent.</span></div>`
+            ? `<div class="empty-state"><strong>No Saved Work Waiting</strong></div>`
             : `<div class="table-wrap outbox-table">
                 <table>
                   <thead>
-                    <tr>
-                      <th class="numeric">No.</th>
-                      <th>Action</th>
-                      <th>Product</th>
-                      <th>Location</th>
-                      <th class="numeric">Amount</th>
-                      <th>Duplicate Check</th>
-                      <th>Status</th>
-                    </tr>
+                  <tr>
+                    <th class="numeric">No.</th>
+                    <th>Action</th>
+                    <th>Product</th>
+                    <th>Location</th>
+                    <th class="numeric">Amount</th>
+                    <th>Duplicate Check</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
                   </thead>
                   <tbody>
                     ${outboxValidation
@@ -1202,6 +1299,9 @@ function renderOutbox(outboxValidation) {
                             <td class="numeric">${formatQuantity(event.quantity)}</td>
                             <td><code>${event.idempotency_key}</code></td>
                             <td><span class="badge ${validation.valid ? "is-valid" : "is-error"}">${validation.valid ? "Ready" : simpleValidationReason(validation.reason)}</span></td>
+                            <td>
+                              <button class="table-action" data-action="undo-outbox-event" data-event-id="${event.event_id}" type="button">Undo</button>
+                            </td>
                           </tr>
                         `,
                       )
@@ -1225,6 +1325,7 @@ function renderOutbox(outboxValidation) {
                             <div><dt>Location</dt><dd>${eventLocationText(event)}</dd></div>
                             <div><dt>Amount</dt><dd>${formatQuantity(event.quantity)}</dd></div>
                             <div><dt>Duplicate Check</dt><dd><code>${event.idempotency_key}</code></dd></div>
+                            <div><dt>Action</dt><dd><button class="table-action" data-action="undo-outbox-event" data-event-id="${event.event_id}" type="button">Undo</button></dd></div>
                           </dl>
                         </article>
                       `,
@@ -1244,9 +1345,7 @@ function renderAudit(localLedger) {
       <article class="panel panel-wide">
         <div class="panel-header compact">
           <div>
-            <p class="eyebrow">Full History</p>
             <h2>Every Recorded Movement</h2>
-            <p class="section-help">Use this page to answer who changed stock, where it changed, and what the balance became.</p>
           </div>
         </div>
         ${renderAuditTable(localLedger)}
@@ -1261,9 +1360,7 @@ function renderReconcile(stockRows) {
       <article class="panel panel-wide">
         <div class="panel-header compact">
           <div>
-            <p class="eyebrow">After Counting Stock</p>
             <h2>Compare Counted Stock</h2>
-            <p class="section-help">Enter what you counted by hand. If it differs, save a correction so the reason stays visible.</p>
           </div>
         </div>
         <div class="table-wrap reconcile-table">
@@ -1315,20 +1412,16 @@ function renderReconcile(stockRows) {
                     <div class="card-row">
                       <div>
                         <strong>${row.product_name}</strong>
-                        <span>${row.location}</span>
                       </div>
                       <div class="card-number">
-                        <span>System Count</span>
                         <strong>${formatQuantity(row.quantity)}</strong>
                       </div>
                     </div>
                     <label>
-                      <span>Hand Count</span>
                       <input data-count-key="${key}" type="number" step="0.01" value="${escapeAttr(physical)}" aria-label="Physical count for ${row.product_name} at ${row.location}" />
                     </label>
                     <div class="card-row">
                       <div>
-                        <span>Difference</span>
                         <strong class="${variance && variance < 0 ? "danger-text" : ""}">${variance === null ? "Pending" : formatQuantity(variance)}</strong>
                       </div>
                       <button class="button button-secondary" data-action="reconcile" data-count-key="${key}" type="button" ${!variance ? "disabled" : ""}>
@@ -1348,8 +1441,8 @@ function renderReconcile(stockRows) {
 
 function renderFilters() {
   return `
-      <div class="filters">
-        <label class="field-select-wrap field-select-wrap--stock-overview-filter">
+    <div class="filters stock-filters">
+      <label class="field-select-wrap field-select-wrap--stock-overview-filter stock-control-item">
         <span>Product</span>
         ${renderFieldSelect({
             name: "product-filter",
@@ -1364,7 +1457,7 @@ function renderFilters() {
           `,
           })}
       </label>
-      <label class="field-select-wrap field-select-wrap--stock-overview-filter">
+      <label class="field-select-wrap field-select-wrap--stock-overview-filter stock-control-item">
         <span>Location</span>
         ${renderFieldSelect({
           name: "location-filter",
@@ -1384,12 +1477,28 @@ function renderFilters() {
 }
 
 function renderStockControls() {
+  const safeStockSearch = String(state.stockSearch || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   return `
     <div class="stock-controls" aria-label="Stock View Options">
+      <div class="view-switch" role="group" aria-label="Choose Stock View">
+        ${stockViewButton("totals", "Total Stock", "layers")}
+        ${stockViewButton("location", "By Location", "map")}
+        ${stockViewButton("detail", "Detailed List", "list")}
+      </div>
       <div class="stock-filter-slot">
+        <label class="stock-control-item">
+          <span>Search</span>
+          <input
+            class="stock-control-input"
+            type="search"
+            placeholder="Search products or locations"
+            value="${safeStockSearch}"
+            data-filter="stock-search"
+          />
+        </label>
         ${ 
             state.stockView === "location"
-              ? `<label class="compact-select field-select-wrap field-select-wrap--stock-overview-filter">
+              ? `<label class="compact-select field-select-wrap field-select-wrap--stock-overview-filter stock-control-item">
                   <span>Location</span>
                   ${renderFieldSelect({
                     name: "selected-location-filter",
@@ -1404,11 +1513,6 @@ function renderStockControls() {
             : ""
         }
         ${state.stockView === "detail" ? renderFilters() : ""}
-      </div>
-      <div class="view-switch" role="group" aria-label="Choose Stock View">
-        ${stockViewButton("totals", "Total Stock", "layers")}
-        ${stockViewButton("location", "By Location", "map")}
-        ${stockViewButton("detail", "Detailed List", "list")}
       </div>
     </div>
   `;
@@ -1474,13 +1578,12 @@ function renderMasterStockTable(rows) {
         ${rows
           .map(
             (row) => `
-              <article class="stock-card">
-                <div>
-                  <strong>${row.product_name}</strong>
-                  <span>${row.location_count} location${row.location_count === 1 ? "" : "s"} with stock</span>
-                </div>
-                <div>
-                  <strong>${formatQuantity(row.quantity)} ${productUnit(row.product_id)}</strong>
+                <article class="stock-card">
+                  <div>
+                    <strong>${row.product_name}</strong>
+                  </div>
+                  <div>
+                    <strong>${formatQuantity(row.quantity)} ${productUnit(row.product_id)}</strong>
                   ${stockState(row)}
                 </div>
               </article>
@@ -1525,10 +1628,9 @@ function renderLocationStockTable(rows) {
         ${rows
           .map(
             (row) => `
-              <article class="stock-card">
+                <article class="stock-card">
                 <div>
                   <strong>${row.product_name}</strong>
-                  <span>${row.location}</span>
                 </div>
                 <div>
                   <strong>${formatQuantity(row.quantity)} ${productUnit(row.product_id)}</strong>
@@ -1576,10 +1678,9 @@ function renderStockTable(rows) {
         ${rows
           .map(
             (row) => `
-              <article class="stock-card">
+                <article class="stock-card">
                 <div>
                   <strong>${row.product_name}</strong>
-                  <span>${row.location}</span>
                 </div>
                 <div>
                   <strong>${formatQuantity(row.quantity)} ${productUnit(row.product_id)}</strong>
@@ -1599,7 +1700,7 @@ function renderAuditTable(events, limit = null, compact = false) {
   const rows = [...trail].reverse().slice(0, limit ?? trail.length);
 
   if (rows.length === 0) {
-    return `<div class="empty-state"><strong>No history yet</strong><span>Save inventory movements to build the ledger.</span></div>`;
+    return `<div class="empty-state"><strong>No history yet</strong></div>`;
   }
 
   return `
@@ -1619,36 +1720,34 @@ function renderAuditTable(events, limit = null, compact = false) {
         </thead>
         <tbody>
           ${rows
-            .map(
-              (entry) => `
+            .map((entry) => {
+              return `
                 <tr>
                   <td class="numeric">${entry.sequence_number}</td>
                   <td><span class="type-pill">${eventLabels[entry.type] ?? entry.type}</span></td>
                   <td>${entry.product_name}</td>
                   <td>${entry.location}</td>
                   <td class="numeric ${entry.delta < 0 ? "danger-text" : ""}">${entry.delta > 0 ? "+" : ""}${formatQuantity(entry.delta)}</td>
-                  <td class="numeric">${formatQuantity(entry.running_balance)}</td>
+                  <td class="numeric">${formatAuditBalance(entry.running_balance)}</td>
                   <td>${entry.actor_name}</td>
                   ${
                     compact
                       ? ""
                       : `<td><code>${entry.sync_batch_id}</code></td>
                         <td>
-                          <button class="table-action" data-action="quick-revert" data-event-id="${entry.event_id}" type="button" ${entry.type === "STOCK_REVERT" ? "disabled" : ""}>
-                            Reverse
-                          </button>
+                          <button class="table-action" data-action="quick-revert" data-event-id="${entry.event_id}" type="button" ${!isRevertibleEvent(entry.type) ? "disabled" : ""}>Reverse</button>
                         </td>`
                   }
                 </tr>
-              `,
-            )
+              `;
+            })
             .join("")}
         </tbody>
       </table>
-      <div class="audit-cards" aria-label="${compact ? "Recent movement list" : "Full movement history"}">
+        <div class="audit-cards" aria-label="${compact ? "Recent movement list" : "Full movement history"}">
         ${rows
-          .map(
-            (entry) => `
+            .map((entry) => {
+              return `
               <article class="history-card">
                 <div class="card-row">
                   <div>
@@ -1660,32 +1759,33 @@ function renderAuditTable(events, limit = null, compact = false) {
                 <dl>
                   <div><dt>Location</dt><dd>${entry.location}</dd></div>
                   <div><dt>Change</dt><dd class="${entry.delta < 0 ? "danger-text" : ""}">${entry.delta > 0 ? "+" : ""}${formatQuantity(entry.delta)}</dd></div>
-                  <div><dt>New balance</dt><dd>${formatQuantity(entry.running_balance)}</dd></div>
+                  <div><dt>New balance</dt><dd>${formatAuditBalance(entry.running_balance)}</dd></div>
                   <div><dt>Actor</dt><dd>${entry.actor_name}</dd></div>
                   ${compact ? "" : `<div><dt>Batch</dt><dd><code>${entry.sync_batch_id}</code></dd></div>`}
                 </dl>
                 ${
                   compact
                     ? ""
-                    : `<button class="table-action" data-action="quick-revert" data-event-id="${entry.event_id}" type="button" ${entry.type === "STOCK_REVERT" ? "disabled" : ""}>
-                        Reverse
-                      </button>`
+                    : `<div>
+                        <button class="table-action" data-action="quick-revert" data-event-id="${entry.event_id}" type="button" ${!isRevertibleEvent(entry.type) ? "disabled" : ""}>
+                          Reverse
+                        </button>
+                      </div>`
                 }
               </article>
-            `,
-          )
-          .join("")}
+              `;
+            })
+            .join("")}
       </div>
     </div>
   `;
 }
 
-function metricCard(label, value, hint) {
+function metricCard(label, value) {
   return `
     <article class="metric-card">
       <span>${label}</span>
       <strong>${value}</strong>
-      <small>${hint}</small>
     </article>
   `;
 }
@@ -1693,7 +1793,13 @@ function metricCard(label, value, hint) {
 function bindEvents() {
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
+      const isSidebarTab = button.closest(".nav-item");
+      const isStockTab = button.closest(".view-option");
+
       const nextView = button.dataset.view;
+      if (isSidebarTab) {
+        tabMotionQueue.activeView = nextView;
+      }
       if (nextView === "compose") {
         shouldFocusActionOnCompose = true;
       }
@@ -1924,8 +2030,16 @@ function bindEvents() {
     });
   });
 
+  document.querySelectorAll("[data-filter='stock-search']").forEach((input) => {
+    input.addEventListener("input", () => {
+      state.stockSearch = input.value;
+      commit();
+    });
+  });
+
   document.querySelectorAll("[data-stock-view]").forEach((button) => {
     button.addEventListener("click", () => {
+      tabMotionQueue.stockView = button.dataset.stockView;
       state.stockView = button.dataset.stockView;
       commit();
     });
@@ -1944,6 +2058,10 @@ function bindEvents() {
 
   document.querySelectorAll("[data-action='quick-revert']").forEach((button) => {
     button.addEventListener("click", () => createRevert(button.dataset.eventId));
+  });
+
+  document.querySelectorAll("[data-action='undo-outbox-event']").forEach((button) => {
+    button.addEventListener("click", () => undoOutboxEvent(button.dataset.eventId));
   });
 
   document.querySelectorAll("[data-action='deactivate-product']").forEach((button) => {
@@ -2020,6 +2138,9 @@ function bindEvents() {
       });
     });
   }
+
+  bindTabMotion();
+  flushQueuedTabMotion();
 }
 
 function fieldNameForProductInput(name) {
@@ -2055,6 +2176,20 @@ function createProductFromForm() {
   const lowValue = Number(rawLow);
   const low = Number.isFinite(lowValue) && lowValue >= 0 ? lowValue : 0;
   const candidateId = nextProductId(normalizedName, getProductCatalog());
+  const createEvent = createInventoryEvent({
+    ...tenant,
+    event_id: nextId("product-created"),
+    idempotency_key: nextId("idem-product-created"),
+    sync_batch_id: currentBatchId(),
+    type: "PRODUCT_CREATED",
+    product_id: candidateId,
+    product_name: normalizedName,
+    quantity: 0,
+    reason: `Product added to catalog: ${normalizedName}`,
+    sequence_number: nextSequence(),
+    timestamp: Date.now(),
+    status: "queued",
+  });
 
   state.products = [
     ...getProductCatalog(),
@@ -2072,6 +2207,7 @@ function createProductFromForm() {
       reactivated_by: null,
     },
   ];
+  state.outbox = [...state.outbox, createEvent];
 
   state.form.product_id = candidateId;
   state.productForm = {
@@ -2140,6 +2276,19 @@ function syncOutbox() {
   commit();
 }
 
+function undoOutboxEvent(eventId) {
+  const event = state.outbox.find((candidate) => candidate.event_id === eventId);
+  if (!event) return;
+
+  const shouldUndo = window.confirm(`Remove ${eventLabels[event.type] ?? event.type} from Send Work queue?`);
+  if (!shouldUndo) return;
+
+  state.outbox = state.outbox.filter((candidate) => candidate.event_id !== eventId);
+  showToast(`${eventLabels[event.type] ?? event.type} removed from Send Work queue.`);
+  commit();
+}
+
+
 function reconcileCount(key) {
   const row = filteredStockRows(allLocalEvents()).find((candidate) => countKey(candidate) === key);
   if (!row) return;
@@ -2173,6 +2322,10 @@ function reconcileCount(key) {
 function createRevert(eventId) {
   const original = allLocalEvents().find((event) => event.event_id === eventId);
   if (!original || original.type === "STOCK_REVERT") return;
+  if (!isRevertibleEvent(original.type)) {
+    showToast("This event does not support mistake reversal.", "error");
+    return;
+  }
 
   const event = createInventoryEvent({
     ...tenant,
@@ -2195,6 +2348,10 @@ function createRevert(eventId) {
   showToast("Mistake reversal saved. The original record still stays visible in history.");
   state.activeView = "outbox";
   commit();
+}
+
+function isRevertibleEvent(eventType) {
+  return REVERTIBLE_EVENT_TYPES.has(eventType);
 }
 
 function buildEventFromForm() {
@@ -2273,10 +2430,17 @@ function allLocalEvents() {
 }
 
 function filteredStockRows(events) {
+  const searchTerm = String(state.stockSearch || "").trim().toLowerCase();
+
   return summarizeStock(events, getProductCatalog(), locations).filter((row) => {
     const productMatch = state.productFilter === "all" || row.product_id === state.productFilter;
     const locationMatch = state.locationFilter === "all" || row.location === state.locationFilter;
-    return productMatch && locationMatch;
+    const productName = String(row.product_name || "").toLowerCase();
+    const productId = String(row.product_id || "").toLowerCase();
+    const locationName = String(row.location || "").toLowerCase();
+    const searchMatch = !searchTerm || productName.includes(searchTerm) || productId.includes(searchTerm) || locationName.includes(searchTerm);
+
+    return productMatch && locationMatch && searchMatch;
   });
 }
 
@@ -2544,12 +2708,26 @@ function deactivateProduct(productId) {
 
   productLifecycleBusy = productId;
   try {
-    const actorReason = (window.prompt("Enter reason for deactivation (optional):", "") || "").trim();
-    const batchId = currentBatchId();
-    let sequence = nextSequence();
-    const closureEvents = closures.map((entry) =>
-      createInventoryEvent({
-        ...tenant,
+  const actorReason = (window.prompt("Enter reason for deactivation (optional):", "") || "").trim();
+  const batchId = currentBatchId();
+  let sequence = nextSequence();
+  const lifecycleEvent = createInventoryEvent({
+    ...tenant,
+    event_id: nextId("deactivate"),
+    idempotency_key: nextId("idem-deactivate"),
+    sync_batch_id: batchId,
+    type: "PRODUCT_DEACTIVATED",
+    product_id: product.id,
+    product_name: product.name,
+    quantity: 0,
+    reason: actorReason ? `Product deactivated: ${actorReason}` : "Product deactivated",
+    sequence_number: sequence++,
+    timestamp: Date.now(),
+    status: "queued",
+  });
+  const closureEvents = closures.map((entry) =>
+    createInventoryEvent({
+      ...tenant,
         event_id: nextId("deactivate"),
         idempotency_key: nextId("idem-deactivate"),
         sync_batch_id: batchId,
@@ -2565,7 +2743,7 @@ function deactivateProduct(productId) {
       }),
     );
 
-    state.outbox = [...state.outbox, ...closureEvents];
+    state.outbox = [...state.outbox, lifecycleEvent, ...closureEvents];
     state.products = getProductCatalog().map((current) =>
       current.id === productId
         ? {
@@ -2613,6 +2791,21 @@ function reactivateProduct(productId) {
     `Reactivate "${product.name}"?\n\nReactivation does not create any stock movement events. Current stock (replayed) becomes immediately reusable.${warning ? `\n\n${warning}` : ""}`,
   );
   if (!shouldProceed) return;
+  const actorReason = (window.prompt("Enter reason for reactivation (optional):", "") || "").trim();
+  const reactivationEvent = createInventoryEvent({
+    ...tenant,
+    event_id: nextId("reactivate"),
+    idempotency_key: nextId("idem-reactivate"),
+    sync_batch_id: currentBatchId(),
+    type: "PRODUCT_REACTIVATED",
+    product_id: product.id,
+    product_name: product.name,
+    quantity: 0,
+    reason: actorReason ? `Product reactivated: ${actorReason}` : "Product reactivated",
+    sequence_number: nextSequence(),
+    timestamp: Date.now(),
+    status: "queued",
+  });
 
   state.products = getProductCatalog().map((current) =>
     current.id === productId
@@ -2624,6 +2817,7 @@ function reactivateProduct(productId) {
         }
       : current,
   );
+  state.outbox = [...state.outbox, reactivationEvent];
 
   showToast(`"${product.name}" is active again. Reactivation does not create stock movement events.`);
   ensureProductSelectionIntegrity();
@@ -2652,7 +2846,15 @@ function eventLocationText(event) {
   if (event.type === "STOCK_TRANSFER") return `${event.from_location || "Unknown Place"} to ${event.to_location || "Unknown Place"}`;
   if (event.type === "STOCK_ADJUSTMENT") return `Corrected at ${event.to_location || event.from_location || "Unknown Place"}`;
   if (event.type === "STOCK_REVERT") return `Reverses an earlier movement`;
+  if (event.type === "PRODUCT_CREATED") return "Product catalog";
+  if (event.type === "PRODUCT_DEACTIVATED") return "Product catalog";
+  if (event.type === "PRODUCT_REACTIVATED") return "Product catalog";
   return `${event.from_location || "None"} to ${event.to_location || "None"}`;
+}
+
+function formatAuditBalance(value) {
+  if (!Number.isFinite(Number(value))) return "N/A";
+  return formatQuantity(value);
 }
 
 function formatQuantity(value) {
