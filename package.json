@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "test": "node --test test/ledger.test.mjs",
+    "test": "node --test test/*.test.mjs",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "smoke:browser": "node test/browser-smoke.mjs"
+    "smoke:browser": "node test/browser-smoke.mjs",
+    "verify": "node test/verify.mjs",
+    "verify:debug": "node test/verify.mjs --keep-server-on-failure"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.0",

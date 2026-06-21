@@ -27,14 +27,35 @@ http://127.0.0.1:5173
 
 ## Verify
 
+Run the full local verification loop with one command:
+
+```bash
+npm run verify
+```
+
+This runs unit tests, builds the app, starts a temporary Vite dev server on an open local port, runs the browser smoke against that exact server, stops the server, and keeps per-step logs in a temp folder printed by the command.
+
+For quick server-free checks:
+
 ```bash
 npm test
 npm run build
+```
+
+For debugging browser failures, keep the temporary server alive after a failed run:
+
+```bash
+npm run verify:debug
+```
+
+You can also run the smoke test manually against an already-running server:
+
+```bash
 npm run smoke:browser
 ```
 
 The unit tests cover replay, validation, atomic sync rejection, idempotency, and audit trail ordering.
-The browser smoke uses Playwright Chromium to load the local UI, create an event, verify the outbox, and sync the batch.
+The browser smoke uses Playwright Chromium to load the local UI, create actions, verify Work to Send, and sync the batch.
 
 ## Browser Runtime Note
 
