@@ -1,0 +1,16 @@
+:root {
+  --sidebar-width: 236px;
+  --sidebar-width-collapsed: 68px;
+  --sidebar-padding: 12px;
+  --sidebar-padding-collapsed: 8px;
+  --sidebar-toggle-size: 28px;
+  --sidebar-toggle-size-collapsed: 22px;
+
+  --workspace-padding: 22px;
+  --workspace-padding-mobile: 16px;
+
+  --panel-padding: 16px;
+  --topbar-gap: 18px;
+
+  --panel-radius-lg: var(--radius-lg, 5px);
+}

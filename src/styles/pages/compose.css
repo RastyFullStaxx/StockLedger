@@ -1,0 +1,29 @@
+.composer-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.compose-template-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--surface-panel-soft);
+}
+
+.compose-template-strip span {
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-strong);
+  font-size: 0.82rem;
+  font-weight: 780;
+  white-space: nowrap;
+}
+
+.compose-template-strip strong {
+  color: var(--color-text-muted);
+  font-size: 0.94rem;
+}

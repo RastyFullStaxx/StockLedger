@@ -1,0 +1,21 @@
+:root {
+  --color-primary: #0b5f56;
+  --color-primary-strong: #063f39;
+  --color-primary-soft: #dcefeb;
+
+  --color-bg: #edf4f1;
+  --color-card: rgba(255, 255, 255, 0.74);
+  --color-card-solid: #ffffff;
+  --color-card-muted: rgba(244, 249, 247, 0.9);
+
+  --color-text: #111827;
+  --color-text-muted: #3f4b47;
+
+  --color-border: rgba(12, 74, 68, 0.18);
+  --color-border-strong: rgba(12, 74, 68, 0.32);
+
+  --color-success: #166534;
+  --color-warning: #815400;
+  --color-error: #9f1d1d;
+  --color-info: #174e7a;
+}

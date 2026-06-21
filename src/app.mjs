@@ -97,12 +97,71 @@ let toastTimer = null;
 let shouldFocusActionOnCompose = state.activeView === "compose";
 let fieldSelectUid = 0;
 let customSelectEventsBound = false;
+let sidebarMotion = null;
 const eventSelectPortalMap = new WeakMap();
 const shouldReduceMotion = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 const tabMotionQueue = {
   activeView: null,
   stockView: null,
 };
+const sidebarTemplateColumns = {
+  expanded: "236px minmax(0, 1fr)",
+  collapsed: "68px minmax(0, 1fr)",
+};
+
+function getSidebarTemplateColumns(collapsed) {
+  return collapsed ? sidebarTemplateColumns.collapsed : sidebarTemplateColumns.expanded;
+}
+
+function animateSidebarTransition(targetCollapsed) {
+  return new Promise((resolve) => {
+    if (shouldReduceMotion) {
+      resolve();
+      return;
+    }
+
+    const shell = document.querySelector(".app-shell");
+    if (!shell) {
+      resolve();
+      return;
+    }
+
+    const from = window.getComputedStyle(shell).gridTemplateColumns;
+    const to = getSidebarTemplateColumns(targetCollapsed);
+
+    if (from === to) {
+      resolve();
+      return;
+    }
+
+    if (sidebarMotion?.stop) {
+      sidebarMotion.stop();
+    }
+
+    sidebarMotion = animate(
+      shell,
+      {
+        gridTemplateColumns: [from, to],
+      },
+      {
+        duration: 0.24,
+        ease: "easeOut",
+      },
+    );
+
+    sidebarMotion.finished
+      .then(() => {
+        shell.style.removeProperty("grid-template-columns");
+        sidebarMotion = null;
+        resolve();
+      })
+      .catch(() => {
+        shell.style.removeProperty("grid-template-columns");
+        sidebarMotion = null;
+        resolve();
+      });
+  });
+}
 
 function animateTabPress(button) {
   if (shouldReduceMotion || !button) return;
@@ -165,7 +224,7 @@ function flushQueuedTabMotion() {
   }
 
   if (tabMotionQueue.stockView === state.stockView) {
-    const nextStockTab = document.querySelector(`.view-option[data-stock-view="${CSS.escape(tabMotionQueue.stockView)}"]`);
+    const nextStockTab = document.querySelector(`.stock-overview-view-tab[data-stock-view="${CSS.escape(tabMotionQueue.stockView)}"]`);
     if (nextStockTab) animateTabActivate(nextStockTab);
     tabMotionQueue.stockView = null;
   } else {
@@ -191,13 +250,13 @@ function bindTabMotion() {
     button.addEventListener("pointerleave", () => animateTabHover(button, false), { passive: true });
   });
 
-  document.querySelectorAll(".view-option").forEach((button) => {
+  document.querySelectorAll(".stock-overview-view-tab").forEach((button) => {
     bindSimplePressMotion(button);
     button.addEventListener("pointerenter", () => animateTabHover(button, true), { passive: true });
     button.addEventListener("pointerleave", () => animateTabHover(button, false), { passive: true });
   });
 
-  document.querySelectorAll("[data-view]:not(.nav-item):not(.view-option)").forEach((button) => {
+  document.querySelectorAll("[data-view]:not(.nav-item):not(.stock-overview-view-tab)").forEach((button) => {
     bindSimplePressMotion(button);
   });
 }
@@ -270,6 +329,7 @@ function defaultState() {
       low: "0",
     },
     physicalCounts: {},
+    selectedReconcileRowKey: "",
   };
 }
 
@@ -496,6 +556,16 @@ function render() {
   ensureProductSelectionIntegrity();
   const localLedger = allLocalEvents();
   const stockRows = filteredStockRows(localLedger);
+  if (state.activeView === "reconcile" && state.selectedReconcileRowKey) {
+    const selectedStillExists = stockRows.some((row) => countKey(row) === state.selectedReconcileRowKey);
+    if (!selectedStillExists) {
+      state.selectedReconcileRowKey = "";
+      saveState();
+    }
+  }
+  if (state.activeView !== "reconcile") {
+    state.selectedReconcileRowKey = "";
+  }
   const outboxValidation = state.outbox.map((event) => ({ event, validation: validateEvent(event) }));
 
   app.innerHTML = `
@@ -532,14 +602,29 @@ document.addEventListener("click", (event) => {
 });
 
 function renderSidebar() {
-  const nav = [
-    ["home", screenMeta.home],
-    ["dashboard", screenMeta.dashboard],
-    ["products", screenMeta.products],
-    ["compose", screenMeta.compose],
-    ["outbox", screenMeta.outbox],
-    ["audit", screenMeta.audit],
-    ["reconcile", screenMeta.reconcile],
+  const navGroups = [
+    {
+      title: "Operations",
+      items: [
+        ["home", screenMeta.home],
+        ["dashboard", screenMeta.dashboard],
+        ["compose", screenMeta.compose],
+      ],
+    },
+    {
+      title: "Audit",
+      items: [
+        ["audit", screenMeta.audit],
+        ["reconcile", screenMeta.reconcile],
+      ],
+    },
+    {
+      title: "Catalog & Sync",
+      items: [
+        ["products", screenMeta.products],
+        ["outbox", screenMeta.outbox],
+      ],
+    },
   ];
 
   return `
@@ -549,22 +634,33 @@ function renderSidebar() {
         <div class="brand-copy">
           <p class="brand-name"><span>Stock</span><span>Ledger</span></p>
         </div>
-        <button class="sidebar-toggle" data-action="toggle-sidebar" type="button" aria-label="${state.sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}" aria-pressed="${state.sidebarCollapsed}">
+      <button class="sidebar-toggle" data-action="toggle-sidebar" type="button" aria-label="${state.sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}" aria-pressed="${state.sidebarCollapsed}">
           ${icon(state.sidebarCollapsed ? "panelOpen" : "panelClose")}
         </button>
       </div>
       <nav class="nav-list">
-        ${nav
+        ${navGroups
           .map(
-            ([key, item]) => `
-              <button class="nav-item ${state.activeView === key ? "is-active" : ""}" data-view="${key}" type="button">
-                ${icon(navIcon(key))}
-                <span>
-                  <small>${item.kicker}</small>
-                  ${item.label}
-                </span>
-                ${key === "outbox" && state.outbox.length ? `<strong>${state.outbox.length}</strong>` : ""}
-              </button>
+            (group) => `
+              <section class="nav-group">
+                <p class="nav-group-title">${group.title}</p>
+                <div class="nav-group-items">
+                  ${group.items
+                    .map(
+                      ([key, item]) => `
+                        <button class="nav-item ${state.activeView === key ? "is-active" : ""}" data-view="${key}" type="button">
+                          ${icon(navIcon(key))}
+                          <span>
+                            <small class="nav-item-subtitle">${item.kicker}</small>
+                            <span class="nav-item-title">${item.label}</span>
+                          </span>
+                          ${key === "outbox" && state.outbox.length ? `<strong>${state.outbox.length}</strong>` : ""}
+                        </button>
+                      `,
+                    )
+                    .join("")}
+                </div>
+              </section>
             `,
           )
           .join("")}
@@ -619,7 +715,7 @@ function renderTopbar() {
           <span class="toggle-track" aria-hidden="true"><span class="toggle-thumb"></span></span>
           <span>${state.online ? "Online" : "Offline"}</span>
         </button>
-        <button class="button button-primary send-work-button ${state.outbox.length ? "has-work" : ""}" data-action="sync" type="button" ${!state.online || state.outbox.length === 0 ? "disabled" : ""}>
+        <button class="button button-primary topbar-sync-action ${state.outbox.length ? "has-work" : ""}" data-action="sync" type="button" ${!state.online || state.outbox.length === 0 ? "disabled" : ""}>
           ${icon("send")}
           Send Work
         </button>
@@ -753,7 +849,7 @@ function renderStatusRail(localLedger, stockRows, outboxValidation) {
   const invalidOutbox = outboxValidation.filter((entry) => !entry.validation.valid).length;
 
   return `
-    <section class="status-grid" aria-label="Ledger status">
+    <section class="dashboard-kpi-grid" aria-label="Ledger status">
       ${metricCard("Saved Changes", localLedger.length)}
       ${metricCard("Waiting to Send", state.outbox.length)}
       ${metricCard("Low Stock", lowRows)}
@@ -812,10 +908,7 @@ function renderLanding(localLedger, stockRows, outboxValidation) {
           </article>
         </div>
       <article class="panel landing-recent">
-        <div class="panel-header compact">
-          <div>
-            <h2>Last Movements</h2>
-          </div>
+        <div class="panel-header panel-header--compact">
           <button class="table-action" data-view="audit" type="button">View All</button>
         </div>
         <div class="landing-timeline">
@@ -840,12 +933,7 @@ function renderDashboard(localLedger, stockRows) {
   return `
     <section class="content-grid stock-overview-grid">
       <article class="panel panel-wide">
-        <div class="panel-header">
-          <div>
-            <h2>${stockViewTitle()}</h2>
-          </div>
-        </div>
-        <div class="stock-control-row">
+        <div class="stock-overview-toolbar-row">
           ${renderStockControls()}
         </div>
         ${renderStockView(stockRows)}
@@ -866,11 +954,6 @@ function renderComposer(localLedger) {
   return `
     <section class="content-grid composer-grid">
       <article class="panel panel-wide">
-        <div class="panel-header compact">
-          <div>
-            <h2>Record One Movement</h2>
-          </div>
-        </div>
         ${renderActionTemplate(form.type)}
         <form class="event-form" data-form="event">
           <label class="field-select-wrap field-select-wrap--emphasized">
@@ -896,11 +979,11 @@ function renderComposer(localLedger) {
             })}
           </label>
           ${renderActionTemplateFields(form, template, revertOptions)}
-          <label class="span-2">
+          <label class="form-field-span-2">
             <span>Reason</span>
             <textarea name="reason" rows="3" placeholder="${template.reasonPlaceholder}">${escapeHtml(form.reason)}</textarea>
           </label>
-          <div class="form-footer span-2">
+          <div class="form-footer form-field-span-2">
             <div class="validation ${validation.valid ? "is-valid" : "is-error"}">
               ${validation.valid ? "Ready to Save on This Device." : simpleValidationReason(validation.reason)}
             </div>
@@ -921,11 +1004,6 @@ function renderProducts() {
   return `
     <section class="content-grid">
       <article class="panel panel-wide">
-        <div class="panel-header compact">
-          <div>
-            <h2>Product Management</h2>
-          </div>
-        </div>
         <form class="event-form" data-form="product">
           <label>
             <span>Product Name</span>
@@ -943,17 +1021,15 @@ function renderProducts() {
             <span>Low Stock Alert Threshold</span>
             <input name="product-low" type="number" step="0.01" min="0" value="${escapeAttr(productForm.low)}" placeholder="e.g. 6" />
           </label>
-          <div class="form-footer span-2">
+          <div class="form-footer form-field-span-2">
             <button class="button button-primary" data-action="create-product" type="button">${icon("plus")}Add Product</button>
           </div>
         </form>
         <div class="product-sections">
         <section class="product-section">
-          <h3>Active Products (${activeProducts.length})</h3>
             ${activeProducts.length === 0 ? `<div class="empty-state"><strong>No Active Products</strong></div>` : renderProductTable(activeProducts, "active")}
           </section>
           <section class="product-section">
-            <h3>Inactive Products (${deactivatedCount})</h3>
             ${inactiveProducts.length === 0
       ? `<div class="empty-state"><strong>No Inactive Products</strong></div>`
       : renderProductTable(inactiveProducts, "inactive")}
@@ -1037,8 +1113,8 @@ function renderProductTable(products, group) {
             const changeLabel = productLastStateLabel(product);
 
             return `
-              <article class="work-card">
-                <div class="card-row">
+              <article class="panel-list-card">
+                <div class="kv-row">
                   <div>
                     <strong>${escapeHtml(product.name)}</strong>
                   </div>
@@ -1073,7 +1149,7 @@ function renderActionTemplateFields(form, template, revertOptions) {
       ${renderMovementLocationField(template.showToLocation, template.destinationLabel, form.to_location, "to_location")}
       ${
         template.showOriginalEvent
-          ? `<label class="span-2 field-select-wrap">
+          ? `<label class="form-field-span-2 field-select-wrap">
                <span>Original Event</span>
                ${renderFieldSelect({
                  name: "original_event_id",
@@ -1101,7 +1177,7 @@ function renderActionTemplateFields(form, template, revertOptions) {
              <span>${template.quantityLabel}</span>
              <input name="quantity" type="number" step="0.01" value="${escapeAttr(form.quantity)}" />
            </label>`
-        : `<label class="span-2">
+        : `<label class="form-field-span-2">
              <span>${template.quantityLabel}</span>
              <p>${renderRevertAmountHelp(originalEvent)}</p>
            </label>`
@@ -1245,7 +1321,7 @@ function renderActionTemplate(type) {
   const copy = actionTemplate(type);
 
   return `
-    <div class="template-strip" aria-label="Action Template">
+    <div class="compose-template-strip" aria-label="Action Template">
       <span>${copy.template}</span>
       <strong>${copy.summary}</strong>
     </div>
@@ -1263,9 +1339,6 @@ function renderOutbox(outboxValidation) {
     <section class="content-grid">
       <article class="panel panel-wide">
         <div class="panel-header">
-          <div>
-            <h2>Work Waiting to Send</h2>
-          </div>
           <button class="button button-primary" data-action="sync" type="button" ${!state.online || state.outbox.length === 0 ? "disabled" : ""}>
             ${icon("send")}Send Saved Work
           </button>
@@ -1277,11 +1350,11 @@ function renderOutbox(outboxValidation) {
                 <table>
                   <thead>
                   <tr>
-                    <th class="numeric">No.</th>
+                    <th class="table-cell--numeric">No.</th>
                     <th>Action</th>
                     <th>Product</th>
                     <th>Location</th>
-                    <th class="numeric">Amount</th>
+                    <th class="table-cell--numeric">Amount</th>
                     <th>Duplicate Check</th>
                     <th>Status</th>
                     <th>Action</th>
@@ -1292,11 +1365,11 @@ function renderOutbox(outboxValidation) {
                       .map(
                         ({ event, validation }) => `
                           <tr>
-                            <td class="numeric">${event.sequence_number}</td>
+                            <td class="table-cell--numeric">${event.sequence_number}</td>
                             <td><span class="type-pill">${eventLabels[event.type]}</span></td>
                             <td>${productName(event.product_id)}</td>
                             <td>${eventLocationText(event)}</td>
-                            <td class="numeric">${formatQuantity(event.quantity)}</td>
+                            <td class="table-cell--numeric">${formatQuantity(event.quantity)}</td>
                             <td><code>${event.idempotency_key}</code></td>
                             <td><span class="badge ${validation.valid ? "is-valid" : "is-error"}">${validation.valid ? "Ready" : simpleValidationReason(validation.reason)}</span></td>
                             <td>
@@ -1312,8 +1385,8 @@ function renderOutbox(outboxValidation) {
                   ${outboxValidation
                     .map(
                       ({ event, validation }) => `
-                        <article class="work-card">
-                          <div class="card-row">
+                        <article class="panel-list-card">
+                          <div class="kv-row">
                             <div>
                               <span>No. ${event.sequence_number}</span>
                               <strong>${eventLabels[event.type]}</strong>
@@ -1343,11 +1416,6 @@ function renderAudit(localLedger) {
   return `
     <section class="content-grid">
       <article class="panel panel-wide">
-        <div class="panel-header compact">
-          <div>
-            <h2>Every Recorded Movement</h2>
-          </div>
-        </div>
         ${renderAuditTable(localLedger)}
       </article>
     </section>
@@ -1355,13 +1423,17 @@ function renderAudit(localLedger) {
 }
 
 function renderReconcile(stockRows) {
+  const selectedKey = state.selectedReconcileRowKey || "";
+  const selectedRow = stockRows.find((row) => countKey(row) === selectedKey);
+  const selectedPhysical = selectedRow ? (state.physicalCounts[selectedKey] ?? "") : "";
+  const selectedVariance = selectedRow && selectedPhysical !== "" ? Number(selectedPhysical) - selectedRow.quantity : null;
+  const canSaveSelected = selectedVariance !== null && Number.isFinite(selectedVariance) && selectedVariance !== 0;
+
   return `
     <section class="content-grid">
       <article class="panel panel-wide">
-        <div class="panel-header compact">
-          <div>
-            <h2>Compare Counted Stock</h2>
-          </div>
+        <div class="reconcile-filters">
+          ${renderReconcileFilters()}
         </div>
         <div class="table-wrap reconcile-table">
           <table>
@@ -1369,32 +1441,23 @@ function renderReconcile(stockRows) {
               <tr>
                 <th>Product</th>
                 <th>Location</th>
-                <th class="numeric">System Count</th>
-                <th>Hand Count</th>
-                <th class="numeric">Difference</th>
-                <th>Action</th>
+                <th class="table-cell--numeric">System Count</th>
               </tr>
             </thead>
             <tbody>
               ${stockRows
                 .map((row) => {
                   const key = countKey(row);
-                  const physical = state.physicalCounts[key] ?? "";
-                  const variance = physical === "" ? null : Number(physical) - row.quantity;
                   return `
-                    <tr>
+                    <tr
+                      class="reconcile-row ${state.selectedReconcileRowKey === key ? "is-active" : ""}"
+                      data-reconcile-row
+                      data-count-key="${key}"
+                      data-reconcile-row-key="${key}"
+                    >
                       <td>${row.product_name}</td>
                       <td>${row.location}</td>
-                      <td class="numeric">${formatQuantity(row.quantity)}</td>
-                      <td>
-                        <input class="count-input" data-count-key="${key}" type="number" step="0.01" value="${escapeAttr(physical)}" aria-label="Physical count for ${row.product_name} at ${row.location}" />
-                      </td>
-                      <td class="numeric ${variance && variance < 0 ? "danger-text" : ""}">${variance === null ? "Pending" : formatQuantity(variance)}</td>
-                      <td>
-                        <button class="button button-secondary" data-action="reconcile" data-count-key="${key}" type="button" ${!variance ? "disabled" : ""}>
-                          ${icon("check")}Save Correction
-                        </button>
-                      </td>
+                      <td class="table-cell--numeric">${formatQuantity(row.quantity)}</td>
                     </tr>
                   `;
                 })
@@ -1405,28 +1468,25 @@ function renderReconcile(stockRows) {
             ${stockRows
               .map((row) => {
                 const key = countKey(row);
-                const physical = state.physicalCounts[key] ?? "";
-                const variance = physical === "" ? null : Number(physical) - row.quantity;
                 return `
-                  <article class="count-card">
-                    <div class="card-row">
+                  <article
+                    class="count-card reconcile-card ${selectedKey === key ? "is-active" : ""}"
+                    data-reconcile-row
+                    data-count-key="${key}"
+                    data-reconcile-row-key="${key}"
+                    tabindex="0"
+                    role="button"
+                    aria-label="Open hand count correction for ${row.product_name} at ${row.location}"
+                  >
+                    <div class="kv-row">
                       <div>
                         <strong>${row.product_name}</strong>
+                        <small>${row.location}</small>
                       </div>
-                      <div class="card-number">
-                        <strong>${formatQuantity(row.quantity)}</strong>
+                      <div class="kv-row">
+                        <strong class="table-cell--numeric">${formatQuantity(row.quantity)}</strong>
+                        <span class="count-card-meta">System Count</span>
                       </div>
-                    </div>
-                    <label>
-                      <input data-count-key="${key}" type="number" step="0.01" value="${escapeAttr(physical)}" aria-label="Physical count for ${row.product_name} at ${row.location}" />
-                    </label>
-                    <div class="card-row">
-                      <div>
-                        <strong class="${variance && variance < 0 ? "danger-text" : ""}">${variance === null ? "Pending" : formatQuantity(variance)}</strong>
-                      </div>
-                      <button class="button button-secondary" data-action="reconcile" data-count-key="${key}" type="button" ${!variance ? "disabled" : ""}>
-                        ${icon("check")}Save Correction
-                      </button>
                     </div>
                   </article>
                 `;
@@ -1434,15 +1494,86 @@ function renderReconcile(stockRows) {
               .join("")}
           </div>
         </div>
+        ${selectedRow ? renderReconcilePopup(selectedRow, selectedKey, selectedPhysical, selectedVariance, canSaveSelected) : ""}
       </article>
     </section>
   `;
 }
 
+function renderReconcileFilters() {
+  const safeStockSearch = String(state.stockSearch || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  return `
+    <div class="reconcile-toolbar">
+      <label class="stock-overview-field">
+        <span>Search</span>
+        <input
+          class="stock-overview-search-input"
+          type="search"
+          placeholder="Search products or locations"
+          value="${safeStockSearch}"
+          data-filter="stock-search"
+        />
+      </label>
+      ${renderFilters()}
+    </div>
+  `;
+}
+
+function renderReconcilePopup(row, key, physicalValue, variance, canSave) {
+  const isPositive = Number.isFinite(variance) && variance > 0;
+  const numericVariance = Number.isFinite(variance) ? formatQuantity(variance) : "Enter a hand count to calculate difference";
+  return `
+    <div class="reconcile-popup-shell" data-reconcile-popup>
+      <div class="reconcile-popup-backdrop" data-action="close-reconcile-popup"></div>
+      <aside class="reconcile-popup">
+        <div class="reconcile-popup-header">
+          <div>
+            <strong>${row.product_name}</strong>
+            <small>${row.location}</small>
+          </div>
+          <button class="icon-button" data-action="close-reconcile-popup" type="button" aria-label="Close correction card">
+            ${icon("close")}
+          </button>
+        </div>
+        <div class="reconcile-popup-content">
+          <dl>
+            <div>
+              <dt>System Count</dt>
+              <dd>${formatQuantity(row.quantity)}</dd>
+            </div>
+            <div>
+              <dt>Hand Count</dt>
+              <dd>
+                <input
+                  class="count-input"
+                  data-count-key="${key}"
+                  type="number"
+                  step="0.01"
+                  value="${escapeAttr(physicalValue)}"
+                  aria-label="Physical count for ${row.product_name} at ${row.location}"
+                />
+              </dd>
+            </div>
+            <div>
+              <dt>Variance</dt>
+              <dd class="${variance === null || !Number.isFinite(variance) ? "" : isPositive ? "badge is-valid" : "badge is-error"}">
+                ${variance === null ? "Enter a hand count to calculate difference" : numericVariance}
+              </dd>
+            </div>
+          </dl>
+          <button class="button button-secondary" data-action="reconcile" data-count-key="${key}" type="button" ${!canSave ? "disabled" : ""}>
+            ${icon("check")}Save Correction
+          </button>
+        </div>
+      </aside>
+    </div>
+  `;
+}
+
 function renderFilters() {
   return `
-    <div class="filters stock-filters">
-      <label class="field-select-wrap field-select-wrap--stock-overview-filter stock-control-item">
+    <div class="stock-overview-filter-cluster">
+      <label class="field-select-wrap field-select-wrap--stock-overview-filter stock-overview-field">
         <span>Product</span>
         ${renderFieldSelect({
             name: "product-filter",
@@ -1457,7 +1588,7 @@ function renderFilters() {
           `,
           })}
       </label>
-      <label class="field-select-wrap field-select-wrap--stock-overview-filter stock-control-item">
+      <label class="field-select-wrap field-select-wrap--stock-overview-filter stock-overview-field">
         <span>Location</span>
         ${renderFieldSelect({
           name: "location-filter",
@@ -1479,17 +1610,17 @@ function renderFilters() {
 function renderStockControls() {
   const safeStockSearch = String(state.stockSearch || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   return `
-    <div class="stock-controls" aria-label="Stock View Options">
-      <div class="view-switch" role="group" aria-label="Choose Stock View">
+    <div class="stock-overview-toolbar" aria-label="Stock View Options">
+      <div class="stock-overview-view-switch" role="group" aria-label="Choose Stock View">
         ${stockViewButton("totals", "Total Stock", "layers")}
         ${stockViewButton("location", "By Location", "map")}
         ${stockViewButton("detail", "Detailed List", "list")}
       </div>
-      <div class="stock-filter-slot">
-        <label class="stock-control-item">
+      <div class="stock-overview-filter-slot">
+        <label class="stock-overview-field">
           <span>Search</span>
           <input
-            class="stock-control-input"
+            class="stock-overview-search-input"
             type="search"
             placeholder="Search products or locations"
             value="${safeStockSearch}"
@@ -1498,7 +1629,7 @@ function renderStockControls() {
         </label>
         ${ 
             state.stockView === "location"
-              ? `<label class="compact-select field-select-wrap field-select-wrap--stock-overview-filter stock-control-item">
+              ? `<label class="stock-overview-compact-select field-select-wrap field-select-wrap--stock-overview-filter stock-overview-field">
                   <span>Location</span>
                   ${renderFieldSelect({
                     name: "selected-location-filter",
@@ -1520,7 +1651,7 @@ function renderStockControls() {
 
 function stockViewButton(view, label, iconName) {
   return `
-    <button class="view-option ${state.stockView === view ? "is-active" : ""}" data-stock-view="${view}" type="button" aria-pressed="${state.stockView === view}">
+    <button class="stock-overview-view-tab ${state.stockView === view ? "is-active" : ""}" data-stock-view="${view}" type="button" aria-pressed="${state.stockView === view}">
       ${icon(iconName)}
       ${label}
     </button>
@@ -1552,9 +1683,9 @@ function renderMasterStockTable(rows) {
         <thead>
           <tr>
             <th>Product</th>
-            <th class="numeric">Total Stock</th>
+            <th class="table-cell--numeric">Total Stock</th>
             <th>Unit</th>
-            <th class="numeric">Locations With Stock</th>
+            <th class="table-cell--numeric">Locations With Stock</th>
             <th>Status</th>
           </tr>
         </thead>
@@ -1564,9 +1695,9 @@ function renderMasterStockTable(rows) {
               (row) => `
                 <tr>
                   <td>${row.product_name}</td>
-                  <td class="numeric">${formatQuantity(row.quantity)}</td>
+                  <td class="table-cell--numeric">${formatQuantity(row.quantity)}</td>
                   <td>${productUnit(row.product_id)}</td>
-                  <td class="numeric">${row.location_count}</td>
+                  <td class="table-cell--numeric">${row.location_count}</td>
                   <td>${stockState(row)}</td>
                 </tr>
               `,
@@ -1603,7 +1734,7 @@ function renderLocationStockTable(rows) {
           <tr>
             <th>Product</th>
             <th>Location</th>
-            <th class="numeric">Quantity</th>
+            <th class="table-cell--numeric">Quantity</th>
             <th>Unit</th>
             <th>Status</th>
           </tr>
@@ -1615,7 +1746,7 @@ function renderLocationStockTable(rows) {
                 <tr>
                   <td>${row.product_name}</td>
                   <td>${row.location}</td>
-                  <td class="numeric">${formatQuantity(row.quantity)}</td>
+                  <td class="table-cell--numeric">${formatQuantity(row.quantity)}</td>
                   <td>${productUnit(row.product_id)}</td>
                   <td>${stockState(row)}</td>
                 </tr>
@@ -1653,7 +1784,7 @@ function renderStockTable(rows) {
           <tr>
             <th>Product</th>
             <th>Location</th>
-            <th class="numeric">Quantity</th>
+            <th class="table-cell--numeric">Quantity</th>
             <th>Unit</th>
             <th>Status</th>
           </tr>
@@ -1665,7 +1796,7 @@ function renderStockTable(rows) {
                 <tr>
                   <td>${row.product_name}</td>
                   <td>${row.location}</td>
-                  <td class="numeric">${formatQuantity(row.quantity)}</td>
+                  <td class="table-cell--numeric">${formatQuantity(row.quantity)}</td>
                   <td>${productUnit(row.product_id)}</td>
                   <td>${stockState(row)}</td>
                 </tr>
@@ -1704,16 +1835,16 @@ function renderAuditTable(events, limit = null, compact = false) {
   }
 
   return `
-    <div class="table-wrap audit-table ${compact ? "compact-table" : ""}">
+    <div class="table-wrap audit-table ${compact ? "table-wrap--compact" : ""}">
       <table>
         <thead>
           <tr>
-            <th class="numeric">No.</th>
+            <th class="table-cell--numeric">No.</th>
             <th>Action</th>
             <th>Product</th>
             <th>Location</th>
-            <th class="numeric">Change</th>
-            <th class="numeric">New Balance</th>
+            <th class="table-cell--numeric">Change</th>
+            <th class="table-cell--numeric">New Balance</th>
             <th>Actor</th>
             ${compact ? "" : "<th>Batch</th><th>Fix</th>"}
           </tr>
@@ -1723,12 +1854,12 @@ function renderAuditTable(events, limit = null, compact = false) {
             .map((entry) => {
               return `
                 <tr>
-                  <td class="numeric">${entry.sequence_number}</td>
+                  <td class="table-cell--numeric">${entry.sequence_number}</td>
                   <td><span class="type-pill">${eventLabels[entry.type] ?? entry.type}</span></td>
                   <td>${entry.product_name}</td>
                   <td>${entry.location}</td>
-                  <td class="numeric ${entry.delta < 0 ? "danger-text" : ""}">${entry.delta > 0 ? "+" : ""}${formatQuantity(entry.delta)}</td>
-                  <td class="numeric">${formatAuditBalance(entry.running_balance)}</td>
+                  <td class="table-cell--numeric ${entry.delta < 0 ? "danger-text" : ""}">${entry.delta > 0 ? "+" : ""}${formatQuantity(entry.delta)}</td>
+                  <td class="table-cell--numeric">${formatAuditBalance(entry.running_balance)}</td>
                   <td>${entry.actor_name}</td>
                   ${
                     compact
@@ -1749,7 +1880,7 @@ function renderAuditTable(events, limit = null, compact = false) {
             .map((entry) => {
               return `
               <article class="history-card">
-                <div class="card-row">
+                <div class="kv-row">
                   <div>
                     <span>No. ${entry.sequence_number}</span>
                     <strong>${entry.product_name}</strong>
@@ -1783,7 +1914,7 @@ function renderAuditTable(events, limit = null, compact = false) {
 
 function metricCard(label, value) {
   return `
-    <article class="metric-card">
+    <article class="dashboard-kpi-card">
       <span>${label}</span>
       <strong>${value}</strong>
     </article>
@@ -1794,7 +1925,7 @@ function bindEvents() {
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
       const isSidebarTab = button.closest(".nav-item");
-      const isStockTab = button.closest(".view-option");
+      const isStockTab = button.closest(".stock-overview-view-tab");
 
       const nextView = button.dataset.view;
       if (isSidebarTab) {
@@ -1826,8 +1957,9 @@ function bindEvents() {
   });
 
   document.querySelectorAll("[data-action='toggle-sidebar']").forEach((button) => {
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
       state.sidebarCollapsed = !state.sidebarCollapsed;
+      await animateSidebarTransition(state.sidebarCollapsed);
       state.accountOpen = false;
       commit();
     });
@@ -2049,6 +2181,26 @@ function bindEvents() {
     input.addEventListener("input", () => {
       state.physicalCounts[input.dataset.countKey] = input.value;
       saveState();
+    });
+  });
+
+  document.querySelectorAll("[data-reconcile-row]").forEach((row) => {
+    row.addEventListener("click", () => {
+      state.selectedReconcileRowKey = row.dataset.reconcileRowKey || row.dataset.countKey;
+      commit();
+    });
+
+    row.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      row.click();
+    });
+  });
+
+  document.querySelectorAll("[data-action='close-reconcile-popup']").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedReconcileRowKey = "";
+      commit();
     });
   });
 
@@ -2315,6 +2467,7 @@ function reconcileCount(key) {
   state.outbox.push(event);
   delete state.physicalCounts[key];
   showToast("Count difference saved as a correction. The old history was not changed.");
+  state.selectedReconcileRowKey = "";
   state.activeView = "outbox";
   commit();
 }

@@ -1,0 +1,35 @@
+.outbox-table th:nth-child(1),
+.outbox-table td:nth-child(1) {
+  width: 68px;
+}
+
+.outbox-table th:nth-child(2),
+.outbox-table td:nth-child(2) {
+  width: 150px;
+}
+
+.outbox-table th:nth-child(5),
+.outbox-table td:nth-child(5) {
+  width: 96px;
+}
+
+.outbox-table th:nth-child(6),
+.outbox-table td:nth-child(6) {
+  width: 220px;
+}
+
+.outbox-cards {
+  display: none;
+}
+
+@media (max-width: 700px) {
+  .outbox-table table {
+    display: none;
+  }
+
+  .outbox-cards {
+    display: grid;
+    gap: 8px;
+    padding: 8px;
+  }
+}

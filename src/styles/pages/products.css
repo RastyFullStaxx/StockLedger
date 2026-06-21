@@ -1,0 +1,125 @@
+.product-sections {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.product-section h3 {
+  margin: 0 0 8px;
+  color: var(--color-primary-strong);
+  font-family: var(--font-heading);
+  font-size: 1.06rem;
+}
+
+.product-table-wrap {
+  margin-top: 6px;
+  overflow-x: hidden;
+}
+
+.product-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  font-size: 0.8rem;
+  font-weight: 780;
+}
+
+.product-row.is-inactive {
+  opacity: 0.85;
+  background: linear-gradient(180deg, rgba(255, 244, 244, 0.56), rgba(255, 250, 250, 0.88));
+}
+
+.product-table-wrap .product-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+  border-collapse: collapse;
+  --product-col-1: 24.72%;
+  --product-col-2: 15.73%;
+  --product-col-3: 11.24%;
+  --product-col-4: 10.11%;
+  --product-col-5: 11.24%;
+  --product-col-6: 13.48%;
+  --product-col-7: 13.48%;
+}
+
+.product-table-wrap .product-table th,
+.product-table-wrap .product-table td {
+  padding: 8px 10px;
+  text-align: left;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.product-table-wrap .product-table .product-col-product,
+.product-table-wrap .product-table .product-col-category,
+.product-table-wrap .product-table .product-col-unit,
+.product-table-wrap .product-table .product-col-low-stock,
+.product-table-wrap .product-table .product-col-status,
+.product-table-wrap .product-table .product-col-state-change,
+.product-table-wrap .product-table .product-col-action,
+.product-table-wrap .product-table .col-product,
+.product-table-wrap .product-table .col-category,
+.product-table-wrap .product-table .col-unit,
+.product-table-wrap .product-table .col-low-stock,
+.product-table-wrap .product-table .col-status,
+.product-table-wrap .product-table .col-state-change,
+.product-table-wrap .product-table .col-action {
+  min-width: 0;
+}
+
+.product-table-wrap .product-table col.product-col-product {
+  width: var(--product-col-1);
+}
+
+.product-table-wrap .product-table col.product-col-category {
+  width: var(--product-col-2);
+}
+
+.product-table-wrap .product-table col.product-col-unit {
+  width: var(--product-col-3);
+}
+
+.product-table-wrap .product-table col.product-col-low-stock {
+  width: var(--product-col-4);
+}
+
+.product-table-wrap .product-table col.product-col-status {
+  width: var(--product-col-5);
+}
+
+.product-table-wrap .product-table col.product-col-state-change {
+  width: var(--product-col-6);
+}
+
+.product-table-wrap .product-table col.product-col-action {
+  width: var(--product-col-7);
+}
+
+.product-table-wrap .product-table .col-low-stock,
+.product-table-wrap .product-table .col-status,
+.product-table-wrap .product-table .col-action {
+  text-align: center;
+}
+
+.product-table-wrap .product-table td.col-action {
+  text-align: center;
+}
+
+.product-table-wrap .product-table .col-action button,
+.product-table-wrap .product-table .col-action .button,
+.product-table-wrap .product-table .col-action .table-action {
+  width: min(100%, 11rem);
+  max-width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  justify-content: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

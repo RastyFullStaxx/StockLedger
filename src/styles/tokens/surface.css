@@ -1,0 +1,23 @@
+:root {
+  --shadow-soft: 0 12px 30px rgba(18, 43, 38, 0.07);
+  --shadow-control: 0 4px 12px rgba(18, 43, 38, 0.06);
+  --shadow-sidebar: 0 6px 16px rgba(18, 43, 38, 0.05);
+  --shadow-layered-popover: 0 8px 18px rgba(18, 43, 38, 0.08);
+  --shadow-toast: 0 5px 16px rgba(18, 43, 38, 0.1);
+  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.72), inset 0 -1px 0 rgba(255, 255, 255, 0.28);
+
+  --surface-paper: rgba(255, 255, 255, 0.84);
+  --surface-paper-subtle: rgba(255, 255, 255, 0.82);
+  --surface-paper-soft: rgba(255, 255, 255, 0.78);
+  --surface-table: rgba(255, 255, 255, 0.62);
+  --surface-panel-soft: rgba(244, 249, 247, 0.82);
+  --surface-panel: rgba(244, 249, 247, 0.78);
+  --surface-panel-soft-muted: rgba(244, 249, 247, 0.74);
+  --focus-ring-color: rgba(11, 95, 86, 0.38);
+  --focus-ring: 3px solid var(--focus-ring-color);
+  --focus-ring-offset: 3px;
+
+  --radius-lg: 5px;
+  --radius-md: 3px;
+  --radius-sm: 2px;
+}
