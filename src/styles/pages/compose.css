@@ -27,3 +27,61 @@
   color: var(--color-text-muted);
   font-size: 0.94rem;
 }
+
+.physical-count-panel {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--color-card-solid);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.physical-count-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr);
+  align-items: end;
+  gap: 12px;
+}
+
+.physical-count-stat {
+  display: grid;
+  gap: 4px;
+}
+
+.physical-count-stat span {
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+  font-weight: 720;
+}
+
+.physical-count-stat strong {
+  font-size: 1.1rem;
+}
+
+.physical-count-stat strong.badge {
+  width: fit-content;
+  font-size: 1rem;
+}
+
+.physical-count-input {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.96rem;
+  font-weight: 690;
+}
+
+.physical-count-help {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.86rem;
+}
+
+@media (max-width: 700px) {
+  .physical-count-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

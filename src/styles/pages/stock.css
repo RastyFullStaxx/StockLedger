@@ -58,7 +58,6 @@
 
 .stock-overview-toolbar {
   --stock-overview-control-height: var(--control-height-compact);
-  --stock-overview-control-label-offset: 30px;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: stretch;
@@ -94,7 +93,6 @@
   flex: 0 1 auto;
   justify-self: end;
   align-items: stretch;
-  margin-top: var(--stock-overview-control-label-offset);
   min-height: var(--stock-overview-control-height);
   height: var(--stock-overview-control-height);
   padding: 0;

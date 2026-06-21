@@ -307,6 +307,11 @@ function defaultState() {
     productFilter: "all",
     locationFilter: "all",
     stockSearch: "",
+    stockPage: 1,
+    auditPage: 1,
+    outboxPage: 1,
+    activeProductsPage: 1,
+    inactiveProductsPage: 1,
     message: "",
     toast: null,
     accountOpen: false,
@@ -319,6 +324,7 @@ function defaultState() {
       from_location: "Main Bar",
       to_location: "",
       quantity: 1,
+      physical_count: "",
       reason: "",
       original_event_id: "",
     },
@@ -328,8 +334,6 @@ function defaultState() {
       unit: "unit",
       low: "0",
     },
-    physicalCounts: {},
-    selectedReconcileRowKey: "",
   };
 }
 
@@ -350,7 +354,7 @@ const screenMeta = {
     title: "Record Movement",
     kicker: "Actions",
     label: "Record Movement",
-    guide: "Write what happened. Do not type a final stock number. The system will calculate stock for you.",
+    guide: "Write what happened. For a physical count, enter what you counted — the system calculates the correction for you.",
   },
   products: {
     title: "Products",
@@ -365,16 +369,10 @@ const screenMeta = {
     guide: "These events are saved on this device. When online, send them together as one safe batch.",
   },
   audit: {
-    title: "History",
-    kicker: "Audit",
-    label: "History",
+    title: "Audit",
+    kicker: "History",
+    label: "Audit",
     guide: "Use this when a number looks wrong. It shows who recorded each change and how stock was affected.",
-  },
-  reconcile: {
-    title: "Count Check",
-    kicker: "Reconcile",
-    label: "Count Check",
-    guide: "After a physical count, enter what you counted. Differences become correction events, not hidden edits.",
   },
 };
 
@@ -459,7 +457,7 @@ const ACTION_TEMPLATES = {
   STOCK_ADJUSTMENT: {
     template: "Count Correction Template",
     summary: "A hand count found a difference.",
-    help: "Use this after a hand count finds a difference. Use a plus number to add stock or a minus number to subtract stock.",
+    help: "Choose the product and location you counted. Enter what you physically counted — the system shows the current count and calculates the difference for you.",
     requiredFields: ["product_id", "to_location", "quantity"],
     sourceLabel: "Count Location",
     destinationLabel: "Not Used",
@@ -469,11 +467,13 @@ const ACTION_TEMPLATES = {
     showToLocation: true,
     showOriginalEvent: false,
     quantityEditable: true,
+    isPhysicalCount: true,
     requiresPositiveQuantity: false,
     defaults: {
       from_location: "",
       to_location: "Main Bar",
       quantity: 1,
+      physical_count: "",
       original_event_id: "",
     },
   },
@@ -510,14 +510,17 @@ function loadState() {
 
   try {
     const parsed = JSON.parse(saved);
-    return {
+    const next = {
       ...defaultState(),
       ...parsed,
       form: { ...defaultState().form, ...(parsed.form ?? {}) },
       productForm: { ...defaultState().productForm, ...(parsed.productForm ?? {}) },
       products: sanitizeProducts(parsed.products),
-      physicalCounts: parsed.physicalCounts ?? {},
     };
+    delete next.physicalCounts;
+    delete next.selectedReconcileRowKey;
+    if (next.activeView === "reconcile") next.activeView = "compose";
+    return next;
   } catch {
     return defaultState();
   }
@@ -556,29 +559,22 @@ function render() {
   ensureProductSelectionIntegrity();
   const localLedger = allLocalEvents();
   const stockRows = filteredStockRows(localLedger);
-  if (state.activeView === "reconcile" && state.selectedReconcileRowKey) {
-    const selectedStillExists = stockRows.some((row) => countKey(row) === state.selectedReconcileRowKey);
-    if (!selectedStillExists) {
-      state.selectedReconcileRowKey = "";
-      saveState();
-    }
-  }
-  if (state.activeView !== "reconcile") {
-    state.selectedReconcileRowKey = "";
-  }
   const outboxValidation = state.outbox.map((event) => ({ event, validation: validateEvent(event) }));
+
+  const focusSnapshot = captureFocusSnapshot(app);
 
   app.innerHTML = `
     <div class="app-shell ${state.sidebarCollapsed ? "is-sidebar-collapsed" : ""}">
       ${renderSidebar()}
       <main class="workspace">
         ${renderTopbar()}
-        ${renderStatusRail(localLedger, stockRows, outboxValidation)}
         ${renderActiveView(localLedger, stockRows, outboxValidation)}
       </main>
       ${renderToast()}
     </div>
   `;
+
+  restoreFocusSnapshot(app, focusSnapshot);
 
   if (state.activeView === "compose" && shouldFocusActionOnCompose) {
     requestAnimationFrame(() => {
@@ -593,6 +589,33 @@ function render() {
   bindEvents();
 }
 
+function captureFocusSnapshot(app) {
+  const active = document.activeElement;
+  if (!active || !app.contains(active) || !active.name) return null;
+  if (active.tagName !== "INPUT" && active.tagName !== "TEXTAREA") return null;
+
+  return {
+    name: active.name,
+    selectionStart: typeof active.selectionStart === "number" ? active.selectionStart : null,
+    selectionEnd: typeof active.selectionEnd === "number" ? active.selectionEnd : null,
+  };
+}
+
+function restoreFocusSnapshot(app, snapshot) {
+  if (!snapshot) return;
+  const next = app.querySelector(`[name="${snapshot.name}"]`);
+  if (!next) return;
+
+  next.focus();
+  if (snapshot.selectionStart !== null && typeof next.setSelectionRange === "function") {
+    try {
+      next.setSelectionRange(snapshot.selectionStart, snapshot.selectionEnd);
+    } catch {
+      // Some input types (e.g. number) don't support selection ranges in all browsers; ignore.
+    }
+  }
+}
+
 document.addEventListener("click", (event) => {
   const button = event.target.closest("[data-action='append-event']");
   if (!button) return;
@@ -602,69 +625,55 @@ document.addEventListener("click", (event) => {
 });
 
 function renderSidebar() {
-  const navGroups = [
-    {
-      title: "Operations",
-      items: [
-        ["home", screenMeta.home],
-        ["dashboard", screenMeta.dashboard],
-        ["compose", screenMeta.compose],
-      ],
-    },
-    {
-      title: "Audit",
-      items: [
-        ["audit", screenMeta.audit],
-        ["reconcile", screenMeta.reconcile],
-      ],
-    },
-    {
-      title: "Catalog & Sync",
-      items: [
-        ["products", screenMeta.products],
-        ["outbox", screenMeta.outbox],
-      ],
-    },
+  const navItems = [
+    ["home", screenMeta.home],
+    ["dashboard", screenMeta.dashboard],
+    ["products", screenMeta.products],
+    ["compose", screenMeta.compose],
+    ["audit", screenMeta.audit],
+    ["outbox", screenMeta.outbox],
   ];
 
   return `
     <aside class="sidebar" aria-label="Primary navigation">
       <div class="brand-lockup">
-        <div class="brand-mark" aria-hidden="true"><img src="/logo.svg" alt="" /></div>
+        ${
+          state.sidebarCollapsed
+            ? `<button class="brand-mark brand-mark-toggle" data-action="toggle-sidebar" type="button" aria-label="Expand Sidebar" aria-pressed="true">
+                <img class="brand-logo" src="/logo.svg" alt="" />
+                <span class="brand-mark-icon" aria-hidden="true">${icon("panelOpen")}</span>
+              </button>`
+            : `<div class="brand-mark" aria-hidden="true"><img src="/logo.svg" alt="" /></div>`
+        }
         <div class="brand-copy">
           <p class="brand-name"><span>Stock</span><span>Ledger</span></p>
         </div>
-      <button class="sidebar-toggle" data-action="toggle-sidebar" type="button" aria-label="${state.sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}" aria-pressed="${state.sidebarCollapsed}">
-          ${icon(state.sidebarCollapsed ? "panelOpen" : "panelClose")}
-        </button>
+        ${
+          state.sidebarCollapsed
+            ? ""
+            : `<button class="sidebar-toggle" data-action="toggle-sidebar" type="button" aria-label="Collapse Sidebar" aria-pressed="false">
+                ${icon("panelClose")}
+              </button>`
+        }
       </div>
       <nav class="nav-list">
-        ${navGroups
-          .map(
-            (group) => `
-              <section class="nav-group">
-                <p class="nav-group-title">${group.title}</p>
-                <div class="nav-group-items">
-                  ${group.items
-                    .map(
-                      ([key, item]) => `
-                        <button class="nav-item ${state.activeView === key ? "is-active" : ""}" data-view="${key}" type="button">
-                          ${icon(navIcon(key))}
-                          <span>
-                            <small class="nav-item-subtitle">${item.kicker}</small>
-                            <span class="nav-item-title">${item.label}</span>
-                          </span>
-                          ${key === "outbox" && state.outbox.length ? `<strong>${state.outbox.length}</strong>` : ""}
-                        </button>
-                      `,
-                    )
-                    .join("")}
-                </div>
-              </section>
-            `,
-          )
-          .join("")}
+        <div class="nav-group-items">
+          ${navItems
+            .map(
+              ([key, item]) => `
+                <button class="nav-item ${state.activeView === key ? "is-active" : ""}" data-view="${key}" type="button">
+                  ${icon(navIcon(key))}
+                  <span>
+                    <span class="nav-item-title">${item.label}</span>
+                  </span>
+                  ${key === "outbox" && state.outbox.length ? `<strong>${state.outbox.length}</strong>` : ""}
+                </button>
+              `,
+            )
+            .join("")}
+        </div>
       </nav>
+      <div class="sidebar-divider" role="separator"></div>
       <div class="account-menu">
         <button class="account-trigger" data-action="toggle-account" type="button" aria-expanded="${state.accountOpen}">
           <span class="account-avatar" aria-hidden="true">NH</span>
@@ -678,10 +687,11 @@ function renderSidebar() {
         ${
           state.accountOpen
                 ? `<div class="account-popover">
-                    <button type="button" data-view="home">${icon("home")}Home</button>
-                    <button type="button" data-view="dashboard">${icon("layers")}Stock Overview</button>
-                    <button type="button" data-view="products">${icon("list")}Products</button>
-                    <button type="button" data-view="outbox">${icon("send")}Send Work${state.outbox.length ? `<span>${state.outbox.length}</span>` : ""}</button>
+                    <button class="account-popover-toggle" data-action="toggle-online" type="button" aria-pressed="${state.online}">
+                      ${icon(state.online ? "wifi" : "wifiOff")}
+                      <span class="account-popover-toggle-label">${state.online ? "Online" : "Offline"}</span>
+                      <span class="mini-toggle-track ${state.online ? "is-on" : ""}" aria-hidden="true"><span class="mini-toggle-thumb"></span></span>
+                    </button>
                     <button type="button" data-action="reset-demo">${icon("refresh")}Reset Demo</button>
                   </div>`
             : ""
@@ -700,9 +710,6 @@ function renderTopbar() {
         <h1>${viewTitle()}</h1>
       </div>
       <div class="topbar-actions">
-        <button class="icon-button" data-action="reset-demo" type="button" aria-label="Reset demo">
-          ${icon("refresh")}
-        </button>
         <span class="guide-anchor">
           <button class="button button-secondary guide-button ${state.guideOpen ? "is-open" : ""}" data-action="toggle-guide" type="button" aria-expanded="${state.guideOpen}">
             ${icon("spark")}
@@ -711,14 +718,6 @@ function renderTopbar() {
           </button>
           ${state.guideOpen ? renderGuideMenu() : ""}
         </span>
-        <button class="connection-toggle ${state.online ? "is-on" : ""}" data-action="toggle-online" type="button" aria-pressed="${state.online}">
-          <span class="toggle-track" aria-hidden="true"><span class="toggle-thumb"></span></span>
-          <span>${state.online ? "Online" : "Offline"}</span>
-        </button>
-        <button class="button button-primary topbar-sync-action ${state.outbox.length ? "has-work" : ""}" data-action="sync" type="button" ${!state.online || state.outbox.length === 0 ? "disabled" : ""}>
-          ${icon("send")}
-          Send Work
-        </button>
       </div>
     </header>
   `;
@@ -829,21 +828,16 @@ function renderToast() {
 function guideTips() {
   const tips = {
     dashboard: ["Use Total Stock for the master count.", "Use By Location to check one store room, bar, or kitchen.", "Open Detailed List only when you need every product-location row."],
-    compose: ["Choose the action in user terms.", "Record what happened, not the final stock number.", "Write a short reason that another person can understand."],
+    compose: ["Choose the action in user terms.", "Record what happened, not the final stock number.", "For Correct Count, enter what you counted — the system shows the current count and calculates the difference.", "Write a short reason that another person can understand."],
     outbox: ["Saved work stays on this device while offline.", "Send work when the Online button is on.", "If one row has a problem, the full batch waits."],
     audit: ["Use History when a number needs explaining.", "Reverse a mistake instead of deleting it.", "The original movement remains visible."],
     products: ["Add a product before you record movements for a new item.", "Pick a low stock threshold to trigger alerts.", "Keep product naming consistent for easy searching."],
-    reconcile: ["Enter the hand count after a physical count.", "Save a correction only when there is a difference.", "Corrections keep the reason visible."],
   };
 
   return tips[state.activeView] ?? tips.dashboard;
 }
 
 function renderStatusRail(localLedger, stockRows, outboxValidation) {
-  if (state.activeView === "home") {
-    return "";
-  }
-
   const negativeRows = stockRows.filter((row) => row.quantity < 0).length;
   const lowRows = stockRows.filter((row) => row.quantity >= 0 && row.quantity <= productLow(row.product_id)).length;
   const invalidOutbox = outboxValidation.filter((entry) => !entry.validation.valid).length;
@@ -863,9 +857,8 @@ function renderActiveView(localLedger, stockRows, outboxValidation) {
   if (state.activeView === "compose") return renderComposer(localLedger);
   if (state.activeView === "outbox") return renderOutbox(outboxValidation);
   if (state.activeView === "audit") return renderAudit(localLedger);
-  if (state.activeView === "reconcile") return renderReconcile(stockRows);
   if (state.activeView === "products") return renderProducts();
-  return renderDashboard(localLedger, stockRows);
+  return renderDashboard(localLedger, stockRows, outboxValidation);
 }
 
 function renderLanding(localLedger, stockRows, outboxValidation) {
@@ -929,10 +922,11 @@ function renderLanding(localLedger, stockRows, outboxValidation) {
   `;
 }
 
-function renderDashboard(localLedger, stockRows) {
+function renderDashboard(localLedger, stockRows, outboxValidation) {
   return `
     <section class="content-grid stock-overview-grid">
-      <article class="panel panel-wide">
+      ${renderStatusRail(localLedger, stockRows, outboxValidation)}
+      <article class="panel panel-wide panel--flush-table">
         <div class="stock-overview-toolbar-row">
           ${renderStockControls()}
         </div>
@@ -999,7 +993,11 @@ function renderProducts() {
   const activeProducts = getActiveProducts();
   const inactiveProducts = getInactiveProducts();
   const productForm = state.productForm ?? { name: "", category: "", unit: "unit", low: "0" };
-  const deactivatedCount = inactiveProducts.length;
+
+  const activePagination = paginateRows(activeProducts, state.activeProductsPage);
+  state.activeProductsPage = activePagination.page;
+  const inactivePagination = paginateRows(inactiveProducts, state.inactiveProductsPage);
+  state.inactiveProductsPage = inactivePagination.page;
 
   return `
     <section class="content-grid">
@@ -1025,22 +1023,24 @@ function renderProducts() {
             <button class="button button-primary" data-action="create-product" type="button">${icon("plus")}Add Product</button>
           </div>
         </form>
-        <div class="product-sections">
-        <section class="product-section">
-            ${activeProducts.length === 0 ? `<div class="empty-state"><strong>No Active Products</strong></div>` : renderProductTable(activeProducts, "active")}
-          </section>
-          <section class="product-section">
-            ${inactiveProducts.length === 0
-      ? `<div class="empty-state"><strong>No Inactive Products</strong></div>`
-      : renderProductTable(inactiveProducts, "inactive")}
-          </section>
+      </article>
+      <article class="panel panel-wide panel--flush-table">
+        <div class="panel-header">
+          <h2>Active Products</h2>
         </div>
+        ${activeProducts.length === 0 ? `<div class="empty-state"><strong>No Active Products</strong></div>` : renderProductTable(activePagination.pageRows, "active", activePagination)}
+      </article>
+      <article class="panel panel-wide panel--flush-table">
+        <div class="panel-header">
+          <h2>Inactive Products</h2>
+        </div>
+        ${inactiveProducts.length === 0 ? `<div class="empty-state"><strong>No Inactive Products</strong></div>` : renderProductTable(inactivePagination.pageRows, "inactive", inactivePagination)}
       </article>
     </section>
   `;
 }
 
-function renderProductTable(products, group) {
+function renderProductTable(products, group, pagination) {
   return `
     <div class="table-wrap stock-table product-table-wrap">
       <table class="product-table">
@@ -1137,6 +1137,7 @@ function renderProductTable(products, group) {
           })
           .join("")}
       </div>
+      ${renderTablePagination(group === "inactive" ? "inactive-products" : "active-products", pagination, products.length)}
     </div>
   `;
 }
@@ -1172,7 +1173,9 @@ function renderActionTemplateFields(form, template, revertOptions) {
         : ""
     }
     ${
-      template.quantityEditable
+      template.isPhysicalCount
+        ? renderPhysicalCountFields(form)
+        : template.quantityEditable
         ? `<label>
              <span>${template.quantityLabel}</span>
              <input name="quantity" type="number" step="0.01" value="${escapeAttr(form.quantity)}" />
@@ -1182,6 +1185,59 @@ function renderActionTemplateFields(form, template, revertOptions) {
              <p>${renderRevertAmountHelp(originalEvent)}</p>
            </label>`
     }
+  `;
+}
+
+function currentSystemCount(form) {
+  if (!form.product_id || !form.to_location) return null;
+  const row = filteredStockRows(allLocalEvents()).find(
+    (candidate) => candidate.product_id === form.product_id && candidate.location === form.to_location,
+  );
+  return row ? Number(row.quantity) : 0;
+}
+
+function physicalCountVariance(form) {
+  const systemCount = currentSystemCount(form);
+  if (systemCount === null) return null;
+  if (form.physical_count === "" || form.physical_count === null || form.physical_count === undefined) return null;
+  const physical = Number(form.physical_count);
+  if (!Number.isFinite(physical)) return null;
+  return Number((physical - systemCount).toFixed(4));
+}
+
+function renderPhysicalCountFields(form) {
+  const systemCount = currentSystemCount(form);
+  const variance = physicalCountVariance(form);
+  const hasLocation = systemCount !== null;
+  const varianceTone = variance === null ? "" : variance === 0 ? "" : variance > 0 ? "is-valid" : "is-error";
+
+  return `
+    <div class="panel form-field-span-2 physical-count-panel">
+      <div class="physical-count-row">
+        <div class="physical-count-stat">
+          <span>System Count</span>
+          <strong>${hasLocation ? formatQuantity(systemCount) : "Choose a location"}</strong>
+        </div>
+        <label class="physical-count-input">
+          <span>Physical Count</span>
+          <input
+            name="physical_count"
+            type="number"
+            step="0.01"
+            placeholder="What you counted"
+            value="${escapeAttr(form.physical_count)}"
+            ${hasLocation ? "" : "disabled"}
+          />
+        </label>
+        <div class="physical-count-stat">
+          <span>Variance</span>
+          <strong class="${varianceTone ? `badge ${varianceTone}` : ""}">
+            ${variance === null ? "—" : `${variance > 0 ? "+" : ""}${formatQuantity(variance)}`}
+          </strong>
+        </div>
+      </div>
+      <p class="physical-count-help">Enter what you actually counted. The system count is looked up live and the difference is saved as the correction — nobody hand-calculates the delta.</p>
+    </div>
   `;
 }
 
@@ -1335,9 +1391,13 @@ function findEventForRevert(eventId) {
 }
 
 function renderOutbox(outboxValidation) {
+  const pagination = paginateRows(outboxValidation, state.outboxPage);
+  state.outboxPage = pagination.page;
+  const pageItems = pagination.pageRows;
+
   return `
     <section class="content-grid">
-      <article class="panel panel-wide">
+      <article class="panel panel-wide panel--flush-table">
         <div class="panel-header">
           <button class="button button-primary" data-action="sync" type="button" ${!state.online || state.outbox.length === 0 ? "disabled" : ""}>
             ${icon("send")}Send Saved Work
@@ -1361,7 +1421,7 @@ function renderOutbox(outboxValidation) {
                   </tr>
                   </thead>
                   <tbody>
-                    ${outboxValidation
+                    ${pageItems
                       .map(
                         ({ event, validation }) => `
                           <tr>
@@ -1382,7 +1442,7 @@ function renderOutbox(outboxValidation) {
                   </tbody>
                 </table>
                 <div class="outbox-cards" aria-label="Saved work list">
-                  ${outboxValidation
+                  ${pageItems
                     .map(
                       ({ event, validation }) => `
                         <article class="panel-list-card">
@@ -1405,6 +1465,7 @@ function renderOutbox(outboxValidation) {
                     )
                     .join("")}
                 </div>
+                ${renderTablePagination("outbox", pagination, pageItems.length)}
               </div>`
         }
       </article>
@@ -1415,166 +1476,18 @@ function renderOutbox(outboxValidation) {
 function renderAudit(localLedger) {
   return `
     <section class="content-grid">
-      <article class="panel panel-wide">
+      <article class="panel panel-wide panel--flush-table">
         ${renderAuditTable(localLedger)}
       </article>
     </section>
   `;
 }
 
-function renderReconcile(stockRows) {
-  const selectedKey = state.selectedReconcileRowKey || "";
-  const selectedRow = stockRows.find((row) => countKey(row) === selectedKey);
-  const selectedPhysical = selectedRow ? (state.physicalCounts[selectedKey] ?? "") : "";
-  const selectedVariance = selectedRow && selectedPhysical !== "" ? Number(selectedPhysical) - selectedRow.quantity : null;
-  const canSaveSelected = selectedVariance !== null && Number.isFinite(selectedVariance) && selectedVariance !== 0;
-
-  return `
-    <section class="content-grid">
-      <article class="panel panel-wide">
-        <div class="reconcile-filters">
-          ${renderReconcileFilters()}
-        </div>
-        <div class="table-wrap reconcile-table">
-          <table>
-            <thead>
-              <tr>
-                <th>Product</th>
-                <th>Location</th>
-                <th class="table-cell--numeric">System Count</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${stockRows
-                .map((row) => {
-                  const key = countKey(row);
-                  return `
-                    <tr
-                      class="reconcile-row ${state.selectedReconcileRowKey === key ? "is-active" : ""}"
-                      data-reconcile-row
-                      data-count-key="${key}"
-                      data-reconcile-row-key="${key}"
-                    >
-                      <td>${row.product_name}</td>
-                      <td>${row.location}</td>
-                      <td class="table-cell--numeric">${formatQuantity(row.quantity)}</td>
-                    </tr>
-                  `;
-                })
-                .join("")}
-            </tbody>
-          </table>
-          <div class="reconcile-cards" aria-label="Count correction list">
-            ${stockRows
-              .map((row) => {
-                const key = countKey(row);
-                return `
-                  <article
-                    class="count-card reconcile-card ${selectedKey === key ? "is-active" : ""}"
-                    data-reconcile-row
-                    data-count-key="${key}"
-                    data-reconcile-row-key="${key}"
-                    tabindex="0"
-                    role="button"
-                    aria-label="Open hand count correction for ${row.product_name} at ${row.location}"
-                  >
-                    <div class="kv-row">
-                      <div>
-                        <strong>${row.product_name}</strong>
-                        <small>${row.location}</small>
-                      </div>
-                      <div class="kv-row">
-                        <strong class="table-cell--numeric">${formatQuantity(row.quantity)}</strong>
-                        <span class="count-card-meta">System Count</span>
-                      </div>
-                    </div>
-                  </article>
-                `;
-              })
-              .join("")}
-          </div>
-        </div>
-        ${selectedRow ? renderReconcilePopup(selectedRow, selectedKey, selectedPhysical, selectedVariance, canSaveSelected) : ""}
-      </article>
-    </section>
-  `;
-}
-
-function renderReconcileFilters() {
-  const safeStockSearch = String(state.stockSearch || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-  return `
-    <div class="reconcile-toolbar">
-      <label class="stock-overview-field">
-        <span>Search</span>
-        <input
-          class="stock-overview-search-input"
-          type="search"
-          placeholder="Search products or locations"
-          value="${safeStockSearch}"
-          data-filter="stock-search"
-        />
-      </label>
-      ${renderFilters()}
-    </div>
-  `;
-}
-
-function renderReconcilePopup(row, key, physicalValue, variance, canSave) {
-  const isPositive = Number.isFinite(variance) && variance > 0;
-  const numericVariance = Number.isFinite(variance) ? formatQuantity(variance) : "Enter a hand count to calculate difference";
-  return `
-    <div class="reconcile-popup-shell" data-reconcile-popup>
-      <div class="reconcile-popup-backdrop" data-action="close-reconcile-popup"></div>
-      <aside class="reconcile-popup">
-        <div class="reconcile-popup-header">
-          <div>
-            <strong>${row.product_name}</strong>
-            <small>${row.location}</small>
-          </div>
-          <button class="icon-button" data-action="close-reconcile-popup" type="button" aria-label="Close correction card">
-            ${icon("close")}
-          </button>
-        </div>
-        <div class="reconcile-popup-content">
-          <dl>
-            <div>
-              <dt>System Count</dt>
-              <dd>${formatQuantity(row.quantity)}</dd>
-            </div>
-            <div>
-              <dt>Hand Count</dt>
-              <dd>
-                <input
-                  class="count-input"
-                  data-count-key="${key}"
-                  type="number"
-                  step="0.01"
-                  value="${escapeAttr(physicalValue)}"
-                  aria-label="Physical count for ${row.product_name} at ${row.location}"
-                />
-              </dd>
-            </div>
-            <div>
-              <dt>Variance</dt>
-              <dd class="${variance === null || !Number.isFinite(variance) ? "" : isPositive ? "badge is-valid" : "badge is-error"}">
-                ${variance === null ? "Enter a hand count to calculate difference" : numericVariance}
-              </dd>
-            </div>
-          </dl>
-          <button class="button button-secondary" data-action="reconcile" data-count-key="${key}" type="button" ${!canSave ? "disabled" : ""}>
-            ${icon("check")}Save Correction
-          </button>
-        </div>
-      </aside>
-    </div>
-  `;
-}
-
-function renderFilters() {
+function renderFilters({ hideLabels = false } = {}) {
   return `
     <div class="stock-overview-filter-cluster">
       <label class="field-select-wrap field-select-wrap--stock-overview-filter stock-overview-field">
-        <span>Product</span>
+        ${hideLabels ? "" : "<span>Product</span>"}
         ${renderFieldSelect({
             name: "product-filter",
             menuStyle: "styled",
@@ -1589,7 +1502,7 @@ function renderFilters() {
           })}
       </label>
       <label class="field-select-wrap field-select-wrap--stock-overview-filter stock-overview-field">
-        <span>Location</span>
+        ${hideLabels ? "" : "<span>Location</span>"}
         ${renderFieldSelect({
           name: "location-filter",
           menuStyle: "styled",
@@ -1617,20 +1530,19 @@ function renderStockControls() {
         ${stockViewButton("detail", "Detailed List", "list")}
       </div>
       <div class="stock-overview-filter-slot">
-        <label class="stock-overview-field">
-          <span>Search</span>
+        <div class="stock-overview-field stock-overview-field--search">
           <input
             class="stock-overview-search-input"
             type="search"
             placeholder="Search products or locations"
             value="${safeStockSearch}"
             data-filter="stock-search"
+            aria-label="Search products or locations"
           />
-        </label>
+        </div>
         ${ 
             state.stockView === "location"
               ? `<label class="stock-overview-compact-select field-select-wrap field-select-wrap--stock-overview-filter stock-overview-field">
-                  <span>Location</span>
                   ${renderFieldSelect({
                     name: "selected-location-filter",
                     menuStyle: "styled",
@@ -1643,7 +1555,7 @@ function renderStockControls() {
               </label>`
             : ""
         }
-        ${state.stockView === "detail" ? renderFilters() : ""}
+        ${state.stockView === "detail" ? renderFilters({ hideLabels: true }) : ""}
       </div>
     </div>
   `;
@@ -1659,9 +1571,21 @@ function stockViewButton(view, label, iconName) {
 }
 
 function renderStockView(stockRows) {
-  if (state.stockView === "location") return renderLocationStockTable(locationStockRows(stockRows));
-  if (state.stockView === "detail") return renderStockTable(stockRows);
-  return renderMasterStockTable(stockTotalRows(stockRows));
+  if (state.stockView === "location") {
+    const rows = locationStockRows(stockRows);
+    const pagination = paginateRows(rows, state.stockPage);
+    state.stockPage = pagination.page;
+    return renderLocationStockTable(pagination.pageRows, pagination);
+  }
+  if (state.stockView === "detail") {
+    const pagination = paginateRows(stockRows, state.stockPage);
+    state.stockPage = pagination.page;
+    return renderStockTable(pagination.pageRows, pagination);
+  }
+  const rows = stockTotalRows(stockRows);
+  const pagination = paginateRows(rows, state.stockPage);
+  state.stockPage = pagination.page;
+  return renderMasterStockTable(pagination.pageRows, pagination);
 }
 
 function stockViewTitle() {
@@ -1676,7 +1600,7 @@ function stockViewHelp() {
   return "Shows the master total for each product across all locations.";
 }
 
-function renderMasterStockTable(rows) {
+function renderMasterStockTable(rows, pagination) {
   return `
     <div class="table-wrap stock-table">
       <table>
@@ -1722,11 +1646,12 @@ function renderMasterStockTable(rows) {
           )
           .join("")}
       </div>
+      ${renderTablePagination("stock", pagination, rows.length)}
     </div>
   `;
 }
 
-function renderLocationStockTable(rows) {
+function renderLocationStockTable(rows, pagination) {
   return `
     <div class="table-wrap stock-table">
       <table>
@@ -1772,11 +1697,12 @@ function renderLocationStockTable(rows) {
           )
           .join("")}
       </div>
+      ${renderTablePagination("stock", pagination, rows.length)}
     </div>
   `;
 }
 
-function renderStockTable(rows) {
+function renderStockTable(rows, pagination) {
   return `
     <div class="table-wrap stock-table">
       <table>
@@ -1822,16 +1748,28 @@ function renderStockTable(rows) {
           )
           .join("")}
       </div>
+      ${renderTablePagination("stock", pagination, rows.length)}
     </div>
   `;
 }
 
 function renderAuditTable(events, limit = null, compact = false) {
   const trail = replayAuditTrail(events);
-  const rows = [...trail].reverse().slice(0, limit ?? trail.length);
+  const allRows = [...trail].reverse();
 
-  if (rows.length === 0) {
+  if (allRows.length === 0) {
     return `<div class="empty-state"><strong>No history yet</strong></div>`;
+  }
+
+  let rows = allRows;
+  let pagination = null;
+
+  if (compact || limit !== null) {
+    rows = allRows.slice(0, limit ?? allRows.length);
+  } else {
+    pagination = paginateRows(allRows, state.auditPage);
+    state.auditPage = pagination.page;
+    rows = pagination.pageRows;
   }
 
   return `
@@ -1908,6 +1846,7 @@ function renderAuditTable(events, limit = null, compact = false) {
             })
             .join("")}
       </div>
+      ${pagination ? renderTablePagination("audit", pagination, rows.length) : ""}
     </div>
   `;
 }
@@ -2144,6 +2083,7 @@ function bindEvents() {
   document.querySelectorAll("[data-filter='product']").forEach((select) => {
     select.addEventListener("change", () => {
       state.productFilter = select.value;
+      state.stockPage = 1;
       commit();
     });
   });
@@ -2151,6 +2091,7 @@ function bindEvents() {
   document.querySelectorAll("[data-filter='location']").forEach((select) => {
     select.addEventListener("change", () => {
       state.locationFilter = select.value;
+      state.stockPage = 1;
       commit();
     });
   });
@@ -2158,6 +2099,7 @@ function bindEvents() {
   document.querySelectorAll("[data-filter='selected-location']").forEach((select) => {
     select.addEventListener("change", () => {
       state.selectedLocation = select.value;
+      state.stockPage = 1;
       commit();
     });
   });
@@ -2165,6 +2107,7 @@ function bindEvents() {
   document.querySelectorAll("[data-filter='stock-search']").forEach((input) => {
     input.addEventListener("input", () => {
       state.stockSearch = input.value;
+      state.stockPage = 1;
       commit();
     });
   });
@@ -2173,39 +2116,35 @@ function bindEvents() {
     button.addEventListener("click", () => {
       tabMotionQueue.stockView = button.dataset.stockView;
       state.stockView = button.dataset.stockView;
+      state.stockPage = 1;
       commit();
     });
   });
 
-  document.querySelectorAll("[data-count-key]").forEach((input) => {
-    input.addEventListener("input", () => {
-      state.physicalCounts[input.dataset.countKey] = input.value;
-      saveState();
-    });
-  });
+  const paginationScopeKey = {
+    stock: "stockPage",
+    audit: "auditPage",
+    outbox: "outboxPage",
+    "active-products": "activeProductsPage",
+    "inactive-products": "inactiveProductsPage",
+  };
 
-  document.querySelectorAll("[data-reconcile-row]").forEach((row) => {
-    row.addEventListener("click", () => {
-      state.selectedReconcileRowKey = row.dataset.reconcileRowKey || row.dataset.countKey;
-      commit();
-    });
-
-    row.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter" && event.key !== " ") return;
-      event.preventDefault();
-      row.click();
-    });
-  });
-
-  document.querySelectorAll("[data-action='close-reconcile-popup']").forEach((button) => {
+  document.querySelectorAll("[data-action='page-prev']").forEach((button) => {
     button.addEventListener("click", () => {
-      state.selectedReconcileRowKey = "";
+      const key = paginationScopeKey[button.dataset.pageScope];
+      if (!key || button.disabled) return;
+      state[key] = Math.max(1, (state[key] || 1) - 1);
       commit();
     });
   });
 
-  document.querySelectorAll("[data-action='reconcile']").forEach((button) => {
-    button.addEventListener("click", () => reconcileCount(button.dataset.countKey));
+  document.querySelectorAll("[data-action='page-next']").forEach((button) => {
+    button.addEventListener("click", () => {
+      const key = paginationScopeKey[button.dataset.pageScope];
+      if (!key || button.disabled) return;
+      state[key] = (state[key] || 1) + 1;
+      commit();
+    });
   });
 
   document.querySelectorAll("[data-action='quick-revert']").forEach((button) => {
@@ -2226,17 +2165,24 @@ function bindEvents() {
 
   const form = document.querySelector("[data-form='event']");
   if (form) {
-    form.addEventListener("input", () => {
+    form.addEventListener("input", (event) => {
       const data = new FormData(form);
       state.form = {
         ...state.form,
         product_id: data.get("product_id"),
         from_location: data.get("from_location") ?? state.form.from_location ?? "",
         to_location: data.get("to_location") ?? state.form.to_location ?? "",
-        quantity: data.get("quantity"),
+        quantity: data.has("quantity") ? data.get("quantity") : state.form.quantity,
+        physical_count: data.has("physical_count") ? data.get("physical_count") : state.form.physical_count,
         reason: data.get("reason") ?? "",
         original_event_id: data.get("original_event_id") ?? state.form.original_event_id ?? "",
       };
+
+      if (event.target?.name === "physical_count") {
+        commit();
+        return;
+      }
+
       saveState();
     });
 
@@ -2260,7 +2206,7 @@ function bindEvents() {
         return;
       }
 
-      saveState();
+      commit();
     });
 
     form.addEventListener("submit", (event) => {
@@ -2400,6 +2346,7 @@ function appendFormEvent() {
   state.outbox.push(event);
   showToast(`${eventLabels[event.type]} saved locally. Send work when online.`);
   state.form.quantity = 1;
+  state.form.physical_count = "";
   state.form.original_event_id = "";
   state.form.reason = "";
   normalizeFormForType();
@@ -2440,37 +2387,6 @@ function undoOutboxEvent(eventId) {
   commit();
 }
 
-
-function reconcileCount(key) {
-  const row = filteredStockRows(allLocalEvents()).find((candidate) => countKey(candidate) === key);
-  if (!row) return;
-
-  const physical = Number(state.physicalCounts[key]);
-  const variance = Number((physical - row.quantity).toFixed(4));
-  if (!Number.isFinite(physical) || variance === 0) return;
-
-  const event = createInventoryEvent({
-    ...tenant,
-    event_id: nextId("recon"),
-    idempotency_key: nextId("idem-recon"),
-    sync_batch_id: currentBatchId(),
-    type: "STOCK_ADJUSTMENT",
-    product_id: row.product_id,
-    product_name: row.product_name,
-    to_location: row.location,
-    quantity: variance,
-    reason: `Physical count ${formatQuantity(physical)} vs replay ${formatQuantity(row.quantity)}`,
-    sequence_number: nextSequence(),
-    timestamp: Date.now(),
-  });
-
-  state.outbox.push(event);
-  delete state.physicalCounts[key];
-  showToast("Count difference saved as a correction. The old history was not changed.");
-  state.selectedReconcileRowKey = "";
-  state.activeView = "outbox";
-  commit();
-}
 
 function createRevert(eventId) {
   const original = allLocalEvents().find((event) => event.event_id === eventId);
@@ -2532,7 +2448,14 @@ function buildEventFromForm() {
     });
   }
 
-  const quantityValue = template.requiresPositiveQuantity ? Math.abs(Number(form.quantity || 0)) : Number(form.quantity || 0);
+  const quantityValue = template.isPhysicalCount
+    ? physicalCountVariance(form) ?? 0
+    : template.requiresPositiveQuantity
+    ? Math.abs(Number(form.quantity || 0))
+    : Number(form.quantity || 0);
+  const defaultReason = template.isPhysicalCount && currentSystemCount(form) !== null
+    ? `Physical count ${formatQuantity(Number(form.physical_count || 0))} vs system ${formatQuantity(currentSystemCount(form))}`
+    : "Operational event";
   return createInventoryEvent({
     ...tenant,
     event_id: nextId("event"),
@@ -2545,7 +2468,7 @@ function buildEventFromForm() {
     to_location: form.to_location || null,
     quantity: quantityValue,
     original_event_id: form.original_event_id || null,
-    reason: form.reason.trim() || "Operational event",
+    reason: form.reason.trim() || defaultReason,
     sequence_number: nextSequence(),
     timestamp: Date.now(),
     status: "queued",
@@ -2575,6 +2498,10 @@ function normalizeFormForType() {
     }
   } else {
     state.form.quantity = defaults.quantity ?? 1;
+  }
+
+  if (!template.isPhysicalCount) {
+    state.form.physical_count = "";
   }
 }
 
@@ -2619,6 +2546,31 @@ function stockState(row) {
   return `<span class="badge is-valid">Enough</span>`;
 }
 
+const TABLE_PAGE_SIZE = 10;
+
+function paginateRows(rows, page) {
+  const total = rows.length;
+  const totalPages = Math.max(1, Math.ceil(total / TABLE_PAGE_SIZE));
+  const safePage = Math.min(Math.max(1, Number(page) || 1), totalPages);
+  const start = (safePage - 1) * TABLE_PAGE_SIZE;
+  const pageRows = rows.slice(start, start + TABLE_PAGE_SIZE);
+  return { pageRows, page: safePage, totalPages, total };
+}
+
+function renderTablePagination(scope, pagination, shownCount) {
+  const { page, totalPages, total } = pagination;
+  return `
+    <div class="table-pagination">
+      <span class="table-pagination-info">Showing <strong>${shownCount}</strong> of <strong>${total}</strong> ${total === 1 ? "record" : "records"}</span>
+      <div class="table-pagination-controls">
+        <button class="icon-button table-pagination-btn" data-action="page-prev" data-page-scope="${scope}" type="button" aria-label="Previous page" ${page <= 1 ? "disabled" : ""}>${icon("chevronLeft")}</button>
+        <span class="table-pagination-page">Page <strong>${page}</strong> of <strong>${totalPages}</strong></span>
+        <button class="icon-button table-pagination-btn" data-action="page-next" data-page-scope="${scope}" type="button" aria-label="Next page" ${page >= totalPages ? "disabled" : ""}>${icon("chevronRight")}</button>
+      </div>
+    </div>
+  `;
+}
+
 function simpleValidationReason(reason) {
   const messages = [
     ["STOCK_IN requires to_location", "Choose where the stock arrived."],
@@ -2643,10 +2595,6 @@ function nextSequence() {
 
 function nextId(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function countKey(row) {
-  return `${row.product_id}::${row.location}`;
 }
 
 function showToast(message, type = "success") {
@@ -2704,7 +2652,6 @@ function navIcon(view) {
     compose: "plus",
     outbox: "send",
     audit: "history",
-    reconcile: "check",
   };
 
   return icons[view] ?? "layers";
@@ -2722,11 +2669,15 @@ function icon(name) {
     spark: '<path d="M12 2l1.6 5.4L19 9l-5.4 1.6L12 16l-1.6-5.4L5 9l5.4-1.6L12 2Z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z"/>',
     close: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
     chevron: '<path d="m6 9 6 6 6-6"/>',
+    chevronLeft: '<path d="m15 18-6-6 6-6"/>',
+    chevronRight: '<path d="m9 18 6-6-6-6"/>',
     refresh: '<path d="M21 12a9 9 0 0 1-15.5 6.2"/><path d="M3 12A9 9 0 0 1 18.5 5.8"/><path d="M3 19v-5h5"/><path d="M21 5v5h-5"/>',
     alert: '<path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/>',
     panelClose: '<path d="M3 5h18v14H3z"/><path d="M9 5v14"/><path d="m16 10-2 2 2 2"/>',
     panelOpen: '<path d="M3 5h18v14H3z"/><path d="M9 5v14"/><path d="m14 10 2 2-2 2"/>',
     home: '<path d="m3 11 9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',
+    wifi: '<path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><path d="M12 20h.01"/>',
+    wifiOff: '<path d="M1 1l22 22"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.58 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><path d="M12 20h.01"/>',
   };
 
   return `<svg class="icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${paths[name] ?? paths.layers}</svg>`;
@@ -2740,7 +2691,6 @@ function viewTitle() {
     compose: "Record Movement",
     outbox: "Send Work",
     audit: "History",
-    reconcile: "Count Check",
   };
   return titles[state.activeView] ?? "Stock Overview";
 }
