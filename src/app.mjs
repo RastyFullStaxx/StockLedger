@@ -66,6 +66,17 @@ import {
   answerAssistantQuestion as answerAssistantQuestionFromContext,
   createAssistantGreeting as createAssistantGreetingFromContext,
 } from "./assistant/assistant-engine.mjs";
+import {
+  appendStockActionBusinessRecord,
+  markStockActionBusinessRecordsSynced,
+  removeStockActionBusinessRecordForUndo,
+} from "./stock-actions/business-records.mjs";
+import {
+  createStockActionEventBuilder,
+  physicalCountForProduct as selectPhysicalCountForProduct,
+  physicalCountVariance as selectPhysicalCountVariance,
+  quantityForProduct as selectQuantityForProduct,
+} from "./stock-actions/event-builder.mjs";
 import { buildWorkQueueItems } from "./stock-actions/work-queue.mjs";
 import {
   clientSalesReportRows,
@@ -2885,16 +2896,11 @@ function currentSystemCountForProduct(form, productId) {
 
 function physicalCountVariance(form, productId = form.product_id) {
   const systemCount = currentSystemCountForProduct(form, productId);
-  if (systemCount === null) return null;
-  const productPhysicalCount = physicalCountForProduct(form, productId);
-  if (productPhysicalCount === "" || productPhysicalCount === null || productPhysicalCount === undefined) return null;
-  const physical = Number(productPhysicalCount);
-  if (!Number.isFinite(physical)) return null;
-  return Number((physical - systemCount).toFixed(4));
+  return selectPhysicalCountVariance(form, productId, systemCount);
 }
 
 function physicalCountForProduct(form, productId) {
-  return form.product_physical_counts?.[productId] ?? form.physical_count ?? "";
+  return selectPhysicalCountForProduct(form, productId);
 }
 
 function renderPhysicalCountFields(form) {
@@ -5204,63 +5210,16 @@ function appendFormEvent() {
 }
 
 function createBusinessRecordFromStockAction(events) {
-  const first = events[0];
-  if (!first?.source_type || !first.source_id) return;
-
-  const timestamp = Date.now();
-  const selectedProducts = events.map((event) => event.product_id);
-  const totalQuantity = events.reduce((total, event) => total + Math.abs(Number(event.quantity)), 0);
-  const itemLabel = events.length === 1 ? productName(first.product_id) : `${events.length} products`;
-
-  if (first.source_type === "sale") {
-    const client = DEFAULT_CLIENTS.find((candidate) => candidate.id === state.form.sale_client_id) ?? DEFAULT_CLIENTS[0];
-    state.sales = [
-      ...(Array.isArray(state.sales) ? state.sales : []),
-      {
-        id: first.source_id,
-        client_id: client.id,
-        sale_type: saleTypeLabels[state.form.sale_type] ? state.form.sale_type : "one_time",
-        sale_mode: "direct_stock",
-        menu_item_id: null,
-        product_id: first.product_id,
-        product_ids: selectedProducts,
-        item_label: itemLabel,
-        location: first.from_location,
-        quantity: totalQuantity,
-        notes: `${state.form.sale_notes ?? ""}`.trim(),
-        event_id: first.event_id,
-        event_count: events.length,
-        work_item_id: first.work_item_id,
-        created_at: new Date(timestamp).toISOString(),
-        status: "queued",
-      },
-    ];
-    state.selectedSaleId = null;
-    return;
-  }
-
-  if (first.source_type === "purchase") {
-    const supplier = DEFAULT_SUPPLIERS.find((candidate) => candidate.id === state.form.purchase_supplier_id) ?? DEFAULT_SUPPLIERS[0];
-    state.purchases = [
-      ...(Array.isArray(state.purchases) ? state.purchases : []),
-      {
-        id: first.source_id,
-        supplier_id: supplier.id,
-        product_id: first.product_id,
-        product_ids: selectedProducts,
-        item_label: itemLabel,
-        location: first.to_location,
-        quantity: totalQuantity,
-        notes: `${state.form.purchase_notes ?? ""}`.trim(),
-        event_id: first.event_id,
-        event_count: events.length,
-        work_item_id: first.work_item_id,
-        created_at: new Date(timestamp).toISOString(),
-        status: "queued",
-      },
-    ];
-    state.selectedPurchaseId = null;
-  }
+  const result = appendStockActionBusinessRecord(
+    { sales: state.sales, purchases: state.purchases },
+    events,
+    state.form,
+    { clients: DEFAULT_CLIENTS, suppliers: DEFAULT_SUPPLIERS, saleTypeLabels, productName },
+  );
+  state.sales = result.sales;
+  state.purchases = result.purchases;
+  if ("selectedSaleId" in result) state.selectedSaleId = result.selectedSaleId;
+  if ("selectedPurchaseId" in result) state.selectedPurchaseId = result.selectedPurchaseId;
 }
 
 function syncOutbox() {
@@ -5356,31 +5315,15 @@ function rollbackLocalProductStateForUndo(primaryEvent) {
 }
 
 function rollbackBusinessRecordForUndo(primaryEvent) {
-  if (primaryEvent.source_type === "sale" && primaryEvent.source_id) {
-    state.sales = (Array.isArray(state.sales) ? state.sales : []).filter((record) => record.id !== primaryEvent.source_id);
-    return;
-  }
-
-  if (primaryEvent.source_type === "purchase" && primaryEvent.source_id) {
-    state.purchases = (Array.isArray(state.purchases) ? state.purchases : []).filter((record) => record.id !== primaryEvent.source_id);
-  }
+  const result = removeStockActionBusinessRecordForUndo({ sales: state.sales, purchases: state.purchases }, primaryEvent);
+  state.sales = result.sales;
+  state.purchases = result.purchases;
 }
 
 function markBusinessRecordsSynced(events) {
-  const saleIds = new Set(events.filter((event) => event.source_type === "sale").map((event) => event.source_id).filter(Boolean));
-  const purchaseIds = new Set(events.filter((event) => event.source_type === "purchase").map((event) => event.source_id).filter(Boolean));
-
-  if (saleIds.size > 0) {
-    state.sales = (Array.isArray(state.sales) ? state.sales : []).map((record) =>
-      saleIds.has(record.id) ? { ...record, status: "synced" } : record,
-    );
-  }
-
-  if (purchaseIds.size > 0) {
-    state.purchases = (Array.isArray(state.purchases) ? state.purchases : []).map((record) =>
-      purchaseIds.has(record.id) ? { ...record, status: "synced" } : record,
-    );
-  }
+  const result = markStockActionBusinessRecordsSynced({ sales: state.sales, purchases: state.purchases }, events);
+  state.sales = result.sales;
+  state.purchases = result.purchases;
 }
 
 
@@ -5424,130 +5367,33 @@ function isRevertibleEvent(eventType) {
 }
 
 function buildEventsFromForm() {
-  if (state.form.type === "STOCK_REVERT") return [buildEventFromForm()];
-  const selectedIds = normalizeSelectedProductIds(state.form.product_ids, state.form.product_id);
-  const workItemId = selectedIds.length > 1 || state.form.attach_sale || state.form.attach_purchase ? nextId("work") : undefined;
-  const batchId = currentBatchId();
-  const firstSequence = nextSequence();
-  const sourceDetails = stockActionSourceDetails({
-    ...state.form,
-    pending_source_id:
-      state.form.type === "STOCK_OUT" && state.form.attach_sale
-        ? nextId("sale")
-        : state.form.type === "STOCK_IN" && state.form.attach_purchase
-        ? nextId("purchase")
-        : undefined,
-  });
-  return selectedIds.map((productId, index) =>
-    buildEventFromForm({
-      productId,
-      workItemId,
-      batchId,
-      sequenceNumber: firstSequence + index,
-      sourceDetails,
-    }),
-  );
+  return stockActionEventBuilder().buildEvents(state.form);
 }
 
-function buildEventFromForm({ productId = state.form.product_id, workItemId = nextId("work"), batchId = currentBatchId(), sequenceNumber = nextSequence(), sourceDetails = null } = {}) {
-  const form = state.form;
-  const template = actionTemplate(form.type);
-
-  if (form.type === "STOCK_REVERT") {
-    const original = findEventForRevert(form.original_event_id);
-    return withWorkItem(
-      createInventoryEvent({
-        ...tenant,
-        event_id: nextId("event"),
-        idempotency_key: nextId("idem"),
-        sync_batch_id: batchId,
-        type: "STOCK_REVERT",
-        product_id: original ? original.product_id : form.product_id,
-        product_name: productName(original ? original.product_id : form.product_id),
-        from_location: original ? original.from_location : null,
-        to_location: original ? original.to_location : null,
-        quantity: original ? Math.abs(Number(original.quantity)) : 1,
-        original_event_id: form.original_event_id || null,
-        reason: form.reason.trim() || "Operational event",
-        sequence_number: sequenceNumber,
-        timestamp: Date.now(),
-        status: "queued",
-      }),
-      workItemId,
-    );
-  }
-
-  const quantityValue = template.isPhysicalCount
-    ? physicalCountVariance(form, productId) ?? 0
-    : template.requiresPositiveQuantity
-    ? Math.abs(Number(quantityForProduct(form, productId) || 0))
-    : Number(quantityForProduct(form, productId) || 0);
-  const systemCount = currentSystemCountForProduct(form, productId);
-  const physicalCount = physicalCountForProduct(form, productId);
-  const defaultReason = template.isPhysicalCount && systemCount !== null
-    ? `Physical count ${formatQuantity(Number(physicalCount || 0))} vs system ${formatQuantity(systemCount)}`
-    : "Operational event";
-  const source = sourceDetails ?? stockActionSourceDetails(form);
-  return withWorkItem(
-    createInventoryEvent({
-      ...tenant,
-      event_id: nextId("event"),
-      idempotency_key: nextId("idem"),
-      sync_batch_id: batchId,
-      type: form.type,
-      product_id: productId,
-      product_name: productName(productId),
-      from_location: form.from_location || null,
-      to_location: form.to_location || null,
-      quantity: quantityValue,
-      original_event_id: form.original_event_id || null,
-      reason: source.reason || form.reason.trim() || defaultReason,
-      source_type: source.type,
-      source_id: source.id,
-      source_label: source.label,
-      sequence_number: sequenceNumber,
-      timestamp: Date.now(),
-      status: "queued",
-    }),
-    workItemId,
-  );
+function buildEventFromForm(options = {}) {
+  return stockActionEventBuilder().buildEvent(state.form, options);
 }
 
 function quantityForProduct(form, productId) {
-  return form.product_quantities?.[productId] ?? form.quantity ?? 1;
+  return selectQuantityForProduct(form, productId);
 }
 
-function stockActionSourceDetails(form) {
-  const selectedCount = normalizeSelectedProductIds(form.product_ids, form.product_id).length;
-
-  if (form.type === "STOCK_OUT" && form.attach_sale) {
-    const client = DEFAULT_CLIENTS.find((candidate) => candidate.id === form.sale_client_id) ?? DEFAULT_CLIENTS[0];
-    const saleId = form.pending_source_id ?? nextId("sale");
-    return {
-      type: "sale",
-      id: saleId,
-      label: `Sale - ${client.name} - ${selectedCount} product${selectedCount === 1 ? "" : "s"}`,
-      reason: `${form.sale_notes || form.reason || `${saleTypeLabels[form.sale_type] ?? "Sale"} fulfilled for ${client.name}`}`.trim(),
-    };
-  }
-
-  if (form.type === "STOCK_IN" && form.attach_purchase) {
-    const supplier = DEFAULT_SUPPLIERS.find((candidate) => candidate.id === form.purchase_supplier_id) ?? DEFAULT_SUPPLIERS[0];
-    const purchaseId = form.pending_source_id ?? nextId("purchase");
-    return {
-      type: "purchase",
-      id: purchaseId,
-      label: `Purchase - ${supplier.name} - ${selectedCount} product${selectedCount === 1 ? "" : "s"}`,
-      reason: `${form.purchase_notes || form.reason || `Purchase received from ${supplier.name}`}`.trim(),
-    };
-  }
-
-  return {
-    type: undefined,
-    id: undefined,
-    label: undefined,
-    reason: "",
-  };
+function stockActionEventBuilder() {
+  return createStockActionEventBuilder({
+    tenant,
+    nextId,
+    currentBatchId,
+    nextSequence,
+    findEventForRevert,
+    productName,
+    formatQuantity,
+    systemCountForProduct: currentSystemCountForProduct,
+    sourceDetailsOptions: {
+      clients: DEFAULT_CLIENTS,
+      suppliers: DEFAULT_SUPPLIERS,
+      saleTypeLabels,
+    },
+  });
 }
 
 function previewEventValidation() {

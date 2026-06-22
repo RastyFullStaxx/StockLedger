@@ -16,6 +16,7 @@ import {
   seedEvents,
   seedPurchases,
   seedSales,
+  tenant,
 } from "../src/data/demo-data.mjs";
 import { ACTION_TEMPLATES, actionTemplate, eventLabels, navigationGroups, screenMeta } from "../src/config/app-config.mjs";
 import { STORAGE_KEY, loadState, normalizeSelectedProductIds, saveState } from "../src/state/local-state.mjs";
@@ -32,6 +33,18 @@ import {
   withWorkItem,
 } from "../src/inventory/selectors.mjs";
 import { answerAssistantQuestion, createAssistantGreeting } from "../src/assistant/assistant-engine.mjs";
+import {
+  appendStockActionBusinessRecord,
+  markStockActionBusinessRecordsSynced,
+  removeStockActionBusinessRecordForUndo,
+} from "../src/stock-actions/business-records.mjs";
+import {
+  createStockActionEventBuilder,
+  physicalCountForProduct,
+  physicalCountVariance,
+  quantityForProduct,
+} from "../src/stock-actions/event-builder.mjs";
+import { buildStockActionSourceDetails } from "../src/stock-actions/source-details.mjs";
 import { buildWorkQueueItems } from "../src/stock-actions/work-queue.mjs";
 import {
   clientSalesReportRows,
@@ -290,6 +303,241 @@ test("record selectors build report and audit rows from explicit inputs", () => 
     }).map((row) => row.product_name),
     ["Juniper Gin"],
   );
+});
+
+test("stock action source details describe optional sale and purchase attachments", () => {
+  let nextIdIndex = 0;
+  const deterministicNextId = (prefix) => `${prefix}-${++nextIdIndex}`;
+
+  assert.deepEqual(
+    buildStockActionSourceDetails(
+      {
+        type: "STOCK_OUT",
+        attach_sale: true,
+        sale_client_id: "client-harbor-room",
+        sale_type: "recurring",
+        product_ids: ["prod-gin", "prod-tonic"],
+      },
+      { clients: DEFAULT_CLIENTS, saleTypeLabels, nextId: deterministicNextId },
+    ),
+    {
+      type: "sale",
+      id: "sale-1",
+      label: "Sale - Harbor Room - 2 products",
+      reason: "Recurring fulfilled for Harbor Room",
+    },
+  );
+  assert.deepEqual(
+    buildStockActionSourceDetails(
+      {
+        type: "STOCK_IN",
+        attach_purchase: true,
+        purchase_supplier_id: "supplier-marketline",
+        purchase_notes: "Received early",
+        product_ids: ["prod-lime"],
+      },
+      { suppliers: DEFAULT_SUPPLIERS, nextId: deterministicNextId },
+    ),
+    {
+      type: "purchase",
+      id: "purchase-2",
+      label: "Purchase - Marketline Produce - 1 product",
+      reason: "Received early",
+    },
+  );
+  assert.deepEqual(buildStockActionSourceDetails({ type: "STOCK_IN", attach_purchase: false }), {
+    type: undefined,
+    id: undefined,
+    label: undefined,
+    reason: "",
+  });
+});
+
+test("stock action event builder creates grouped sale events from explicit form state", () => {
+  let idIndex = 0;
+  const builder = createStockActionEventBuilder({
+    tenant,
+    nextId: (prefix) => `${prefix}-${++idIndex}`,
+    currentBatchId: () => "batch-test",
+    nextSequence: () => 40,
+    productName: (productId) => ({ "prod-gin": "Juniper Gin", "prod-tonic": "Tonic Water" })[productId] ?? productId,
+    sourceDetailsOptions: { clients: DEFAULT_CLIENTS, saleTypeLabels },
+    now: () => 1710000000000,
+  });
+
+  const events = builder.buildEvents({
+    type: "STOCK_OUT",
+    product_id: "prod-gin",
+    product_ids: ["prod-gin", "prod-tonic"],
+    product_quantities: { "prod-gin": 2, "prod-tonic": 5 },
+    from_location: "Main Bar",
+    to_location: "",
+    quantity: 1,
+    original_event_id: "",
+    reason: "",
+    attach_sale: true,
+    sale_client_id: "client-harbor-room",
+    sale_type: "recurring",
+  });
+
+  assert.equal(events.length, 2);
+  assert.equal(events[0].work_item_id, "work-1");
+  assert.equal(events[1].work_item_id, "work-1");
+  assert.equal(events[0].source_id, "sale-2");
+  assert.equal(events[1].source_id, "sale-2");
+  assert.equal(events[0].source_label, "Sale - Harbor Room - 2 products");
+  assert.deepEqual(
+    events.map((event) => [event.product_id, event.quantity, event.sequence_number]),
+    [
+      ["prod-gin", 2, 40],
+      ["prod-tonic", 5, 41],
+    ],
+  );
+  assert.equal(events.every((event) => validateEvent(event).valid), true);
+});
+
+test("stock action event builder centralizes physical count and undo event rules", () => {
+  let idIndex = 0;
+  const originalEvent = {
+    event_id: "event-original",
+    type: "STOCK_OUT",
+    product_id: "prod-lime",
+    from_location: "Kitchen",
+    to_location: null,
+    quantity: 3,
+  };
+  const builder = createStockActionEventBuilder({
+    tenant,
+    nextId: (prefix) => `${prefix}-${++idIndex}`,
+    currentBatchId: () => "batch-physical",
+    nextSequence: () => 12,
+    findEventForRevert: (eventId) => (eventId === originalEvent.event_id ? originalEvent : null),
+    productName: (productId) => ({ "prod-lime": "Fresh Lime", "prod-gin": "Juniper Gin" })[productId] ?? productId,
+    formatQuantity,
+    systemCountForProduct: (_form, productId) => (productId === "prod-gin" ? 8 : null),
+    now: () => 1710000000000,
+  });
+
+  assert.equal(quantityForProduct({ product_quantities: { "prod-gin": 3 }, quantity: 1 }, "prod-gin"), 3);
+  assert.equal(physicalCountForProduct({ product_physical_counts: { "prod-gin": 6 } }, "prod-gin"), 6);
+  assert.equal(physicalCountVariance({ product_physical_counts: { "prod-gin": 6 } }, "prod-gin", 8), -2);
+
+  const adjustment = builder.buildEvent({
+    type: "STOCK_ADJUSTMENT",
+    product_id: "prod-gin",
+    product_ids: ["prod-gin"],
+    product_physical_counts: { "prod-gin": 6 },
+    from_location: "",
+    to_location: "Main Bar",
+    quantity: 1,
+    original_event_id: "",
+    reason: "",
+  });
+  assert.equal(adjustment.quantity, -2);
+  assert.equal(adjustment.reason, "Physical count 6 vs system 8");
+  assert.equal(validateEvent(adjustment).valid, true);
+
+  const revert = builder.buildEvent({
+    type: "STOCK_REVERT",
+    product_id: "prod-gin",
+    original_event_id: "event-original",
+    reason: "Wrong sale",
+  });
+  assert.equal(revert.type, "STOCK_REVERT");
+  assert.equal(revert.product_id, "prod-lime");
+  assert.equal(revert.from_location, "Kitchen");
+  assert.equal(revert.quantity, 3);
+  assert.equal(revert.original_event_id, "event-original");
+  assert.equal(validateEvent(revert).valid, true);
+});
+
+test("stock action business records append, rollback, and sync linked source records", () => {
+  const saleEvents = [
+    {
+      event_id: "event-sale-1",
+      type: "STOCK_OUT",
+      product_id: "prod-gin",
+      from_location: "Main Bar",
+      quantity: 2,
+      source_type: "sale",
+      source_id: "sale-local-1",
+      work_item_id: "work-sale-1",
+    },
+    {
+      event_id: "event-sale-2",
+      type: "STOCK_OUT",
+      product_id: "prod-tonic",
+      from_location: "Main Bar",
+      quantity: 4,
+      source_type: "sale",
+      source_id: "sale-local-1",
+      work_item_id: "work-sale-1",
+    },
+  ];
+  const appendedSale = appendStockActionBusinessRecord(
+    { sales: [], purchases: [] },
+    saleEvents,
+    {
+      sale_client_id: "client-harbor-room",
+      sale_type: "recurring",
+      sale_notes: "Standing order",
+    },
+    {
+      clients: DEFAULT_CLIENTS,
+      saleTypeLabels,
+      productName: (productId) => ({ "prod-gin": "Juniper Gin" })[productId] ?? productId,
+      now: () => Date.parse("2026-06-23T00:00:00Z"),
+    },
+  );
+
+  assert.equal(appendedSale.sales.length, 1);
+  assert.equal(appendedSale.selectedSaleId, null);
+  assert.equal(appendedSale.sales[0].client_id, "client-harbor-room");
+  assert.equal(appendedSale.sales[0].quantity, 6);
+  assert.equal(appendedSale.sales[0].item_label, "2 products");
+  assert.equal(appendedSale.sales[0].created_at, "2026-06-23T00:00:00.000Z");
+
+  const purchaseEvents = [
+    {
+      event_id: "event-purchase-1",
+      type: "STOCK_IN",
+      product_id: "prod-lime",
+      to_location: "Kitchen",
+      quantity: 3,
+      source_type: "purchase",
+      source_id: "purchase-local-1",
+      work_item_id: "work-purchase-1",
+    },
+  ];
+  const appendedPurchase = appendStockActionBusinessRecord(
+    { sales: appendedSale.sales, purchases: [] },
+    purchaseEvents,
+    {
+      purchase_supplier_id: "supplier-marketline",
+      purchase_notes: "Checked at receiving",
+    },
+    {
+      suppliers: DEFAULT_SUPPLIERS,
+      productName: (productId) => ({ "prod-lime": "Fresh Lime" })[productId] ?? productId,
+      now: () => Date.parse("2026-06-23T01:00:00Z"),
+    },
+  );
+
+  assert.equal(appendedPurchase.purchases.length, 1);
+  assert.equal(appendedPurchase.selectedPurchaseId, null);
+  assert.equal(appendedPurchase.purchases[0].supplier_id, "supplier-marketline");
+  assert.equal(appendedPurchase.purchases[0].item_label, "Fresh Lime");
+
+  const synced = markStockActionBusinessRecordsSynced(
+    { sales: appendedPurchase.sales, purchases: appendedPurchase.purchases },
+    [...saleEvents, ...purchaseEvents],
+  );
+  assert.equal(synced.sales[0].status, "synced");
+  assert.equal(synced.purchases[0].status, "synced");
+
+  const withoutSale = removeStockActionBusinessRecordForUndo(synced, saleEvents[0]);
+  assert.equal(withoutSale.sales.length, 0);
+  assert.equal(withoutSale.purchases.length, 1);
 });
 
 test("assistant engine answers StockLedger questions and redirects out-of-scope prompts", () => {
