@@ -94,10 +94,204 @@ function defaultProducts() {
 }
 
 const locations = [
-  { id: "loc-dry-store", name: "Dry Store" },
-  { id: "loc-main-bar", name: "Main Bar" },
-  { id: "loc-kitchen", name: "Kitchen" },
-  { id: "loc-cellar", name: "Cellar" },
+  { id: "loc-dry-store", name: "Dry Store", kind: "Storage", owner: "Inventory team", status: "Active" },
+  { id: "loc-main-bar", name: "Main Bar", kind: "Service", owner: "Bar team", status: "Active" },
+  { id: "loc-kitchen", name: "Kitchen", kind: "Prep", owner: "Kitchen team", status: "Active" },
+  { id: "loc-cellar", name: "Cellar", kind: "Storage", owner: "Receiving team", status: "Active" },
+];
+
+const DEFAULT_CLIENTS = [
+  {
+    id: "client-harbor-room",
+    name: "Harbor Room",
+    segment: "Recurring Bar",
+    default_menu_id: "menu-house-pour",
+    order_pattern: "Weekly standing order",
+    next_order: "Friday service",
+    delivery_window: "Before 4 PM",
+    private_contact: "Admin-only contact details",
+  },
+  {
+    id: "client-sunfold-events",
+    name: "Sunfold Events",
+    segment: "Seasonal Events",
+    default_menu_id: "menu-event-service",
+    order_pattern: "Seasonal event batches",
+    next_order: "June wedding block",
+    delivery_window: "Event day morning",
+    private_contact: "Admin-only contact details",
+  },
+  {
+    id: "client-north-pier",
+    name: "North Pier Cafe",
+    segment: "Wholesale",
+    default_menu_id: "menu-cafe-weekly",
+    order_pattern: "Monday wholesale refill",
+    next_order: "Next Monday",
+    delivery_window: "9 AM to 11 AM",
+    private_contact: "Admin-only contact details",
+  },
+];
+
+const DEFAULT_MENUS = [
+  { id: "menu-house-pour", name: "House Pour Menu", client_id: "client-harbor-room", cadence: "Recurring", status: "Active" },
+  { id: "menu-event-service", name: "Event Service Menu", client_id: "client-sunfold-events", cadence: "Seasonal", status: "Draft review" },
+  { id: "menu-cafe-weekly", name: "Cafe Weekly Menu", client_id: "client-north-pier", cadence: "Recurring", status: "Active" },
+];
+
+const DEFAULT_MENU_ITEMS = [
+  {
+    id: "menu-item-gin-tonic",
+    menu_id: "menu-house-pour",
+    name: "Juniper Gin & Tonic",
+    sale_type: "recurring",
+    default_location: "Main Bar",
+    recipe: [
+      { product_id: "prod-gin", quantity: 0.25 },
+      { product_id: "prod-tonic", quantity: 0.25 },
+    ],
+  },
+  {
+    id: "menu-item-rum-lime",
+    menu_id: "menu-event-service",
+    name: "Harbor Rum Lime Service",
+    sale_type: "seasonal",
+    default_location: "Main Bar",
+    recipe: [
+      { product_id: "prod-rum", quantity: 0.35 },
+      { product_id: "prod-lime", quantity: 0.2 },
+    ],
+  },
+  {
+    id: "menu-item-cafe-lime",
+    menu_id: "menu-cafe-weekly",
+    name: "Fresh Lime Prep Pack",
+    sale_type: "recurring",
+    default_location: "Kitchen",
+    recipe: [
+      { product_id: "prod-lime", quantity: 2 },
+    ],
+  },
+];
+
+const DEFAULT_SUPPLIERS = [
+  {
+    id: "supplier-coastal",
+    name: "Coastal Spirits Supply",
+    cadence: "Tuesday delivery",
+    products: ["prod-gin", "prod-rum"],
+    reliability: "On time",
+    last_delivery: "This week",
+    variance_cases: 0,
+    private_terms: "Cost prices, account terms, and buyer contact stay hidden by default.",
+  },
+  {
+    id: "supplier-marketline",
+    name: "Marketline Produce",
+    cadence: "Daily produce run",
+    products: ["prod-lime"],
+    reliability: "Watch quality",
+    last_delivery: "Yesterday",
+    variance_cases: 2,
+    private_terms: "Produce price lists and credit terms are business-sensitive.",
+  },
+  {
+    id: "supplier-cellar",
+    name: "Cellar & Case Distribution",
+    cadence: "Friday cases",
+    products: ["prod-tonic"],
+    reliability: "Stable",
+    last_delivery: "Last Friday",
+    variance_cases: 1,
+    private_terms: "Contracted case rates are hidden until role checks pass.",
+  },
+];
+
+const saleTypeLabels = {
+  one_time: "One-time",
+  recurring: "Recurring",
+  seasonal: "Seasonal",
+};
+
+const saleModeLabels = {
+  menu_item: "Menu Item",
+  direct_stock: "Direct Stock",
+};
+
+const DEFAULT_USERS = [
+  {
+    id: "user-mara-velasco",
+    display_name: "Mara V.",
+    role: "CLIENT_ADMIN",
+    status: "Active",
+    access_scope: "All daily work and control pages",
+    last_active: "Today",
+    sensitive_access: 2,
+    private_note: "Full staff profile and contact details stay server-side until role checks pass.",
+  },
+  {
+    id: "user-eli-reyes",
+    display_name: "Eli R.",
+    role: "MANAGER",
+    status: "Active",
+    access_scope: "Sales, purchases, stock actions, reports",
+    last_active: "Yesterday",
+    sensitive_access: 0,
+    private_note: "Private contact data hidden from this prototype view.",
+  },
+  {
+    id: "user-jo-kim",
+    display_name: "Jo K.",
+    role: "STAFF",
+    status: "Invite pending",
+    access_scope: "Sales and stock actions only",
+    last_active: "Not yet active",
+    sensitive_access: 0,
+    private_note: "Pending invites should expire and be audited in production.",
+  },
+  {
+    id: "user-audit-seat",
+    display_name: "Audit Seat",
+    role: "AUDITOR",
+    status: "Read-only",
+    access_scope: "Reports and audit trail",
+    last_active: "This week",
+    sensitive_access: 1,
+    private_note: "Read-only access still requires export and view logging.",
+  },
+];
+
+const ROLE_MATRIX = [
+  { role: "CLIENT_ADMIN", stock: "Full", sales: "Full", reports: "Full", users: "Manage" },
+  { role: "MANAGER", stock: "Full", sales: "Full", reports: "View", users: "No access" },
+  { role: "STAFF", stock: "Record", sales: "Record", reports: "No export", users: "No access" },
+  { role: "AUDITOR", stock: "View", sales: "View", reports: "Export with audit", users: "No access" },
+];
+
+const TRUSTED_DEVICES = [
+  { id: "device-main-bar-terminal", name: "Main Bar Terminal", trust: "Trusted", offline: "Allowed", last_sync: "Today" },
+  { id: "device-cellar-kiosk", name: "Cellar Kiosk", trust: "Trusted", offline: "Allowed", last_sync: "Yesterday" },
+  { id: "device-manager-laptop", name: "Manager Laptop", trust: "Review", offline: "Read-only", last_sync: "This week" },
+  { id: "device-old-tablet", name: "Old Receiving Tablet", trust: "Suspend", offline: "Blocked", last_sync: "30 days ago" },
+];
+
+const SETTINGS_POLICIES = [
+  { label: "Default Location", value: "Main Bar", detail: "Used when a new stock action or sale starts." },
+  { label: "Offline Retention", value: "14 days", detail: "Queued work stays local only as long as needed." },
+  { label: "Export Mode", value: "Summary first", detail: "Detailed exports require role and audit checks." },
+  { label: "Tenant Boundary", value: "Northstar only", detail: "Prototype views never mix tenant data." },
+];
+
+const NUMBERING_RULES = [
+  { prefix: "SALE", example: "SALE-2026-00042", use: "Fulfilled sales and menu sale source records" },
+  { prefix: "RCV", example: "RCV-2026-00018", use: "Purchase receiving and stock-in source records" },
+  { prefix: "ADJ", example: "ADJ-2026-00007", use: "Count corrections, closure work, and variance follow-up" },
+];
+
+const CI_LANES = [
+  { name: "Unit lane", command: "npm run verify:quick", purpose: "Fast ledger and verification helper feedback." },
+  { name: "Build lane", command: "npm run verify:build", purpose: "Production bundle catches syntax and Vite regressions." },
+  { name: "Browser lane", command: "npm run verify:ui", purpose: "Playwright smoke covers navigation and core workflows." },
 ];
 
 let state = loadState();
@@ -321,6 +515,8 @@ function defaultState() {
     outboxPage: 1,
     activeProductsPage: 1,
     inactiveProductsPage: 1,
+    sales: [],
+    purchases: [],
     message: "",
     toast: null,
     accountOpen: false,
@@ -342,6 +538,23 @@ function defaultState() {
       category: "",
       unit: "unit",
       low: "0",
+    },
+    saleForm: {
+      client_id: DEFAULT_CLIENTS[0].id,
+      sale_type: "one_time",
+      sale_mode: "menu_item",
+      menu_item_id: DEFAULT_MENU_ITEMS[0].id,
+      product_id: "prod-gin",
+      location: "Main Bar",
+      quantity: 1,
+      notes: "",
+    },
+    purchaseForm: {
+      supplier_id: DEFAULT_SUPPLIERS[0].id,
+      product_id: "prod-rum",
+      location: "Cellar",
+      quantity: 1,
+      notes: "",
     },
   };
 }
@@ -846,6 +1059,10 @@ function loadState() {
       ...parsed,
       form: { ...defaultState().form, ...(parsed.form ?? {}) },
       productForm: { ...defaultState().productForm, ...(parsed.productForm ?? {}) },
+      saleForm: { ...defaultState().saleForm, ...(parsed.saleForm ?? {}) },
+      purchaseForm: { ...defaultState().purchaseForm, ...(parsed.purchaseForm ?? {}) },
+      sales: Array.isArray(parsed.sales) ? parsed.sales : [],
+      purchases: Array.isArray(parsed.purchases) ? parsed.purchases : [],
       products: sanitizeProducts(parsed.products),
     };
     delete next.physicalCounts;
@@ -1023,7 +1240,11 @@ function renderNavItem(key) {
       <span>
         <span class="nav-item-title">${item.label}</span>
       </span>
-      ${key === "compose" && state.outbox.length ? `<strong>${state.outbox.length}</strong>` : ""}
+      ${
+        key === "compose" && state.outbox.length
+          ? `<strong class="nav-count" aria-label="${state.outbox.length} saved work item${state.outbox.length === 1 ? "" : "s"}">${state.outbox.length}</strong>`
+          : ""
+      }
     </button>
   `;
 }
@@ -1190,7 +1411,16 @@ function renderStatusRail(localLedger, stockRows, outboxValidation) {
 function renderActiveView(localLedger, stockRows, outboxValidation) {
   if (state.activeView === "home") return renderLanding(localLedger, stockRows, outboxValidation);
   if (state.activeView === "compose" || state.activeView === "outbox") return renderComposer(localLedger, outboxValidation);
+  if (state.activeView === "sales") return renderSalesPage();
+  if (state.activeView === "purchases") return renderPurchasesPage();
+  if (state.activeView === "clients") return renderClientsPage();
+  if (state.activeView === "suppliers") return renderSuppliersPage(localLedger);
+  if (state.activeView === "menus") return renderMenusPage();
+  if (state.activeView === "locations") return renderLocationsPage(localLedger, stockRows);
+  if (state.activeView === "reports") return renderReportsPage(localLedger, stockRows);
   if (state.activeView === "audit") return renderAudit(localLedger);
+  if (state.activeView === "users") return renderUsersPage();
+  if (state.activeView === "settings") return renderSettingsPage();
   if (state.activeView === "products") return renderProducts();
   if (modulePageContent[state.activeView]) return renderModulePage(state.activeView);
   return renderDashboard(localLedger, stockRows, outboxValidation);
@@ -1328,6 +1558,1033 @@ function renderModulePage(key) {
         </ul>
       </article>
     </section>
+  `;
+}
+
+function renderClientsPage() {
+  const content = modulePageContent.clients;
+  const fulfilledSales = Array.isArray(state.sales) ? state.sales : [];
+  const recurringClients = DEFAULT_CLIENTS.filter((client) => client.segment.toLowerCase().includes("recurring")).length;
+  const seasonalClients = DEFAULT_CLIENTS.filter((client) => client.segment.toLowerCase().includes("seasonal")).length;
+
+  return `
+    <section class="content-grid module-page relationship-workspace" aria-label="Clients">
+      ${renderBusinessHero("clients", content)}
+      <section class="module-metrics" aria-label="Client metrics">
+        ${metricCard("Clients", DEFAULT_CLIENTS.length)}
+        ${metricCard("Recurring", recurringClients)}
+        ${metricCard("Seasonal", seasonalClients)}
+        ${metricCard("Fulfilled Sales", fulfilledSales.length)}
+      </section>
+      <section class="relationship-grid" aria-label="Client list">
+        ${DEFAULT_CLIENTS.map((client) => renderClientCard(client)).join("")}
+      </section>
+      ${renderModuleSections(content)}
+    </section>
+  `;
+}
+
+function renderClientCard(client) {
+  const menu = getMenuById(client.default_menu_id);
+  const menuItems = menu ? menuItemsForMenu(menu.id) : [];
+  const fulfilled = (Array.isArray(state.sales) ? state.sales : []).filter((sale) => sale.client_id === client.id).length;
+
+  return `
+    <article class="panel relationship-card client-card">
+      <div class="relationship-card-topline">
+        <span>${escapeHtml(client.segment)}</span>
+        <strong>${escapeHtml(client.name)}</strong>
+      </div>
+      <dl class="relationship-facts">
+        <div><dt>Default Menu</dt><dd>${escapeHtml(menu?.name ?? "No menu assigned")}</dd></div>
+        <div><dt>Order Pattern</dt><dd>${escapeHtml(client.order_pattern)}</dd></div>
+        <div><dt>Next Order</dt><dd>${escapeHtml(client.next_order)}</dd></div>
+        <div><dt>Fulfilled Locally</dt><dd>${fulfilled}</dd></div>
+      </dl>
+      <div class="relationship-menu-strip">
+        ${menuItems
+          .map((item) => `<span>${escapeHtml(item.name)}</span>`)
+          .join("")}
+      </div>
+      <details class="privacy-details">
+        <summary>Private contact</summary>
+        <p>${escapeHtml(client.private_contact)}. Reveal this only for roles that need customer contact details.</p>
+        <p>Delivery window: ${escapeHtml(client.delivery_window)}</p>
+      </details>
+      <button class="button button-secondary relationship-action" data-action="start-client-sale" data-client-id="${escapeAttr(client.id)}" type="button">
+        ${icon("send")}Fulfill Sale
+      </button>
+    </article>
+  `;
+}
+
+function renderSuppliersPage(localLedger) {
+  const content = modulePageContent.suppliers;
+  const purchases = Array.isArray(state.purchases) ? state.purchases : [];
+  const receivingEvents = localLedger.filter((event) => event.type === "STOCK_IN");
+  const suppliersWithVariance = DEFAULT_SUPPLIERS.filter((supplier) => supplier.variance_cases > 0).length;
+  const suppliedProductCount = new Set(DEFAULT_SUPPLIERS.flatMap((supplier) => supplier.products)).size;
+
+  return `
+    <section class="content-grid module-page relationship-workspace" aria-label="Suppliers">
+      ${renderBusinessHero("suppliers", content)}
+      <section class="module-metrics" aria-label="Supplier metrics">
+        ${metricCard("Suppliers", DEFAULT_SUPPLIERS.length)}
+        ${metricCard("Products Supplied", suppliedProductCount)}
+        ${metricCard("Receipts", purchases.length)}
+        ${metricCard("Needs Review", suppliersWithVariance)}
+      </section>
+      <section class="relationship-grid" aria-label="Supplier list">
+        ${DEFAULT_SUPPLIERS.map((supplier) => renderSupplierCard(supplier, purchases, receivingEvents)).join("")}
+      </section>
+      <section class="report-detail-grid" aria-label="Supplier detail reports">
+        <article class="panel report-detail-panel">
+          <div class="panel-header panel-header--compact">
+            <h2>Recent Receiving</h2>
+          </div>
+          <div class="report-source-list">
+            ${purchases
+              .slice(-6)
+              .reverse()
+              .map((purchase) => `
+                <div class="report-source-row">
+                  <span>${escapeHtml(supplierName(purchase.supplier_id))}</span>
+                  <strong>${escapeHtml(productName(purchase.product_id))}</strong>
+                  <small>${escapeHtml(purchase.location)} &middot; ${formatQuantity(purchase.quantity)} ${productUnit(purchase.product_id)}</small>
+                </div>
+              `)
+              .join("") || `<div class="empty-state"><strong>No purchases received yet.</strong></div>`}
+          </div>
+        </article>
+        <article class="panel report-detail-panel">
+          <div class="panel-header panel-header--compact">
+            <h2>Supplier Review Signals</h2>
+          </div>
+          <div class="review-signal-list">
+            ${renderReviewSignal("Variance Cases", DEFAULT_SUPPLIERS.reduce((total, supplier) => total + supplier.variance_cases, 0), "Short, damaged, or quality follow-up cases.", suppliersWithVariance > 0 ? "warning" : "success")}
+            ${renderReviewSignal("Receiving Events", receivingEvents.length, "All supplier stock changes remain replayed events.", "info")}
+            ${renderReviewSignal("Commercial Terms", "Hidden", "Cost and supplier terms should require manager/admin access.", "success")}
+          </div>
+        </article>
+      </section>
+      ${renderModuleSections(content)}
+    </section>
+  `;
+}
+
+function renderSupplierCard(supplier, purchases, receivingEvents) {
+  const purchaseCount = purchases.filter((purchase) => purchase.supplier_id === supplier.id).length;
+  const eventCount = receivingEvents.filter((event) => event.source_id && purchases.some((purchase) => purchase.id === event.source_id && purchase.supplier_id === supplier.id)).length;
+
+  return `
+    <article class="panel relationship-card supplier-card">
+      <div class="relationship-card-topline">
+        <span>${escapeHtml(supplier.reliability)}</span>
+        <strong>${escapeHtml(supplier.name)}</strong>
+      </div>
+      <dl class="relationship-facts">
+        <div><dt>Cadence</dt><dd>${escapeHtml(supplier.cadence)}</dd></div>
+        <div><dt>Last Delivery</dt><dd>${escapeHtml(supplier.last_delivery)}</dd></div>
+        <div><dt>Receipts</dt><dd>${purchaseCount}</dd></div>
+        <div><dt>Stock-In Events</dt><dd>${eventCount}</dd></div>
+      </dl>
+      <div class="relationship-menu-strip">
+        ${supplier.products.map((productId) => `<span>${escapeHtml(productName(productId))}</span>`).join("")}
+      </div>
+      <details class="privacy-details">
+        <summary>Sensitive terms</summary>
+        <p>${escapeHtml(supplier.private_terms)}</p>
+        <p>Record ID: <code>${escapeHtml(supplier.id)}</code></p>
+      </details>
+      <button class="button button-secondary relationship-action" data-view="purchases" type="button">
+        ${icon("plus")}Receive Purchase
+      </button>
+    </article>
+  `;
+}
+
+function renderMenusPage() {
+  const content = modulePageContent.menus;
+  const activeMenus = DEFAULT_MENUS.filter((menu) => menu.status === "Active").length;
+  const recipeLines = DEFAULT_MENU_ITEMS.reduce((total, item) => total + item.recipe.length, 0);
+  const seasonalItems = DEFAULT_MENU_ITEMS.filter((item) => item.sale_type === "seasonal").length;
+
+  return `
+    <section class="content-grid module-page relationship-workspace" aria-label="Menus">
+      ${renderBusinessHero("menus", content)}
+      <section class="module-metrics" aria-label="Menu metrics">
+        ${metricCard("Menus", DEFAULT_MENUS.length)}
+        ${metricCard("Menu Items", DEFAULT_MENU_ITEMS.length)}
+        ${metricCard("Recipe Lines", recipeLines)}
+        ${metricCard("Seasonal", seasonalItems)}
+      </section>
+      <section class="menu-board" aria-label="Client menus">
+        ${DEFAULT_MENUS.map((menu) => renderMenuPanel(menu)).join("")}
+      </section>
+      <article class="panel panel-wide menu-rule-panel">
+        <div class="panel-header panel-header--compact">
+          <h2>Fulfillment Rule</h2>
+        </div>
+        <p>Menu setup does not move stock. A fulfilled menu sale creates grouped STOCK_OUT events from the recipe lines, then the normal sync batch sends them atomically.</p>
+      </article>
+      ${renderModuleSections(content)}
+    </section>
+  `;
+}
+
+function renderLocationsPage(localLedger, stockRows) {
+  const content = modulePageContent.locations;
+  const storageLocations = locations.filter((location) => location.kind === "Storage").length;
+  const serviceLocations = locations.filter((location) => location.kind !== "Storage").length;
+  const negativeRows = stockRows.filter((row) => row.quantity < 0).length;
+  const lowStockedRows = stockRows.filter((row) => row.quantity > 0 && row.quantity <= productLow(row.product_id)).length;
+
+  return `
+    <section class="content-grid module-page relationship-workspace" aria-label="Locations">
+      ${renderBusinessHero("locations", content)}
+      <section class="module-metrics" aria-label="Location metrics">
+        ${metricCard("Locations", locations.length)}
+        ${metricCard("Storage", storageLocations)}
+        ${metricCard("Service/Prep", serviceLocations)}
+        ${metricCard("Needs Review", negativeRows)}
+      </section>
+      <section class="location-board" aria-label="Location balance cards">
+        ${locations.map((location) => renderLocationCard(location, stockRows, localLedger)).join("")}
+      </section>
+      <section class="report-detail-grid" aria-label="Location detail reports">
+        <article class="panel report-detail-panel">
+          <div class="panel-header panel-header--compact">
+            <h2>Location Review Signals</h2>
+          </div>
+          <div class="review-signal-list">
+            ${renderReviewSignal("Negative Rows", negativeRows, "Review below-zero balances before reporting.", negativeRows > 0 ? "error" : "success")}
+            ${renderReviewSignal("Low Stocked Rows", lowStockedRows, "Restock decisions start from low stocked rows.", lowStockedRows > 0 ? "warning" : "success")}
+            ${renderReviewSignal("Replay Source", "Events", "Location stock is derived from event replay, not stored directly.", "success")}
+          </div>
+        </article>
+        <article class="panel report-detail-panel">
+          <div class="panel-header panel-header--compact">
+            <h2>Recent Location Activity</h2>
+          </div>
+          <div class="report-source-list">
+            ${replayAuditTrail(localLedger)
+              .reverse()
+              .slice(0, 6)
+              .map((entry) => renderReportSourceRow(entry))
+              .join("")}
+          </div>
+        </article>
+      </section>
+      ${renderModuleSections(content)}
+    </section>
+  `;
+}
+
+function renderLocationCard(location, stockRows, localLedger) {
+  const rows = stockRows.filter((row) => row.location === location.name);
+  const stockedRows = rows.filter((row) => Number(row.quantity) !== 0);
+  const lowRows = rows.filter((row) => row.quantity > 0 && row.quantity <= productLow(row.product_id));
+  const negativeRows = rows.filter((row) => row.quantity < 0);
+  const recentEvents = replayAuditTrail(localLedger).filter((entry) => entry.location === location.name).slice(-3).reverse();
+
+  return `
+    <article class="panel location-card">
+      <div class="relationship-card-topline">
+        <span>${escapeHtml(location.kind)}</span>
+        <strong>${escapeHtml(location.name)}</strong>
+      </div>
+      <dl class="relationship-facts">
+        <div><dt>Owner</dt><dd>${escapeHtml(location.owner)}</dd></div>
+        <div><dt>Status</dt><dd>${escapeHtml(location.status)}</dd></div>
+        <div><dt>Stocked Rows</dt><dd>${stockedRows.length}</dd></div>
+        <div><dt>Needs Review</dt><dd>${negativeRows.length + lowRows.length}</dd></div>
+      </dl>
+      <div class="location-balance-list">
+        ${
+          stockedRows.length === 0
+            ? `<div class="empty-state"><strong>No stock currently replayed here.</strong></div>`
+            : stockedRows
+                .slice(0, 4)
+                .map(
+                  (row) => `
+                    <div class="location-balance-row">
+                      <strong>${escapeHtml(row.product_name)}</strong>
+                      <span class="${row.quantity < 0 ? "danger-text" : ""}">${formatQuantity(row.quantity)} ${productUnit(row.product_id)}</span>
+                    </div>
+                  `,
+                )
+                .join("")
+        }
+      </div>
+      <details class="privacy-details">
+        <summary>Recent activity</summary>
+        ${
+          recentEvents.length === 0
+            ? `<p>No recent replayed activity.</p>`
+            : recentEvents.map((entry) => `<p>${eventLabels[entry.type] ?? entry.type}: ${escapeHtml(entry.product_name)} ${entry.delta > 0 ? "+" : ""}${formatQuantity(entry.delta)}</p>`).join("")
+        }
+      </details>
+      <button class="button button-secondary relationship-action" data-view="dashboard" type="button">
+        ${icon("layers")}Open Stock View
+      </button>
+    </article>
+  `;
+}
+
+function renderReportsPage(localLedger, stockRows) {
+  const content = modulePageContent.reports;
+  const sales = Array.isArray(state.sales) ? state.sales : [];
+  const purchases = Array.isArray(state.purchases) ? state.purchases : [];
+  const trail = replayAuditTrail(localLedger);
+  const stockTotals = stockTotalRows(stockRows);
+  const lowStockRows = stockRows.filter((row) => row.quantity >= 0 && row.quantity <= productLow(row.product_id));
+  const negativeRows = stockRows.filter((row) => row.quantity < 0);
+  const stockOutEvents = localLedger.filter((event) => event.type === "STOCK_OUT");
+  const stockInEvents = localLedger.filter((event) => event.type === "STOCK_IN");
+  const sourceLinkedEvents = localLedger.filter((event) => event.source_label).length;
+
+  return `
+    <section class="content-grid module-page reports-workspace" aria-label="Reports">
+      ${renderBusinessHero("reports", content)}
+      <section class="module-metrics" aria-label="Report metrics">
+        ${metricCard("Stock Lines", stockRows.length)}
+        ${metricCard("Sales Posted", sales.length)}
+        ${metricCard("Purchases Received", purchases.length)}
+        ${metricCard("Source Links", sourceLinkedEvents)}
+      </section>
+      <section class="report-board" aria-label="Detailed report summaries">
+        ${renderReportPanel({
+          eyebrow: "Stock",
+          title: "Stock Health",
+          summary: `${lowStockRows.length} low row${lowStockRows.length === 1 ? "" : "s"} and ${negativeRows.length} row${negativeRows.length === 1 ? "" : "s"} below zero.`,
+          rows: stockTotals
+            .sort((first, second) => Number(first.quantity) - Number(second.quantity))
+            .slice(0, 5)
+            .map((row) => ({
+              label: row.product_name,
+              value: `${formatQuantity(row.quantity)} ${productUnit(row.product_id)}`,
+              meta: `${row.location_count} stocked location${row.location_count === 1 ? "" : "s"}`,
+            })),
+          empty: "No stock rows to report.",
+        })}
+        ${renderReportPanel({
+          eyebrow: "Sales",
+          title: "Sales by Client",
+          summary: `${sales.filter((sale) => sale.sale_mode === "menu_item").length} menu sale${sales.filter((sale) => sale.sale_mode === "menu_item").length === 1 ? "" : "s"} fulfilled locally.`,
+          rows: clientSalesReportRows(sales),
+          empty: "No fulfilled sales yet.",
+        })}
+        ${renderReportPanel({
+          eyebrow: "Purchases",
+          title: "Receiving by Supplier",
+          summary: `${stockInEvents.length} stock-in event${stockInEvents.length === 1 ? "" : "s"} in the replayed ledger and queue.`,
+          rows: supplierPurchaseReportRows(purchases),
+          empty: "No purchases received yet.",
+        })}
+        ${renderReportPanel({
+          eyebrow: "Movement",
+          title: "Stock Movement Mix",
+          summary: `${stockOutEvents.length} stock-out event${stockOutEvents.length === 1 ? "" : "s"} and ${stockInEvents.length} stock-in event${stockInEvents.length === 1 ? "" : "s"}.`,
+          rows: movementReportRows(localLedger),
+          empty: "No movement events yet.",
+        })}
+      </section>
+      <section class="report-detail-grid" aria-label="Report detail lists">
+        <article class="panel report-detail-panel">
+          <div class="panel-header panel-header--compact">
+            <h2>Recent Source Activity</h2>
+          </div>
+          <div class="report-source-list">
+            ${trail
+              .filter((entry) => entry.source_label)
+              .reverse()
+              .slice(0, 6)
+              .map((entry) => renderReportSourceRow(entry))
+              .join("") || `<div class="empty-state"><strong>No source-linked events yet.</strong></div>`}
+          </div>
+        </article>
+        <article class="panel report-detail-panel">
+          <div class="panel-header panel-header--compact">
+            <h2>Review Signals</h2>
+          </div>
+          <div class="review-signal-list">
+            ${renderReviewSignal("Negative Stock", negativeRows.length, "Check rows below zero before sending reports.", negativeRows.length > 0 ? "error" : "success")}
+            ${renderReviewSignal("Low Stock", lowStockRows.length, "Restock decisions should start here.", lowStockRows.length > 0 ? "warning" : "success")}
+            ${renderReviewSignal("Saved Work", state.outbox.length, "Send saved work before final exports.", state.outbox.length > 0 ? "warning" : "success")}
+            ${renderReviewSignal("Audit Rows", trail.length, "Every number should link back to replayed activity.", "info")}
+          </div>
+        </article>
+      </section>
+      <article class="panel panel-wide report-export-note">
+        <div>
+          <h2>Export Boundary</h2>
+          <p>Reports avoid private contact details and supplier terms by default. Exported reports should use opaque record IDs, role checks, and audit logging before production release.</p>
+        </div>
+        <button class="button button-secondary" data-view="audit" type="button">${icon("history")}Open Audit Trail</button>
+      </article>
+    </section>
+  `;
+}
+
+function renderUsersPage() {
+  const content = modulePageContent.users;
+  const activeUsers = DEFAULT_USERS.filter((user) => user.status === "Active").length;
+  const pendingUsers = DEFAULT_USERS.filter((user) => user.status.includes("pending")).length;
+  const trustedDevices = TRUSTED_DEVICES.filter((device) => device.trust === "Trusted").length;
+  const sensitiveReviews = DEFAULT_USERS.reduce((total, user) => total + Number(user.sensitive_access), 0);
+
+  return `
+    <section class="content-grid module-page access-workspace" aria-label="Users and Roles">
+      ${renderBusinessHero("users", content)}
+      <section class="module-metrics" aria-label="User and role metrics">
+        ${metricCard("Active Users", activeUsers)}
+        ${metricCard("Pending Invites", pendingUsers)}
+        ${metricCard("Trusted Devices", trustedDevices)}
+        ${metricCard("Sensitive Reviews", sensitiveReviews)}
+      </section>
+      <section class="access-grid" aria-label="Users and access">
+        <article class="panel access-panel">
+          <div class="panel-header panel-header--compact">
+            <h2>Staff Access</h2>
+          </div>
+          <div class="access-user-list">
+            ${DEFAULT_USERS.map(renderAccessUserCard).join("")}
+          </div>
+        </article>
+        <article class="panel access-panel">
+          <div class="panel-header panel-header--compact">
+            <h2>Role Matrix</h2>
+          </div>
+          <div class="role-matrix">
+            ${ROLE_MATRIX.map(renderRoleMatrixRow).join("")}
+          </div>
+        </article>
+      </section>
+      <section class="access-grid" aria-label="Device trust and audit review">
+        <article class="panel access-panel">
+          <div class="panel-header panel-header--compact">
+            <h2>Device Trust</h2>
+          </div>
+          <div class="device-trust-list">
+            ${TRUSTED_DEVICES.map(renderDeviceTrustRow).join("")}
+          </div>
+        </article>
+        <article class="panel access-panel">
+          <div class="panel-header panel-header--compact">
+            <h2>Access Review</h2>
+          </div>
+          <div class="review-signal-list">
+            ${renderReviewSignal("Role changes", "Audit required", "Any role or device trust change should create an admin audit record.", "warning")}
+            ${renderReviewSignal("PII display", "Hidden by default", "Staff profile and contact fields stay behind role checks.", "success")}
+            ${renderReviewSignal("Exports", "Controlled", "Report exports need user role, device ID, and audit reason.", "info")}
+          </div>
+        </article>
+      </section>
+    </section>
+  `;
+}
+
+function renderAccessUserCard(user) {
+  return `
+    <article class="access-user-card">
+      <div>
+        <span>${escapeHtml(user.role)}</span>
+        <strong>${escapeHtml(user.display_name)}</strong>
+      </div>
+      <b>${escapeHtml(user.status)}</b>
+      <dl>
+        <div><dt>Scope</dt><dd>${escapeHtml(user.access_scope)}</dd></div>
+        <div><dt>Last Active</dt><dd>${escapeHtml(user.last_active)}</dd></div>
+        <div><dt>Sensitive Views</dt><dd>${escapeHtml(user.sensitive_access)}</dd></div>
+      </dl>
+      <details class="privacy-details">
+        <summary>Private staff details</summary>
+        <p>${escapeHtml(user.private_note)}</p>
+        <p>Record ID: <code>${escapeHtml(user.id)}</code></p>
+      </details>
+    </article>
+  `;
+}
+
+function renderRoleMatrixRow(row) {
+  return `
+    <div class="role-matrix-row">
+      <strong>${escapeHtml(row.role)}</strong>
+      <dl>
+        <div><dt>Stock</dt><dd>${escapeHtml(row.stock)}</dd></div>
+        <div><dt>Sales</dt><dd>${escapeHtml(row.sales)}</dd></div>
+        <div><dt>Reports</dt><dd>${escapeHtml(row.reports)}</dd></div>
+        <div><dt>Users</dt><dd>${escapeHtml(row.users)}</dd></div>
+      </dl>
+    </div>
+  `;
+}
+
+function renderDeviceTrustRow(device) {
+  const tone = device.trust === "Trusted" ? "success" : device.trust === "Review" ? "warning" : "error";
+
+  return `
+    <div class="device-trust-row is-${tone}">
+      <div>
+        <strong>${escapeHtml(device.name)}</strong>
+        <span>${escapeHtml(device.id)}</span>
+      </div>
+      <dl>
+        <div><dt>Trust</dt><dd>${escapeHtml(device.trust)}</dd></div>
+        <div><dt>Offline</dt><dd>${escapeHtml(device.offline)}</dd></div>
+        <div><dt>Last Sync</dt><dd>${escapeHtml(device.last_sync)}</dd></div>
+      </dl>
+    </div>
+  `;
+}
+
+function renderSettingsPage() {
+  const content = modulePageContent.settings;
+
+  return `
+    <section class="content-grid module-page settings-workspace" aria-label="Settings">
+      ${renderBusinessHero("settings", content)}
+      <section class="module-metrics" aria-label="Settings metrics">
+        ${metricCard("Policy Cards", SETTINGS_POLICIES.length)}
+        ${metricCard("Numbering Rules", NUMBERING_RULES.length)}
+        ${metricCard("CI Lanes", CI_LANES.length)}
+        ${metricCard("Offline Mode", state.online ? "Online" : "Saved Local")}
+      </section>
+      <section class="settings-grid" aria-label="Tenant settings">
+        <article class="panel settings-panel">
+          <div class="panel-header panel-header--compact">
+            <h2>Tenant Defaults</h2>
+          </div>
+          <div class="settings-policy-list">
+            ${SETTINGS_POLICIES.map(renderSettingsPolicy).join("")}
+          </div>
+        </article>
+        <article class="panel settings-panel">
+          <div class="panel-header panel-header--compact">
+            <h2>Numbering Rules</h2>
+          </div>
+          <div class="numbering-list">
+            ${NUMBERING_RULES.map(renderNumberingRule).join("")}
+          </div>
+        </article>
+      </section>
+      <section class="settings-grid" aria-label="Development and privacy settings">
+        <article class="panel settings-panel">
+          <div class="panel-header panel-header--compact">
+            <h2>CI Lanes</h2>
+          </div>
+          <div class="ci-lane-list">
+            ${CI_LANES.map(renderCiLane).join("")}
+          </div>
+        </article>
+        <article class="panel settings-panel">
+          <div class="panel-header panel-header--compact">
+            <h2>Privacy Guardrails</h2>
+          </div>
+          <div class="review-signal-list">
+            ${renderReviewSignal("Local cache", "Minimized", "Prototype state avoids full private staff/contact records.", "success")}
+            ${renderReviewSignal("Tenant data", "Scoped", "All visible data is under the Northstar Hospitality demo tenant.", "success")}
+            ${renderReviewSignal("Exports", "Role gated", "Detailed exports should require reason, role, and audit entry.", "warning")}
+            ${renderReviewSignal("Sync", state.outbox.length, "Saved work count that would be sent in the next atomic batch.", state.outbox.length > 0 ? "warning" : "success")}
+          </div>
+        </article>
+      </section>
+      <article class="panel panel-wide report-export-note">
+        <div>
+          <h2>Pipeline Strategy</h2>
+          <p>CI is split into unit, build, and browser lanes so fast failures arrive sooner and UI smoke can run independently after dependencies are ready.</p>
+        </div>
+        <button class="button button-secondary" data-view="reports" type="button">${icon("list")}Open Reports</button>
+      </article>
+    </section>
+  `;
+}
+
+function renderSettingsPolicy(policy) {
+  return `
+    <div class="settings-policy-row">
+      <div>
+        <strong>${escapeHtml(policy.label)}</strong>
+        <span>${escapeHtml(policy.detail)}</span>
+      </div>
+      <b>${escapeHtml(policy.value)}</b>
+    </div>
+  `;
+}
+
+function renderNumberingRule(rule) {
+  return `
+    <div class="numbering-rule">
+      <strong>${escapeHtml(rule.prefix)}</strong>
+      <div>
+        <code>${escapeHtml(rule.example)}</code>
+        <span>${escapeHtml(rule.use)}</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderCiLane(lane) {
+  return `
+    <div class="ci-lane">
+      <strong>${escapeHtml(lane.name)}</strong>
+      <code>${escapeHtml(lane.command)}</code>
+      <span>${escapeHtml(lane.purpose)}</span>
+    </div>
+  `;
+}
+
+function renderReportPanel({ eyebrow, title, summary, rows, empty }) {
+  return `
+    <article class="panel report-panel">
+      <div class="relationship-card-topline">
+        <span>${escapeHtml(eyebrow)}</span>
+        <strong>${escapeHtml(title)}</strong>
+      </div>
+      <p>${escapeHtml(summary)}</p>
+      <div class="report-row-list">
+        ${
+          rows.length === 0
+            ? `<div class="empty-state"><strong>${escapeHtml(empty)}</strong></div>`
+            : rows
+                .map(
+                  (row) => `
+                    <div class="report-row">
+                      <div>
+                        <strong>${escapeHtml(row.label)}</strong>
+                        <span>${escapeHtml(row.meta)}</span>
+                      </div>
+                      <b>${escapeHtml(row.value)}</b>
+                    </div>
+                  `,
+                )
+                .join("")
+        }
+      </div>
+    </article>
+  `;
+}
+
+function renderReportSourceRow(entry) {
+  return `
+    <div class="report-source-row">
+      <span>${eventLabels[entry.type] ?? entry.type}</span>
+      <strong>${escapeHtml(entry.source_label)}</strong>
+      <small>${escapeHtml(entry.product_name)} &middot; ${escapeHtml(entry.location)} &middot; ${entry.delta > 0 ? "+" : ""}${formatQuantity(entry.delta)}</small>
+    </div>
+  `;
+}
+
+function renderReviewSignal(label, value, text, tone) {
+  return `
+    <div class="review-signal is-${tone}">
+      <strong>${escapeHtml(label)}</strong>
+      <b>${escapeHtml(value)}</b>
+      <span>${escapeHtml(text)}</span>
+    </div>
+  `;
+}
+
+function clientSalesReportRows(sales) {
+  const grouped = new Map(DEFAULT_CLIENTS.map((client) => [client.id, { label: client.name, count: 0, stockLines: 0, menuSales: 0 }]));
+  sales.forEach((sale) => {
+    const row = grouped.get(sale.client_id) ?? { label: clientName(sale.client_id), count: 0, stockLines: 0, menuSales: 0 };
+    row.count += 1;
+    row.stockLines += Number(sale.event_count ?? 1);
+    row.menuSales += sale.sale_mode === "menu_item" ? 1 : 0;
+    grouped.set(sale.client_id, row);
+  });
+
+  return [...grouped.values()]
+    .filter((row) => row.count > 0)
+    .sort((first, second) => second.count - first.count)
+    .map((row) => ({
+      label: row.label,
+      value: `${row.count} sale${row.count === 1 ? "" : "s"}`,
+      meta: `${row.menuSales} menu sale${row.menuSales === 1 ? "" : "s"} / ${row.stockLines} stock line${row.stockLines === 1 ? "" : "s"}`,
+    }));
+}
+
+function supplierPurchaseReportRows(purchases) {
+  const grouped = new Map(DEFAULT_SUPPLIERS.map((supplier) => [supplier.id, { label: supplier.name, count: 0, quantity: 0 }]));
+  purchases.forEach((purchase) => {
+    const row = grouped.get(purchase.supplier_id) ?? { label: supplierName(purchase.supplier_id), count: 0, quantity: 0 };
+    row.count += 1;
+    row.quantity += Number(purchase.quantity);
+    grouped.set(purchase.supplier_id, row);
+  });
+
+  return [...grouped.values()]
+    .filter((row) => row.count > 0)
+    .sort((first, second) => second.count - first.count)
+    .map((row) => ({
+      label: row.label,
+      value: `${row.count} receipt${row.count === 1 ? "" : "s"}`,
+      meta: `${formatQuantity(row.quantity)} total units received`,
+    }));
+}
+
+function movementReportRows(events) {
+  const movementTypes = ["STOCK_IN", "STOCK_OUT", "STOCK_TRANSFER", "STOCK_ADJUSTMENT", "STOCK_REVERT"];
+
+  return movementTypes
+    .map((type) => {
+      const matchingEvents = events.filter((event) => event.type === type);
+      const absoluteQuantity = matchingEvents.reduce((total, event) => total + Math.abs(Number(event.quantity)), 0);
+      return {
+        label: eventLabels[type] ?? type,
+        value: `${matchingEvents.length} event${matchingEvents.length === 1 ? "" : "s"}`,
+        meta: `${formatQuantity(absoluteQuantity)} total movement`,
+      };
+    })
+    .filter((row) => !row.value.startsWith("0 "));
+}
+
+function renderMenuPanel(menu) {
+  const client = DEFAULT_CLIENTS.find((candidate) => candidate.id === menu.client_id);
+  const items = menuItemsForMenu(menu.id);
+
+  return `
+    <article class="panel menu-panel">
+      <div class="relationship-card-topline">
+        <span>${escapeHtml(menu.cadence)} menu</span>
+        <strong>${escapeHtml(menu.name)}</strong>
+      </div>
+      <div class="menu-panel-meta">
+        <span>${escapeHtml(client?.name ?? "Unassigned client")}</span>
+        <span>${escapeHtml(menu.status)}</span>
+      </div>
+      <div class="menu-item-list">
+        ${items.map((item) => renderMenuItemCard(item)).join("")}
+      </div>
+    </article>
+  `;
+}
+
+function renderMenuItemCard(item) {
+  const menu = getMenuById(item.menu_id);
+  const client = menu ? DEFAULT_CLIENTS.find((candidate) => candidate.id === menu.client_id) : null;
+
+  return `
+    <section class="menu-item-card">
+      <div>
+        <span>${saleTypeLabels[item.sale_type] ?? "Sale"}</span>
+        <strong>${escapeHtml(item.name)}</strong>
+      </div>
+      <ul>
+        ${item.recipe.map((line) => `<li>${formatQuantity(line.quantity)} ${productUnit(line.product_id)} ${escapeHtml(productName(line.product_id))}</li>`).join("")}
+      </ul>
+      <button class="table-action" data-action="start-menu-sale" data-menu-item-id="${escapeAttr(item.id)}" type="button">
+        Fulfill in Sales
+      </button>
+      <small>${escapeHtml(client?.name ?? "No client")} &middot; ${escapeHtml(item.default_location)}</small>
+    </section>
+  `;
+}
+
+function renderRecipePreview(item) {
+  if (!item) {
+    return `
+      <div class="recipe-preview form-field-span-2">
+        <span>Recipe Preview</span>
+        <strong>Choose a menu item to preview stock use.</strong>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="recipe-preview form-field-span-2">
+      <span>Recipe Preview</span>
+      <strong>${escapeHtml(item.name)}</strong>
+      <ul>
+        ${item.recipe.map((line) => `<li>${formatQuantity(line.quantity)} ${productUnit(line.product_id)} ${escapeHtml(productName(line.product_id))} per unit sold</li>`).join("")}
+      </ul>
+    </div>
+  `;
+}
+
+function renderSalesPage() {
+  const content = modulePageContent.sales;
+  const form = state.saleForm ?? defaultState().saleForm;
+  const sales = Array.isArray(state.sales) ? state.sales : [];
+  const queuedSaleEvents = state.outbox.filter((event) => event.source_type === "sale").length;
+  const saleMode = form.sale_mode ?? "menu_item";
+  const selectedMenuItem = getMenuItemById(form.menu_item_id) ?? DEFAULT_MENU_ITEMS[0];
+
+  return `
+    <section class="content-grid module-page business-workspace" aria-label="Sales">
+      ${renderBusinessHero("sales", content)}
+      <section class="module-metrics" aria-label="Sales metrics">
+        ${metricCard("Fulfilled Locally", sales.length)}
+        ${metricCard("Queued Stock Outs", queuedSaleEvents)}
+        ${metricCard("Recurring", "4")}
+        ${metricCard("Seasonal", "2")}
+      </section>
+      <section class="business-work-grid">
+        <article class="panel business-form-panel">
+          <div class="panel-header panel-header--compact">
+            <h2>Fulfill Sale</h2>
+          </div>
+          <form class="business-form" data-form="sale">
+            <label class="field-select-wrap">
+              <span>Client</span>
+              ${renderFieldSelect({
+                name: "client_id",
+                menuClassName: "field-select-menu--event-form",
+                menuMode: "event-form",
+                options: DEFAULT_CLIENTS.map((client) => `<option value="${client.id}" ${form.client_id === client.id ? "selected" : ""}>${client.name}</option>`).join(""),
+              })}
+            </label>
+            <label class="field-select-wrap">
+              <span>Sale Type</span>
+              ${renderFieldSelect({
+                name: "sale_type",
+                menuClassName: "field-select-menu--event-form",
+                menuMode: "event-form",
+                options: Object.entries(saleTypeLabels)
+                  .map(([value, label]) => `<option value="${value}" ${form.sale_type === value ? "selected" : ""}>${label}</option>`)
+                  .join(""),
+              })}
+            </label>
+            <label class="field-select-wrap">
+              <span>Sale Source</span>
+              ${renderFieldSelect({
+                name: "sale_mode",
+                menuClassName: "field-select-menu--event-form",
+                menuMode: "event-form",
+                options: `
+                  <option value="menu_item" ${saleMode === "menu_item" ? "selected" : ""}>Menu Item</option>
+                  <option value="direct_stock" ${saleMode === "direct_stock" ? "selected" : ""}>Direct Stock</option>
+                `,
+              })}
+            </label>
+            ${
+              saleMode === "menu_item"
+                ? `<label class="field-select-wrap">
+                    <span>Menu Item</span>
+                    ${renderFieldSelect({
+                      name: "menu_item_id",
+                      menuClassName: "field-select-menu--event-form",
+                      menuMode: "event-form",
+                      options: DEFAULT_MENU_ITEMS.map((item) => {
+                        const menu = getMenuById(item.menu_id);
+                        return `<option value="${item.id}" ${form.menu_item_id === item.id ? "selected" : ""}>${menu?.name ?? "Menu"} - ${item.name}</option>`;
+                      }).join(""),
+                    })}
+                  </label>`
+                : `<label class="field-select-wrap">
+                    <span>Product Sold</span>
+                    ${renderFieldSelect({
+                      name: "product_id",
+                      menuClassName: "field-select-menu--event-form",
+                      menuMode: "event-form",
+                      options: getActiveProducts().map((product) => `<option value="${product.id}" ${form.product_id === product.id ? "selected" : ""}>${product.name}</option>`).join(""),
+                    })}
+                  </label>`
+            }
+            <label class="field-select-wrap">
+              <span>Fulfilled From</span>
+              ${renderFieldSelect({
+                name: "location",
+                menuClassName: "field-select-menu--event-form",
+                menuMode: "event-form",
+                options: locations.map((location) => `<option value="${location.name}" ${form.location === location.name ? "selected" : ""}>${location.name}</option>`).join(""),
+              })}
+            </label>
+            <label>
+              <span>${saleMode === "menu_item" ? "Units Sold" : "Amount Sold"}</span>
+              <input name="quantity" type="number" min="0.01" step="0.01" value="${escapeAttr(form.quantity)}" />
+            </label>
+            <label>
+              <span>Notes</span>
+              <textarea name="notes" rows="3" placeholder="Example: weekly standing order">${escapeHtml(form.notes)}</textarea>
+            </label>
+            ${saleMode === "menu_item" ? renderRecipePreview(selectedMenuItem) : ""}
+            <div class="business-form-note">
+              Fulfilled sales queue STOCK_OUT work. Draft sales and price details stay outside stock replay.
+            </div>
+            <div class="form-footer business-form-footer">
+              <div class="validation is-valid">Ready to queue as saved work.</div>
+              <button class="button button-primary" type="submit">${icon("send")}Fulfill Sale</button>
+            </div>
+          </form>
+        </article>
+        ${renderBusinessRecordPanel({
+          title: "Recent Sales",
+          empty: "No fulfilled sales yet.",
+          records: sales,
+          type: "sale",
+        })}
+      </section>
+      ${renderModuleSections(content)}
+    </section>
+  `;
+}
+
+function renderPurchasesPage() {
+  const content = modulePageContent.purchases;
+  const form = state.purchaseForm ?? defaultState().purchaseForm;
+  const purchases = Array.isArray(state.purchases) ? state.purchases : [];
+  const queuedPurchaseEvents = state.outbox.filter((event) => event.source_type === "purchase").length;
+
+  return `
+    <section class="content-grid module-page business-workspace" aria-label="Purchases">
+      ${renderBusinessHero("purchases", content)}
+      <section class="module-metrics" aria-label="Purchase metrics">
+        ${metricCard("Received Locally", purchases.length)}
+        ${metricCard("Queued Stock Ins", queuedPurchaseEvents)}
+        ${metricCard("Incoming", "3")}
+        ${metricCard("Variance", "2")}
+      </section>
+      <section class="business-work-grid">
+        <article class="panel business-form-panel">
+          <div class="panel-header panel-header--compact">
+            <h2>Receive Purchase</h2>
+          </div>
+          <form class="business-form" data-form="purchase">
+            <label class="field-select-wrap">
+              <span>Supplier</span>
+              ${renderFieldSelect({
+                name: "supplier_id",
+                menuClassName: "field-select-menu--event-form",
+                menuMode: "event-form",
+                options: DEFAULT_SUPPLIERS.map((supplier) => `<option value="${supplier.id}" ${form.supplier_id === supplier.id ? "selected" : ""}>${supplier.name}</option>`).join(""),
+              })}
+            </label>
+            <label class="field-select-wrap">
+              <span>Product Received</span>
+              ${renderFieldSelect({
+                name: "product_id",
+                menuClassName: "field-select-menu--event-form",
+                menuMode: "event-form",
+                options: getActiveProducts().map((product) => `<option value="${product.id}" ${form.product_id === product.id ? "selected" : ""}>${product.name}</option>`).join(""),
+              })}
+            </label>
+            <label class="field-select-wrap">
+              <span>Received At</span>
+              ${renderFieldSelect({
+                name: "location",
+                menuClassName: "field-select-menu--event-form",
+                menuMode: "event-form",
+                options: locations.map((location) => `<option value="${location.name}" ${form.location === location.name ? "selected" : ""}>${location.name}</option>`).join(""),
+              })}
+            </label>
+            <label>
+              <span>Amount Received</span>
+              <input name="quantity" type="number" min="0.01" step="0.01" value="${escapeAttr(form.quantity)}" />
+            </label>
+            <label class="form-field-span-2">
+              <span>Receiving Notes</span>
+              <textarea name="notes" rows="3" placeholder="Example: received complete delivery">${escapeHtml(form.notes)}</textarea>
+            </label>
+            <div class="business-form-note form-field-span-2">
+              Receiving queues a STOCK_IN event. Purchase orders stay separate until actual stock arrives.
+            </div>
+            <div class="form-footer business-form-footer form-field-span-2">
+              <div class="validation is-valid">Ready to queue as saved work.</div>
+              <button class="button button-primary" type="submit">${icon("plus")}Receive Purchase</button>
+            </div>
+          </form>
+        </article>
+        ${renderBusinessRecordPanel({
+          title: "Recent Receipts",
+          empty: "No purchases received yet.",
+          records: purchases,
+          type: "purchase",
+        })}
+      </section>
+      ${renderModuleSections(content)}
+    </section>
+  `;
+}
+
+function renderBusinessHero(key, content) {
+  return `
+    <article class="panel panel-wide module-hero">
+      <div>
+        <span>${screenMeta[key]?.kicker ?? "Module"}</span>
+        <h2>${content.title}</h2>
+        <p>${content.summary}</p>
+      </div>
+    </article>
+  `;
+}
+
+function renderModuleSections(content) {
+  return `
+    <article class="panel panel-wide">
+      <div class="panel-header panel-header--compact">
+        <h2>Page Sections</h2>
+      </div>
+      <div class="module-section-grid">
+        ${content.sections
+          .map(
+            ([title, text]) => `
+              <section class="module-section-card">
+                <h3>${title}</h3>
+                <p>${text}</p>
+              </section>
+            `,
+          )
+          .join("")}
+      </div>
+    </article>
+    <article class="panel panel-wide module-workflow">
+      <div class="panel-header panel-header--compact">
+        <h2>Ledger Rules</h2>
+      </div>
+      <ul>
+        ${content.workflow.map((item) => `<li>${item}</li>`).join("")}
+      </ul>
+    </article>
+  `;
+}
+
+function renderBusinessRecordPanel({ title, empty, records, type }) {
+  const safeRecords = records.slice(-6).reverse();
+
+  return `
+    <article class="panel business-record-panel">
+      <div class="panel-header panel-header--compact">
+        <h2>${title}</h2>
+      </div>
+      ${
+        safeRecords.length === 0
+          ? `<div class="empty-state"><strong>${empty}</strong></div>`
+          : `<div class="business-record-list">
+              ${safeRecords.map((record) => renderBusinessRecord(record, type)).join("")}
+            </div>`
+      }
+    </article>
+  `;
+}
+
+function renderBusinessRecord(record, type) {
+  const counterpart = type === "sale" ? clientName(record.client_id) : supplierName(record.supplier_id);
+  const movement = type === "sale" ? (record.sale_mode === "menu_item" ? "Menu sale" : "Stock out") : "Stock in";
+  const saleItemName =
+    record.sale_mode === "menu_item"
+      ? record.item_label ?? getMenuItemById(record.menu_item_id)?.name ?? "Menu item"
+      : productName(record.product_id);
+  const saleAmount =
+    record.sale_mode === "menu_item"
+      ? `${formatQuantity(record.quantity)} sale unit${Number(record.quantity) === 1 ? "" : "s"}`
+      : `${formatQuantity(record.quantity)} ${productUnit(record.product_id)}`;
+
+  return `
+    <article class="business-record">
+      <div>
+        <span>${movement}</span>
+        <strong>${escapeHtml(counterpart)}</strong>
+      </div>
+      <dl>
+        <div><dt>${type === "sale" && record.sale_mode === "menu_item" ? "Menu Item" : "Product"}</dt><dd>${escapeHtml(type === "sale" ? saleItemName : productName(record.product_id))}</dd></div>
+        <div><dt>Location</dt><dd>${escapeHtml(record.location)}</dd></div>
+        <div><dt>Amount</dt><dd>${type === "sale" ? saleAmount : `${formatQuantity(record.quantity)} ${productUnit(record.product_id)}`}</dd></div>
+        ${type === "sale" ? `<div><dt>Sale Type</dt><dd>${saleTypeLabels[record.sale_type] ?? "Sale"}</dd></div>` : ""}
+        ${type === "sale" && record.event_count > 1 ? `<div><dt>Stock Lines</dt><dd>${record.event_count}</dd></div>` : ""}
+      </dl>
+    </article>
   `;
 }
 
@@ -1840,10 +3097,11 @@ function workQueueItems(outboxValidation) {
       ...item,
       sequence_number: Math.min(...item.events.map((event) => Number(event.sequence_number))),
       label: eventLabels[primary.type] ?? primary.type,
-      product_name: escapeHtml(productName(primary.product_id)),
+      product_name: escapeHtml(isGrouped && primary.source_label ? primary.source_label : productName(primary.product_id)),
       location: isGrouped ? `Grouped work: ${item.events.length} events` : escapeHtml(eventLocationText(primary)),
-      amount: isGrouped ? "Grouped work" : formatQuantity(primary.quantity),
+      amount: isGrouped ? `${item.events.length} stock lines` : formatQuantity(primary.quantity),
       detail: isGrouped ? `${item.events.length} grouped event records` : `<code>${escapeHtml(primary.idempotency_key)}</code>`,
+      source: primary.source_label ? escapeHtml(primary.source_label) : "",
       event_count: item.events.length,
       valid: !invalid,
       status: invalid ? simpleValidationReason(invalid.reason) : "Ready",
@@ -1878,6 +3136,7 @@ function renderWorkQueueCard(item) {
       <details class="work-queue-technical">
         <summary>Technical details</summary>
         <dl>
+          ${item.source ? `<div><dt>Source</dt><dd>${item.source}</dd></div>` : ""}
           <div><dt>Batch detail</dt><dd>${item.detail}</dd></div>
           <div><dt>Validation</dt><dd>${escapeHtml(item.status)}</dd></div>
           <div><dt>Events</dt><dd>${item.event_count}</dd></div>
@@ -2245,8 +3504,9 @@ function renderAuditTable(events, limit = null, compact = false) {
             <th>Location</th>
             <th class="table-cell--numeric">Change</th>
             <th class="table-cell--numeric">New Balance</th>
+            <th>Source</th>
             <th>Actor</th>
-            ${compact ? "" : "<th>Batch</th><th>Fix</th>"}
+            ${compact ? "" : "<th>Details</th><th>Fix</th>"}
           </tr>
         </thead>
         <tbody>
@@ -2260,11 +3520,12 @@ function renderAuditTable(events, limit = null, compact = false) {
                   <td>${entry.location}</td>
                   <td class="table-cell--numeric ${entry.delta < 0 ? "danger-text" : ""}">${entry.delta > 0 ? "+" : ""}${formatQuantity(entry.delta)}</td>
                   <td class="table-cell--numeric">${formatAuditBalance(entry.running_balance)}</td>
+                  <td>${auditSourceLabel(entry)}</td>
                   <td>${entry.actor_name}</td>
                   ${
                     compact
                       ? ""
-                      : `<td><code>${entry.sync_batch_id}</code></td>
+                      : `<td>${renderAuditTechnicalDetails(entry)}</td>
                         <td>
                           <button class="table-action" data-action="prepare-revert" data-event-id="${entry.event_id}" type="button" ${!isRevertibleEvent(entry.type) || hasReversalForEvent(entry.event_id) ? "disabled" : ""}>Prepare reverse record</button>
                         </td>`
@@ -2291,8 +3552,9 @@ function renderAuditTable(events, limit = null, compact = false) {
                   <div><dt>Location</dt><dd>${entry.location}</dd></div>
                   <div><dt>Change</dt><dd class="${entry.delta < 0 ? "danger-text" : ""}">${entry.delta > 0 ? "+" : ""}${formatQuantity(entry.delta)}</dd></div>
                   <div><dt>New balance</dt><dd>${formatAuditBalance(entry.running_balance)}</dd></div>
+                  <div><dt>Source</dt><dd>${auditSourceLabel(entry)}</dd></div>
                   <div><dt>Actor</dt><dd>${entry.actor_name}</dd></div>
-                  ${compact ? "" : `<div><dt>Batch</dt><dd><code>${entry.sync_batch_id}</code></dd></div>`}
+                  ${compact ? "" : `<div><dt>Details</dt><dd>${renderAuditTechnicalDetails(entry)}</dd></div>`}
                 </dl>
                 ${
                   compact
@@ -2310,6 +3572,23 @@ function renderAuditTable(events, limit = null, compact = false) {
       </div>
       ${pagination ? renderTablePagination("audit", pagination, rows.length) : ""}
     </div>
+  `;
+}
+
+function auditSourceLabel(entry) {
+  return entry.source_label ? escapeHtml(entry.source_label) : "Manual stock work";
+}
+
+function renderAuditTechnicalDetails(entry) {
+  return `
+    <details class="audit-technical">
+      <summary>Technical details</summary>
+      <dl>
+        <div><dt>Batch</dt><dd><code>${escapeHtml(entry.sync_batch_id)}</code></dd></div>
+        <div><dt>Idempotency</dt><dd><code>${escapeHtml(entry.idempotency_key)}</code></dd></div>
+        <div><dt>Reason</dt><dd>${escapeHtml(entry.reason || "No reason recorded")}</dd></div>
+      </dl>
+    </details>
   `;
 }
 
@@ -2602,7 +3881,7 @@ function bindEvents() {
         ...state.form,
         type: nextType,
       };
-      normalizeFormForType();
+      normalizeFormForType({ resetTemplateDefaults: true });
       commit();
     });
   });
@@ -2639,6 +3918,14 @@ function bindEvents() {
 
   document.querySelectorAll("[data-action='undo-work-item']").forEach((button) => {
     button.addEventListener("click", () => undoWorkItem(button.dataset.workItemId));
+  });
+
+  document.querySelectorAll("[data-action='start-client-sale']").forEach((button) => {
+    button.addEventListener("click", () => startClientSale(button.dataset.clientId));
+  });
+
+  document.querySelectorAll("[data-action='start-menu-sale']").forEach((button) => {
+    button.addEventListener("click", () => startMenuSale(button.dataset.menuItemId));
   });
 
   const form = document.querySelector("[data-form='event']");
@@ -2686,7 +3973,7 @@ function bindEvents() {
       };
 
       if (previousType !== nextType) {
-        normalizeFormForType();
+        normalizeFormForType({ resetTemplateDefaults: true });
         commit();
         return;
       }
@@ -2697,6 +3984,38 @@ function bindEvents() {
     form.addEventListener("submit", (event) => {
       event.preventDefault();
       appendFormEvent();
+    });
+  }
+
+  const saleForm = document.querySelector("[data-form='sale']");
+  if (saleForm) {
+    saleForm.addEventListener("input", () => {
+      updateSaleFormState(saleForm);
+      saveState();
+    });
+    saleForm.addEventListener("change", () => {
+      updateSaleFormState(saleForm);
+      commit();
+    });
+    saleForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      fulfillSaleFromForm(saleForm);
+    });
+  }
+
+  const purchaseForm = document.querySelector("[data-form='purchase']");
+  if (purchaseForm) {
+    purchaseForm.addEventListener("input", () => {
+      updatePurchaseFormState(purchaseForm);
+      saveState();
+    });
+    purchaseForm.addEventListener("change", () => {
+      updatePurchaseFormState(purchaseForm);
+      saveState();
+    });
+    purchaseForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      receivePurchaseFromForm(purchaseForm);
     });
   }
 
@@ -2797,6 +4116,397 @@ function nextProductId(name, catalog) {
   return candidate;
 }
 
+function readSaleForm(form) {
+  const data = new FormData(form);
+  const defaults = defaultState().saleForm;
+
+  return {
+    client_id: `${data.get("client_id") ?? defaults.client_id}`.trim(),
+    sale_type: `${data.get("sale_type") ?? defaults.sale_type}`.trim(),
+    sale_mode: `${data.get("sale_mode") ?? defaults.sale_mode}`.trim(),
+    menu_item_id: `${data.get("menu_item_id") ?? defaults.menu_item_id}`.trim(),
+    product_id: `${data.get("product_id") ?? defaults.product_id}`.trim(),
+    location: `${data.get("location") ?? defaults.location}`.trim(),
+    quantity: data.get("quantity") ?? defaults.quantity,
+    notes: `${data.get("notes") ?? ""}`,
+  };
+}
+
+function readPurchaseForm(form) {
+  const data = new FormData(form);
+  const defaults = defaultState().purchaseForm;
+
+  return {
+    supplier_id: `${data.get("supplier_id") ?? defaults.supplier_id}`.trim(),
+    product_id: `${data.get("product_id") ?? defaults.product_id}`.trim(),
+    location: `${data.get("location") ?? defaults.location}`.trim(),
+    quantity: data.get("quantity") ?? defaults.quantity,
+    notes: `${data.get("notes") ?? ""}`,
+  };
+}
+
+function updateSaleFormState(form) {
+  state.saleForm = {
+    ...state.saleForm,
+    ...readSaleForm(form),
+  };
+  normalizeSaleForm();
+}
+
+function updatePurchaseFormState(form) {
+  state.purchaseForm = {
+    ...state.purchaseForm,
+    ...readPurchaseForm(form),
+  };
+}
+
+function validBusinessQuantity(rawQuantity) {
+  const quantity = Number(rawQuantity);
+  return Number.isFinite(quantity) && quantity > 0 ? quantity : null;
+}
+
+function isKnownLocation(locationName) {
+  return locations.some((location) => location.name === locationName);
+}
+
+function normalizeSaleForm() {
+  const defaults = defaultState().saleForm;
+  const form = state.saleForm ?? defaults;
+  const saleMode = saleModeLabels[form.sale_mode] ? form.sale_mode : defaults.sale_mode;
+  const client = DEFAULT_CLIENTS.find((candidate) => candidate.id === form.client_id) ?? DEFAULT_CLIENTS[0];
+  const clientMenuItems = menuItemsForClient(client.id);
+  const existingMenuItem = getMenuItemById(form.menu_item_id);
+  const selectedMenuItem =
+    existingMenuItem && clientMenuItems.some((item) => item.id === existingMenuItem.id)
+      ? existingMenuItem
+      : clientMenuItems[0] ?? DEFAULT_MENU_ITEMS[0];
+  const selectedProduct = getProductById(form.product_id)?.is_active === false ? null : getProductById(form.product_id);
+
+  state.saleForm = {
+    ...form,
+    client_id: client.id,
+    sale_type: saleTypeLabels[form.sale_type] ? form.sale_type : selectedMenuItem?.sale_type ?? defaults.sale_type,
+    sale_mode: saleMode,
+    menu_item_id: selectedMenuItem?.id ?? defaults.menu_item_id,
+    product_id: selectedProduct?.id ?? getActiveProducts()[0]?.id ?? defaults.product_id,
+    location: isKnownLocation(form.location) ? form.location : selectedMenuItem?.default_location ?? defaults.location,
+  };
+}
+
+function startClientSale(clientId) {
+  const client = DEFAULT_CLIENTS.find((candidate) => candidate.id === clientId);
+  if (!client) return;
+  const menuItem = menuItemsForClient(client.id)[0] ?? DEFAULT_MENU_ITEMS[0];
+  const currentForm = state.saleForm ?? defaultState().saleForm;
+
+  state.saleForm = {
+    ...currentForm,
+    client_id: client.id,
+    sale_mode: "menu_item",
+    sale_type: menuItem?.sale_type ?? "recurring",
+    menu_item_id: menuItem?.id ?? currentForm.menu_item_id,
+    location: menuItem?.default_location ?? currentForm.location,
+    quantity: 1,
+    notes: "",
+  };
+  state.activeView = "sales";
+  state.guideOpen = false;
+  state.accountOpen = false;
+  commit();
+}
+
+function startMenuSale(menuItemId) {
+  const menuItem = getMenuItemById(menuItemId);
+  if (!menuItem) return;
+  const client = clientForMenuItem(menuItem.id);
+  const currentForm = state.saleForm ?? defaultState().saleForm;
+
+  state.saleForm = {
+    ...currentForm,
+    client_id: client?.id ?? currentForm.client_id,
+    sale_mode: "menu_item",
+    sale_type: menuItem.sale_type,
+    menu_item_id: menuItem.id,
+    location: menuItem.default_location,
+    quantity: 1,
+    notes: "",
+  };
+  state.activeView = "sales";
+  state.guideOpen = false;
+  state.accountOpen = false;
+  commit();
+}
+
+function fulfillSaleFromForm(form) {
+  const values = readSaleForm(form);
+  state.saleForm = {
+    ...(state.saleForm ?? defaultState().saleForm),
+    ...values,
+  };
+  normalizeSaleForm();
+  const normalized = state.saleForm;
+
+  const client = DEFAULT_CLIENTS.find((candidate) => candidate.id === normalized.client_id);
+  const saleMode = saleModeLabels[normalized.sale_mode] ? normalized.sale_mode : "menu_item";
+  const quantity = validBusinessQuantity(normalized.quantity);
+  const notes = normalized.notes.trim();
+
+  if (!client) {
+    showToast("Choose a client before fulfilling the sale.", "error");
+    commit();
+    return;
+  }
+
+  if (!saleTypeLabels[normalized.sale_type]) {
+    showToast("Choose a sale type before fulfilling the sale.", "error");
+    commit();
+    return;
+  }
+
+  if (!isKnownLocation(normalized.location)) {
+    showToast("Choose where the sale was fulfilled from.", "error");
+    commit();
+    return;
+  }
+
+  if (quantity === null) {
+    showToast("Enter an amount sold greater than zero.", "error");
+    commit();
+    return;
+  }
+
+  const saleId = nextId("sale");
+  const workItemId = nextId("work-sale");
+  const timestamp = Date.now();
+  const batchId = currentBatchId();
+  let sequence = nextSequence();
+  let events = [];
+  let saleProductId = normalized.product_id;
+  let saleMenuItemId = null;
+  let saleItemLabel = "";
+
+  if (saleMode === "menu_item") {
+    const menuItem = getMenuItemById(normalized.menu_item_id);
+    if (!menuItem) {
+      showToast("Choose a menu item before fulfilling the sale.", "error");
+      commit();
+      return;
+    }
+
+    if (menuItem.recipe.length === 0) {
+      showToast("This menu item has no recipe lines to deduct.", "error");
+      commit();
+      return;
+    }
+
+    const inactiveLine = menuItem.recipe.find((line) => getProductById(line.product_id)?.is_active === false);
+    if (inactiveLine) {
+      showToast("A recipe product is suspended. Reactivate it before fulfilling this sale.", "error");
+      commit();
+      return;
+    }
+
+    saleProductId = menuItem.recipe[0]?.product_id ?? normalized.product_id;
+    saleMenuItemId = menuItem.id;
+    saleItemLabel = menuItem.name;
+    events = menuItem.recipe.map((line) => {
+      const lineQuantity = Number((Number(line.quantity) * quantity).toFixed(4));
+      return withWorkItem(
+        createInventoryEvent({
+          ...tenant,
+          event_id: nextId("sale-stock-out"),
+          idempotency_key: nextId("idem-sale"),
+          sync_batch_id: batchId,
+          type: "STOCK_OUT",
+          product_id: line.product_id,
+          product_name: productName(line.product_id),
+          from_location: normalized.location,
+          to_location: null,
+          quantity: lineQuantity,
+          reason: notes || `${saleTypeLabels[normalized.sale_type]} menu sale fulfilled for ${client.name}`,
+          source_type: "sale",
+          source_id: saleId,
+          source_label: `Sale - ${client.name} - ${menuItem.name}`,
+          sequence_number: sequence++,
+          timestamp,
+          status: "queued",
+        }),
+        workItemId,
+      );
+    });
+  } else {
+    const product = getProductById(normalized.product_id);
+    if (!product || product.is_active === false) {
+      showToast("Choose an active product before fulfilling the sale.", "error");
+      commit();
+      return;
+    }
+
+    saleProductId = product.id;
+    saleItemLabel = product.name;
+    events = [
+      withWorkItem(
+        createInventoryEvent({
+          ...tenant,
+          event_id: nextId("sale-stock-out"),
+          idempotency_key: nextId("idem-sale"),
+          sync_batch_id: batchId,
+          type: "STOCK_OUT",
+          product_id: product.id,
+          product_name: product.name,
+          from_location: normalized.location,
+          to_location: null,
+          quantity,
+          reason: notes || `${saleTypeLabels[normalized.sale_type]} sale fulfilled for ${client.name}`,
+          source_type: "sale",
+          source_id: saleId,
+          source_label: `Sale - ${client.name} - ${product.name}`,
+          sequence_number: sequence++,
+          timestamp,
+          status: "queued",
+        }),
+        workItemId,
+      ),
+    ];
+  }
+
+  const invalidEntry = events
+    .map((event) => ({ event, validation: validateEvent(event) }))
+    .find((entry) => !entry.validation.valid);
+
+  if (invalidEntry) {
+    showToast(simpleValidationReason(invalidEntry.validation.reason), "error");
+    commit();
+    return;
+  }
+
+  state.sales = [
+    ...(Array.isArray(state.sales) ? state.sales : []),
+    {
+      id: saleId,
+      client_id: client.id,
+      sale_type: normalized.sale_type,
+      sale_mode: saleMode,
+      menu_item_id: saleMenuItemId,
+      product_id: saleProductId,
+      item_label: saleItemLabel,
+      location: normalized.location,
+      quantity,
+      notes,
+      event_id: events[0]?.event_id ?? null,
+      event_count: events.length,
+      work_item_id: workItemId,
+      created_at: new Date(timestamp).toISOString(),
+      status: "queued",
+    },
+  ];
+  state.outbox = [...state.outbox, ...events];
+  state.saleForm = {
+    ...normalized,
+    quantity: 1,
+    notes: "",
+  };
+
+  showToast(
+    events.length === 1
+      ? "Sale fulfilled locally. STOCK_OUT is waiting to send."
+      : `Sale fulfilled locally. ${events.length} STOCK_OUT events are waiting to send.`,
+  );
+  commit();
+}
+
+function receivePurchaseFromForm(form) {
+  const values = readPurchaseForm(form);
+  state.purchaseForm = values;
+
+  const supplier = DEFAULT_SUPPLIERS.find((candidate) => candidate.id === values.supplier_id);
+  const product = getProductById(values.product_id);
+  const quantity = validBusinessQuantity(values.quantity);
+  const notes = values.notes.trim();
+
+  if (!supplier) {
+    showToast("Choose a supplier before receiving the purchase.", "error");
+    commit();
+    return;
+  }
+
+  if (!product || product.is_active === false) {
+    showToast("Choose an active product before receiving the purchase.", "error");
+    commit();
+    return;
+  }
+
+  if (!isKnownLocation(values.location)) {
+    showToast("Choose where the purchase was received.", "error");
+    commit();
+    return;
+  }
+
+  if (quantity === null) {
+    showToast("Enter an amount received greater than zero.", "error");
+    commit();
+    return;
+  }
+
+  const purchaseId = nextId("purchase");
+  const workItemId = nextId("work-purchase");
+  const timestamp = Date.now();
+  const event = withWorkItem(
+    createInventoryEvent({
+      ...tenant,
+      event_id: nextId("purchase-stock-in"),
+      idempotency_key: nextId("idem-purchase"),
+      sync_batch_id: currentBatchId(),
+      type: "STOCK_IN",
+      product_id: product.id,
+      product_name: product.name,
+      from_location: null,
+      to_location: values.location,
+      quantity,
+      reason: notes || `Purchase received from ${supplier.name}`,
+      source_type: "purchase",
+      source_id: purchaseId,
+      source_label: `Purchase - ${supplier.name}`,
+      sequence_number: nextSequence(),
+      timestamp,
+      status: "queued",
+    }),
+    workItemId,
+  );
+  const validation = validateEvent(event);
+
+  if (!validation.valid) {
+    showToast(simpleValidationReason(validation.reason), "error");
+    commit();
+    return;
+  }
+
+  state.purchases = [
+    ...(Array.isArray(state.purchases) ? state.purchases : []),
+    {
+      id: purchaseId,
+      supplier_id: supplier.id,
+      product_id: product.id,
+      location: values.location,
+      quantity,
+      notes,
+      event_id: event.event_id,
+      work_item_id: workItemId,
+      created_at: new Date(timestamp).toISOString(),
+      status: "queued",
+    },
+  ];
+  state.outbox = [...state.outbox, event];
+  state.purchaseForm = {
+    ...values,
+    quantity: 1,
+    notes: "",
+  };
+
+  showToast("Purchase received locally. STOCK_IN is waiting to send.");
+  commit();
+}
+
 function appendFormEvent() {
   const template = actionTemplate(state.form.type);
   if (template.kind === "product-create") {
@@ -2847,7 +4557,9 @@ function syncOutbox() {
     return;
   }
 
+  const sentEvents = state.outbox;
   state.serverLedger = result.ledger;
+  markBusinessRecordsSynced(sentEvents);
   state.outbox = [];
   state.lastSync = new Date(result.server_timestamp).toISOString();
   showToast(`${result.processed_count} saved movement(s) sent successfully. The stock list is now updated.`);
@@ -2874,6 +4586,7 @@ function undoWorkItem(workItemId) {
 
   state.outbox = state.outbox.filter((candidate) => (candidate.work_item_id || candidate.event_id) !== workItemId);
   rollbackLocalProductStateForUndo(primary);
+  rollbackBusinessRecordForUndo(primary);
   showToast(`${label} removed from Work to Send.`);
   commit();
 }
@@ -2918,6 +4631,34 @@ function rollbackLocalProductStateForUndo(primaryEvent) {
             reactivated_by: null,
           }
         : product,
+    );
+  }
+}
+
+function rollbackBusinessRecordForUndo(primaryEvent) {
+  if (primaryEvent.source_type === "sale" && primaryEvent.source_id) {
+    state.sales = (Array.isArray(state.sales) ? state.sales : []).filter((record) => record.id !== primaryEvent.source_id);
+    return;
+  }
+
+  if (primaryEvent.source_type === "purchase" && primaryEvent.source_id) {
+    state.purchases = (Array.isArray(state.purchases) ? state.purchases : []).filter((record) => record.id !== primaryEvent.source_id);
+  }
+}
+
+function markBusinessRecordsSynced(events) {
+  const saleIds = new Set(events.filter((event) => event.source_type === "sale").map((event) => event.source_id).filter(Boolean));
+  const purchaseIds = new Set(events.filter((event) => event.source_type === "purchase").map((event) => event.source_id).filter(Boolean));
+
+  if (saleIds.size > 0) {
+    state.sales = (Array.isArray(state.sales) ? state.sales : []).map((record) =>
+      saleIds.has(record.id) ? { ...record, status: "synced" } : record,
+    );
+  }
+
+  if (purchaseIds.size > 0) {
+    state.purchases = (Array.isArray(state.purchases) ? state.purchases : []).map((record) =>
+      purchaseIds.has(record.id) ? { ...record, status: "synced" } : record,
     );
   }
 }
@@ -3029,7 +4770,7 @@ function previewEventValidation() {
   });
 }
 
-function normalizeFormForType() {
+function normalizeFormForType({ resetTemplateDefaults = false } = {}) {
   const template = actionTemplate(state.form.type);
   const defaults = template.defaults ?? {};
   const selectableProducts = template.kind === "product-reactivate" ? getInactiveProducts() : getActiveProducts();
@@ -3040,13 +4781,25 @@ function normalizeFormForType() {
     state.form.product_id = selectableProducts[0]?.id ?? "";
   }
 
-  state.form.from_location = template.showFromLocation ? state.form.from_location || defaults.from_location || "" : "";
-  state.form.to_location = template.showToLocation ? state.form.to_location || defaults.to_location || "" : "";
-  state.form.original_event_id = template.showOriginalEvent ? state.form.original_event_id || defaults.original_event_id || "" : "";
+  state.form.from_location = template.showFromLocation
+    ? resetTemplateDefaults
+      ? defaults.from_location || ""
+      : state.form.from_location || defaults.from_location || ""
+    : "";
+  state.form.to_location = template.showToLocation
+    ? resetTemplateDefaults
+      ? defaults.to_location || ""
+      : state.form.to_location || defaults.to_location || ""
+    : "";
+  state.form.original_event_id = template.showOriginalEvent
+    ? resetTemplateDefaults
+      ? defaults.original_event_id || ""
+      : state.form.original_event_id || defaults.original_event_id || ""
+    : "";
 
   if (template.quantityEditable) {
     const parsedQuantity = Number(state.form.quantity);
-    if (!Number.isFinite(parsedQuantity) || parsedQuantity === 0) {
+    if (resetTemplateDefaults || !Number.isFinite(parsedQuantity) || parsedQuantity === 0) {
       state.form.quantity = defaults.quantity ?? 1;
     }
   } else {
@@ -3512,6 +5265,37 @@ function reactivateProductFromAction() {
 
 function getProductById(productId) {
   return getProductCatalog().find((product) => product.id === productId);
+}
+
+function getMenuById(menuId) {
+  return DEFAULT_MENUS.find((menu) => menu.id === menuId);
+}
+
+function getMenuItemById(menuItemId) {
+  return DEFAULT_MENU_ITEMS.find((item) => item.id === menuItemId);
+}
+
+function menuItemsForMenu(menuId) {
+  return DEFAULT_MENU_ITEMS.filter((item) => item.menu_id === menuId);
+}
+
+function menuItemsForClient(clientId) {
+  const menuIds = new Set(DEFAULT_MENUS.filter((menu) => menu.client_id === clientId).map((menu) => menu.id));
+  return DEFAULT_MENU_ITEMS.filter((item) => menuIds.has(item.menu_id));
+}
+
+function clientForMenuItem(menuItemId) {
+  const menuItem = getMenuItemById(menuItemId);
+  const menu = menuItem ? getMenuById(menuItem.menu_id) : null;
+  return menu ? DEFAULT_CLIENTS.find((client) => client.id === menu.client_id) : null;
+}
+
+function clientName(clientId) {
+  return DEFAULT_CLIENTS.find((client) => client.id === clientId)?.name ?? "Unknown client";
+}
+
+function supplierName(supplierId) {
+  return DEFAULT_SUPPLIERS.find((supplier) => supplier.id === supplierId)?.name ?? "Unknown supplier";
 }
 
 function productName(productId) {

@@ -243,7 +243,6 @@
 }
 
 .nav-item.is-active > span,
-.nav-item.is-active strong,
 .nav-item.is-active .icon,
 .nav-item.is-active .nav-item-title,
 .nav-item.is-active .nav-item-subtitle {
@@ -263,7 +262,7 @@
   gap: 6px;
 }
 
-.nav-item strong {
+.nav-count {
   min-width: 24px;
   padding: 3px 8px;
   border-radius: var(--radius-sm);
@@ -273,7 +272,7 @@
   font-size: 0.78rem;
 }
 
-.nav-item.is-active > strong {
+.nav-item.is-active > .nav-count {
   border-color: #ffffff;
   background: #ffffff;
   color: var(--color-primary);
@@ -490,7 +489,7 @@ button.account-popover-toggle > .mini-toggle-track.is-on {
   justify-self: center;
 }
 
-.is-sidebar-collapsed .nav-item strong {
+.is-sidebar-collapsed .nav-count {
   position: absolute;
   top: 5px;
   right: 5px;

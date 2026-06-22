@@ -39,6 +39,9 @@ export function createInventoryEvent(input) {
     device_name: input.device_name ?? input.device_id,
     product_name: input.product_name ?? input.product_id,
     reason: input.reason ?? "",
+    source_type: input.source_type ?? null,
+    source_id: input.source_id ?? null,
+    source_label: input.source_label ?? null,
     status: input.status ?? "queued",
   };
 }
@@ -159,6 +162,9 @@ export function replayAuditTrail(events) {
         sync_batch_id: event.sync_batch_id,
         idempotency_key: event.idempotency_key,
         reason: event.reason,
+        source_type: event.source_type ?? null,
+        source_id: event.source_id ?? null,
+        source_label: event.source_label ?? null,
       });
       continue;
     }
@@ -183,6 +189,9 @@ export function replayAuditTrail(events) {
         sync_batch_id: event.sync_batch_id,
         idempotency_key: event.idempotency_key,
         reason: event.reason,
+        source_type: event.source_type ?? null,
+        source_id: event.source_id ?? null,
+        source_label: event.source_label ?? null,
       });
     }
   }

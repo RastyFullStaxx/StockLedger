@@ -74,14 +74,586 @@
   color: var(--color-text-muted);
 }
 
+.business-work-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(360px, 0.88fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.business-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.business-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--color-text-muted);
+  font-size: 0.96rem;
+  font-weight: 690;
+}
+
+.business-form .field-select-wrap {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.business-form .field-select-wrap > span,
+.business-form label > span {
+  color: var(--color-primary-strong);
+  font-weight: 760;
+}
+
+.business-form .field-select-trigger {
+  min-height: 48px;
+}
+
+.business-form-note {
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+  font-weight: 680;
+}
+
+.business-form-footer {
+  grid-column: span 2;
+}
+
+.business-record-panel {
+  position: sticky;
+  top: 18px;
+}
+
+.business-record-list {
+  display: grid;
+  gap: 8px;
+}
+
+.business-record {
+  display: grid;
+  gap: 9px;
+  padding: 12px 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.business-record:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.business-record span {
+  color: var(--color-primary);
+  font-size: 0.82rem;
+  font-weight: 820;
+}
+
+.business-record strong {
+  display: block;
+  margin-top: 2px;
+}
+
+.business-record dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.business-record dt {
+  color: var(--color-text-muted);
+  font-size: 0.76rem;
+  font-weight: 780;
+}
+
+.business-record dd {
+  margin: 0;
+  color: var(--color-text);
+  font-weight: 720;
+}
+
+.relationship-grid,
+.menu-board {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.location-board {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.relationship-card,
+.menu-panel,
+.location-card {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+.relationship-card-topline {
+  display: grid;
+  gap: 4px;
+}
+
+.relationship-card-topline span,
+.menu-item-card span,
+.recipe-preview span {
+  color: var(--color-primary);
+  font-size: 0.78rem;
+  font-weight: 820;
+  text-transform: uppercase;
+}
+
+.relationship-card-topline strong {
+  color: var(--color-text);
+  font-size: 1.08rem;
+}
+
+.relationship-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.relationship-facts dt {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 780;
+}
+
+.relationship-facts dd {
+  margin: 0;
+  color: var(--color-text);
+  font-weight: 720;
+}
+
+.relationship-menu-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.relationship-menu-strip span {
+  border: 1px solid var(--color-border);
+  background: var(--color-card-muted);
+  color: var(--color-primary-strong);
+  padding: 5px 7px;
+  font-size: 0.78rem;
+  font-weight: 760;
+}
+
+.privacy-details,
+.work-queue-technical {
+  color: var(--color-text-muted);
+}
+
+.privacy-details summary {
+  cursor: pointer;
+  color: var(--color-primary-strong);
+  font-weight: 760;
+}
+
+.privacy-details p {
+  margin: 6px 0 0;
+  font-size: 0.86rem;
+}
+
+.relationship-action {
+  justify-self: start;
+}
+
+.menu-panel-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--color-text-muted);
+  font-size: 0.86rem;
+  font-weight: 720;
+}
+
+.menu-item-list {
+  display: grid;
+  gap: 8px;
+}
+
+.menu-item-card {
+  display: grid;
+  gap: 8px;
+  padding: 10px 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.menu-item-card:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.menu-item-card strong {
+  display: block;
+  margin-top: 2px;
+}
+
+.menu-item-card ul,
+.recipe-preview ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+}
+
+.menu-item-card small {
+  color: var(--color-text-muted);
+  font-weight: 680;
+}
+
+.menu-rule-panel p {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.location-balance-list {
+  display: grid;
+  gap: 7px;
+}
+
+.location-balance-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+}
+
+.location-balance-row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.location-balance-row strong {
+  color: var(--color-text);
+}
+
+.location-balance-row span {
+  color: var(--color-primary-strong);
+  font-weight: 820;
+  text-align: right;
+}
+
+.recipe-preview {
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-card-muted);
+}
+
+.recipe-preview strong {
+  color: var(--color-text);
+}
+
+.reports-workspace {
+  gap: 10px;
+}
+
+.report-board,
+.report-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.report-panel,
+.report-detail-panel {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+.report-panel p,
+.report-export-note p {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.report-row-list,
+.report-source-list,
+.review-signal-list {
+  display: grid;
+  gap: 8px;
+}
+
+.report-row,
+.report-source-row,
+.review-signal {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.report-row:first-child,
+.report-source-row:first-child,
+.review-signal:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.report-row strong,
+.report-source-row strong,
+.review-signal strong {
+  display: block;
+  color: var(--color-text);
+}
+
+.report-row span,
+.report-source-row span,
+.report-source-row small,
+.review-signal span {
+  color: var(--color-text-muted);
+  font-size: 0.84rem;
+  font-weight: 680;
+}
+
+.report-row b,
+.review-signal b {
+  color: var(--color-primary-strong);
+  font-size: 1rem;
+}
+
+.report-source-row {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.report-source-row span {
+  color: var(--color-primary);
+  font-weight: 820;
+  text-transform: uppercase;
+}
+
+.review-signal {
+  grid-template-columns: minmax(0, 1fr) auto;
+  border-left: 3px solid var(--color-info);
+  padding-left: 10px;
+}
+
+.review-signal.is-success {
+  border-left-color: var(--color-success);
+}
+
+.review-signal.is-warning {
+  border-left-color: var(--color-warning);
+}
+
+.review-signal.is-error {
+  border-left-color: var(--color-error);
+}
+
+.report-export-note {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.report-export-note h2 {
+  margin: 0 0 5px;
+}
+
+.access-grid,
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.access-panel,
+.settings-panel {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+.access-user-list,
+.role-matrix,
+.device-trust-list,
+.settings-policy-list,
+.numbering-list,
+.ci-lane-list {
+  display: grid;
+  gap: 8px;
+}
+
+.access-user-card,
+.role-matrix-row,
+.device-trust-row,
+.settings-policy-row,
+.numbering-rule,
+.ci-lane {
+  display: grid;
+  gap: 9px;
+  padding: 11px 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.access-user-card:first-child,
+.role-matrix-row:first-child,
+.device-trust-row:first-child,
+.settings-policy-row:first-child,
+.numbering-rule:first-child,
+.ci-lane:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.access-user-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.access-user-card > div:first-child span,
+.ci-lane strong,
+.numbering-rule strong {
+  color: var(--color-primary);
+  font-size: 0.8rem;
+  font-weight: 820;
+  text-transform: uppercase;
+}
+
+.access-user-card > div:first-child strong {
+  display: block;
+  margin-top: 2px;
+}
+
+.access-user-card > b,
+.settings-policy-row > b {
+  color: var(--color-primary-strong);
+}
+
+.access-user-card dl,
+.role-matrix-row dl,
+.device-trust-row dl {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.access-user-card dt,
+.role-matrix-row dt,
+.device-trust-row dt {
+  color: var(--color-text-muted);
+  font-size: 0.74rem;
+  font-weight: 780;
+}
+
+.access-user-card dd,
+.role-matrix-row dd,
+.device-trust-row dd {
+  margin: 0;
+  color: var(--color-text);
+  font-weight: 720;
+}
+
+.role-matrix-row strong,
+.device-trust-row strong,
+.settings-policy-row strong {
+  color: var(--color-text);
+}
+
+.device-trust-row {
+  border-left: 3px solid var(--color-info);
+  padding-left: 10px;
+}
+
+.device-trust-row.is-success {
+  border-left-color: var(--color-success);
+}
+
+.device-trust-row.is-warning {
+  border-left-color: var(--color-warning);
+}
+
+.device-trust-row.is-error {
+  border-left-color: var(--color-error);
+}
+
+.device-trust-row span,
+.settings-policy-row span,
+.numbering-rule span,
+.ci-lane span {
+  color: var(--color-text-muted);
+  font-size: 0.86rem;
+  font-weight: 680;
+}
+
+.settings-policy-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.settings-policy-row strong,
+.settings-policy-row span,
+.ci-lane strong,
+.ci-lane code,
+.ci-lane span {
+  display: block;
+}
+
+.numbering-rule {
+  grid-template-columns: 72px minmax(0, 1fr);
+}
+
+.numbering-rule code,
+.ci-lane code {
+  color: var(--color-primary-strong);
+  font-weight: 760;
+}
+
 @media (max-width: 900px) {
   .module-hero,
   .module-metrics,
-  .module-section-grid {
+  .module-section-grid,
+  .business-work-grid,
+  .business-form,
+  .business-record dl,
+  .relationship-grid,
+  .menu-board,
+  .location-board,
+  .relationship-facts,
+  .report-board,
+  .report-detail-grid,
+  .access-grid,
+  .settings-grid,
+  .access-user-card dl,
+  .role-matrix-row dl,
+  .device-trust-row dl {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .module-hero-actions {
     justify-content: flex-start;
+  }
+
+  .business-record-panel {
+    position: static;
+  }
+
+  .business-form-footer,
+  .business-form .form-field-span-2 {
+    grid-column: span 1;
+  }
+
+  .report-export-note {
+    display: grid;
   }
 }

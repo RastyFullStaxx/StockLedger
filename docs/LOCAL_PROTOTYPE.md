@@ -11,6 +11,13 @@ This prototype makes the StockLedger event model usable locally before the produ
 - Idempotency keys make duplicate retries safe.
 - Reconciliation creates `STOCK_ADJUSTMENT` events instead of overwriting stock.
 - Reverts create compensating `STOCK_REVERT` events while preserving original history.
+- Client menus can translate one fulfilled sale into grouped `STOCK_OUT` events from recipe lines.
+- Suppliers show products supplied, receiving history, reliability signals, and hidden commercial terms.
+- Locations show replayed stock balances, low/negative review signals, and recent location activity.
+- Reports summarize stock health, client sales, supplier receiving, movement mix, source activity, and review signals.
+- Audit trail rows keep business source labels visible while hiding batch/idempotency internals in technical details.
+- Users & Roles shows access scope, role matrix, device trust, and sensitive-access review without exposing full staff PII.
+- Settings shows tenant defaults, numbering rules, privacy guardrails, and the split CI verification lanes.
 
 ## Run Locally
 
@@ -61,7 +68,15 @@ npm run smoke:browser
 ```
 
 The unit tests cover replay, validation, atomic sync rejection, idempotency, and audit trail ordering.
-The browser smoke uses Playwright Chromium to load the local UI, check the expanded module navigation, create actions, verify Work to Send, and sync the batch.
+The browser smoke uses Playwright Chromium to load the local UI, check the expanded module navigation, verify client/supplier/menu/location/report/user/settings pages, create stock actions, post a menu-based fulfilled sale as grouped `STOCK_OUT` work, receive a purchase as `STOCK_IN`, verify Work to Send, sync the batch, and confirm source labels in Audit Trail.
+
+## CI Strategy
+
+GitHub Actions runs three lanes in parallel so failures arrive sooner:
+
+- `verify:quick` for unit tests and verification helper tests.
+- `verify:build` for production bundle checks.
+- `verify:ui` for the browser smoke against a temporary Vite server.
 
 ## Browser Runtime Note
 

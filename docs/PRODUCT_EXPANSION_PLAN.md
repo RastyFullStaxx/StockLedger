@@ -64,7 +64,7 @@ Show a scannable operations cockpit:
 - recurring orders needing confirmation
 - recent exceptions needing review
 
-Primary actions should be: `Record Sale`, `Receive Purchase`, `Use Stock`, `Create Order`, `Send Work`.
+Primary actions should be: `Record Sale`, `Receive Purchase`, `Use Stock`, `Create Order`, `Send Saved Work`.
 
 ### Sales
 
@@ -239,16 +239,15 @@ Merge or rename these concepts before implementation:
 
 ## 6. Sidebar Structure
 
-Recommended expanded sidebar:
+Current expanded sidebar:
 
 ```text
-Home
-
 Daily Work
+  Home
   Stock Overview
-  Stock Actions
   Sales
   Purchases
+  Stock Actions
 
 Relationships
   Clients
@@ -285,11 +284,15 @@ On smaller screens, collapse groups into icons and keep `Home`, `Sales`, `Purcha
 - Add placeholder pages for Sales, Purchases, Clients, Suppliers, Menus, Reports, Users & Roles, Settings.
 - Each placeholder should show the intended sections and primary actions, not a blank screen.
 
+Current prototype status: the sidebar is grouped, and those pages are now functional prototype workspaces instead of blank placeholders.
+
 ### Phase C: Sales and Purchases
 
 - Implement sale draft, sale fulfillment, purchase order, and receiving in the local prototype.
 - Fulfillment posts `STOCK_OUT`; receiving posts `STOCK_IN`.
 - Extend browser smoke to cover sale-to-stock and purchase-to-stock flows.
+
+Current prototype status: sales fulfillment and purchase receiving create queued stock events, and browser smoke covers both flows.
 
 ### Phase D: Menus and Recurring Work
 
@@ -297,11 +300,15 @@ On smaller screens, collapse groups into icons and keep `Home`, `Sales`, `Purcha
 - Implement recurring order templates and seasonal effective dates.
 - Add deterministic versioning for menu recipes used by sales.
 
+Current prototype status: client menus and recipe mappings create grouped sale fulfillment work. Production still needs explicit recipe version records.
+
 ### Phase E: Reports and Audit
 
 - Add report views by decision group.
 - Link every report row back to source business records and immutable stock events.
 - Add printable/exportable summaries after the report model stabilizes.
+
+Current prototype status: reports summarize stock health, sales by client, receiving by supplier, movement mix, source activity, and review signals; audit rows expose business source labels while technical IDs stay hidden.
 
 ### Phase F: Production CI and Backend
 

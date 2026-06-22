@@ -85,6 +85,11 @@
   transform: translateY(-1px);
 }
 
+.action-type-tab:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
 .action-type-tab.is-active {
   border-color: var(--color-primary-strong);
   background: var(--color-primary);
@@ -212,6 +217,12 @@
   cursor: pointer;
   font-size: 0.82rem;
   font-weight: 780;
+}
+
+.work-queue-technical summary:focus-visible {
+  border-radius: var(--radius-sm);
+  outline: var(--focus-ring);
+  outline-offset: 3px;
 }
 
 .work-queue-technical[open] {

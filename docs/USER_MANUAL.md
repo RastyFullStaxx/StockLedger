@@ -2,7 +2,7 @@
 
 This manual explains how to use the local StockLedger prototype.
 
-StockLedger records inventory as a history of movements. You do not type the final stock number. You record what happened, and StockLedger calculates stock from those records.
+StockLedger records inventory as a history of events. You do not type the final stock number. You record what happened, and StockLedger calculates stock from those records.
 
 This version is a browser-local prototype. It uses sample data, saves demo work in your browser, and simulates online sync. It is not the production NestJS, PostgreSQL, Electron, or SQLite system yet.
 
@@ -43,6 +43,8 @@ Record what happened:
 
 StockLedger keeps every movement in history. This makes stock numbers explainable, because the system can show how each balance was created.
 
+Sales, purchases, menus, clients, suppliers, users, and settings sit around that ledger. They can explain why stock moved, but stock quantity still comes only from replayed inventory events.
+
 ## 3. First Things to Check
 
 Start on `Home` or `Stock Overview`.
@@ -53,21 +55,31 @@ Check these items first:
 2. `Low Stock`
 3. `Total Stock`
 4. `By Location`
-5. `Audit`
+5. `Recent Activity`
+6. `Reports`
 
 Use the `Guide` button in the top bar when you need a short hint for the current screen.
 
 ## 4. Navigation
 
-The left sidebar opens the main screens:
+The left sidebar is grouped by how people work.
 
-| Screen | Use it for |
-| --- | --- |
-| `Home` | Quick start, recent activity, and shortcuts |
-| `Stock Overview` | Current calculated stock totals |
-| `Stock Actions` | Prepare stock work, product work, and send saved work |
-| `Products` | Review active and inactive products |
-| `Audit` | Check history and explain stock numbers |
+| Group | Screen | Use it for |
+| --- | --- | --- |
+| Daily Work | `Home` | Quick start, recent activity, and shortcuts |
+| Daily Work | `Stock Overview` | Current calculated stock totals |
+| Daily Work | `Sales` | Fulfill client sales, recurring orders, and seasonal transactions |
+| Daily Work | `Purchases` | Receive supplier deliveries and create stock-in work |
+| Daily Work | `Stock Actions` | Prepare manual stock work, product work, corrections, and send saved work |
+| Relationships | `Clients` | Customer records, default menus, order patterns, and hidden contact details |
+| Relationships | `Suppliers` | Supplier records, supplied products, receiving history, and hidden terms |
+| Relationships | `Menus` | Client menus and recipe lines that become stock deductions when fulfilled |
+| Relationships | `Products` | Catalog review for active and inactive products |
+| Relationships | `Locations` | Storage, service, and prep locations with replayed balances |
+| Control | `Reports` | Stock, sales, purchasing, movement, source, and review summaries |
+| Control | `Audit Trail` | Immutable event history and reverse-record workflow |
+| Control | `Users & Roles` | Staff access, role matrix, trusted devices, and sensitive-access review |
+| Control | `Settings` | Tenant defaults, numbering, privacy guardrails, and CI lanes |
 
 The top account menu shows whether the prototype is `Online` or `Offline`.
 
@@ -81,10 +93,8 @@ It shows:
 
 - current stock status
 - recent movements
-- a shortcut to `Stock Actions`
-- a shortcut to `Stock Overview`
-- a shortcut to `Audit`
-- a shortcut to `Products`
+- shortcuts to sales, purchases, reports, stock actions, audit trail, and products
+- waiting work that should be sent
 
 If work is waiting to send, open `Stock Actions` and review `Work to Send`.
 
@@ -114,19 +124,53 @@ Filters can narrow the list by product, location, or search text.
 
 A product is marked `Low Stock` when its replayed balance is at or below its configured low-stock threshold.
 
-## 7. Stock Actions
+## 7. Sales
 
-Use `Stock Actions` to prepare work.
+Use `Sales` when stock leaves because a client order was fulfilled.
+
+Sales are order-first:
+
+- Draft sale information does not change stock.
+- Fulfillment creates one or more `STOCK_OUT` events.
+- Menu sales expand into grouped stock work from recipe lines.
+- Direct stock sales create one stock-out line.
+
+The page includes:
+
+- client selection
+- sale type: one-time, recurring, or seasonal
+- menu-item or direct-stock mode
+- fulfillment location
+- quantity and notes
+- recent sales records
+
+Use `Fulfill Sale` when the sale is ready to affect stock. The created stock work waits in `Work to Send` until sent.
+
+## 8. Purchases
+
+Use `Purchases` when supplier stock arrives.
+
+Purchases separate ordering from receiving:
+
+- A purchase plan does not change stock.
+- Receiving creates `STOCK_IN` work.
+- Supplier, product, quantity, location, and notes stay linked to the stock event.
+
+Use `Receive Purchase` after checking what actually arrived. The stock-in work waits in `Work to Send` until sent.
+
+## 9. Stock Actions
+
+Use `Stock Actions` for manual stock work, product lifecycle work, corrections, and sending saved work.
 
 The left side is the action form. The right side is `Work to Send`.
 
-Choose an action type, fill in the required fields, write a reason, then click `Save Action`.
+Choose the action type from the action tabs, fill in the required fields, write a reason, then click `Save Action`.
 
 Saved work stays in `Work to Send` until you send it.
 
 Important: saved work is sent as one batch. If one saved item has a validation problem, the whole batch is rejected so the history stays consistent.
 
-## 8. Action Types
+## 10. Action Types
 
 ### Stock In
 
@@ -173,7 +217,7 @@ Choose:
 
 The source and destination must be different.
 
-### Correct Stock Count
+### Correct Count
 
 Use this when a hand count does not match the system count.
 
@@ -181,7 +225,7 @@ Choose the product and count location. Enter the number you physically counted. 
 
 This does not overwrite history. It adds a new correction movement.
 
-### Reverse a Record
+### Reverse
 
 Use this when one previous movement was wrong.
 
@@ -189,7 +233,7 @@ Choose the original movement. StockLedger creates a new reversing movement.
 
 The original record is not deleted.
 
-### Enroll Product
+### Enroll
 
 Use this when a product should be added to the catalog.
 
@@ -197,7 +241,7 @@ Enter the product name, category, unit, low-stock threshold, and reason.
 
 After saving, the product appears locally and the enrollment waits in `Work to Send`.
 
-### Suspend Product
+### Suspend
 
 Use this when a product should stop appearing in normal stock actions.
 
@@ -205,23 +249,37 @@ If the product still has stock, StockLedger prepares closure work so the remaini
 
 Suspension work waits in `Work to Send` until it is sent.
 
-### Reactivate Product
+### Reactivate
 
 Use this when a suspended product should be selectable again.
 
 Reactivation does not create stock movement. It only returns the product to active use.
 
-## 9. Work to Send
+## 11. Work to Send
 
 `Work to Send` is the local queue of saved work that has not been sent yet.
 
-Each saved item shows its action, product, location, quantity, and validation status.
+Each review card shows the operator fields first:
 
-You can remove an unsent item from `Work to Send`.
+- sequence number
+- action
+- product or source label
+- location
+- amount
+- `Undo`
 
-After work has been sent, do not delete or edit it. Use `Reverse a Record` or `Correct Stock Count`.
+Technical fields are hidden under `Technical details`:
 
-## 10. Send Saved Work
+- batch or idempotency detail
+- validation status
+- event count
+- source detail when available
+
+Valid cards do not show a `Ready` badge on the main card. If a row is not valid, the validation problem is shown on the card.
+
+Grouped work stays grouped. For example, suspending a product with stock can show `Grouped work: 3 events`.
+
+## 12. Send Saved Work
 
 To send saved work:
 
@@ -237,7 +295,7 @@ If sending fails, read the message on screen. Fix or remove the invalid unsent i
 
 Duplicate movements are ignored safely by the simulated sync engine.
 
-## 11. Offline Work
+## 13. Offline Work
 
 The prototype starts in `Offline` mode.
 
@@ -254,7 +312,58 @@ When online:
 - the whole batch succeeds or fails together
 - duplicate work is handled by idempotency checks
 
-## 12. Products
+## 14. Clients
+
+Use `Clients` for customers or buyers, not StockLedger tenant administration.
+
+Client cards show:
+
+- segment
+- default menu
+- order pattern
+- next order
+- fulfilled local sales count
+- menu items
+
+Private contact details are hidden in a `Private contact` details block. Reveal them only for roles that need customer contact information.
+
+Use `Fulfill Sale` from a client card when you want to start a sale using that client's default menu.
+
+## 15. Suppliers
+
+Use `Suppliers` for purchasing relationships and receiving follow-up.
+
+Supplier cards show:
+
+- reliability
+- delivery cadence
+- last delivery
+- received count
+- stock-in event count
+- supplied products
+
+Commercial terms are hidden under `Sensitive terms`.
+
+Use `Receive Purchase` from a supplier card when a delivery should become stock-in work.
+
+## 16. Menus
+
+Use `Menus` to connect sellable items to stock products.
+
+Menus show:
+
+- client menu name
+- menu status
+- recurring or seasonal cadence
+- menu items
+- recipe lines
+- fulfillment location
+
+Menu setup does not move stock. A fulfilled menu sale creates grouped `STOCK_OUT` events from the recipe lines.
+
+Use `Fulfill in Sales` from a menu item to open a sale already prepared with that item.
+
+## 17. Products
 
 Use `Products` to review the catalog.
 
@@ -269,25 +378,88 @@ The screen has:
 
 Create, suspend, and reactivate products from `Stock Actions`. Product changes use the same queue and sync rules as stock movements.
 
-## 13. Audit
+## 18. Locations
 
-Use `Audit` when a stock number needs explaining.
+Use `Locations` to review storage, service, and prep areas.
 
-The audit table shows:
+Location cards show:
+
+- location kind
+- owner
+- status
+- stocked rows
+- balances by product
+- review signals
+- recent activity in a details block
+
+Location stock is still replayed from events. Locations do not store final stock totals directly.
+
+## 19. Reports
+
+Use `Reports` when you need a decision-focused view instead of a raw event list.
+
+Reports currently show:
+
+- `Stock Health`
+- `Sales by Client`
+- `Receiving by Supplier`
+- `Stock Movement Mix`
+- `Recent Source Activity`
+- `Review Signals`
+- `Export Boundary`
+
+Reports avoid private contact details and supplier terms by default.
+
+Before exporting final reports in production, the system should require role checks, a reason, device/user audit logging, and scoped filters.
+
+## 20. Audit Trail
+
+Use `Audit Trail` when a stock number needs explaining.
+
+The audit view shows:
 
 - action type
 - product
+- source document such as sale, purchase, menu sale, manual action, or correction
 - location
 - quantity change
 - new balance
 - person
 - device
-- batch reference
 - reason
 
-If a movement was wrong, choose `Prepare reverse record` from the audit row. This opens `Stock Actions` with `Reverse a Record` selected. Review the reversal and write a reason before saving it.
+Batch IDs and validation internals stay hidden in `Technical details`.
 
-## 14. Good Reasons to Write
+If a movement was wrong, choose `Prepare reverse record` from the audit row. This opens `Stock Actions` with `Reverse` selected. Review the reversal and write a reason before saving it.
+
+## 21. Users & Roles
+
+Use `Users & Roles` to review access, not to edit historical records.
+
+The page shows:
+
+- staff access
+- role matrix
+- device trust
+- access review signals
+
+Private staff details are hidden by default. Role changes, invite changes, and device trust changes should create audit records in production.
+
+## 22. Settings
+
+Use `Settings` for tenant-level defaults and operational policies.
+
+The page shows:
+
+- tenant defaults
+- numbering rules
+- CI lanes
+- privacy guardrails
+- pipeline strategy
+
+Settings should not rewrite historical events. If a default changes, future work can use the new default, but old records remain explainable from the event history.
+
+## 23. Good Reasons to Write
 
 Reasons should be short and clear.
 
@@ -300,6 +472,8 @@ Moved to Main Bar for opening
 Physical count difference
 Wrong product selected
 Seasonal product suspended
+Sunfold menu sale fulfilled
+Coastal delivery received
 ```
 
 Avoid vague reasons:
@@ -311,45 +485,49 @@ adjusted
 fixed
 ```
 
-## 15. If You Make a Mistake
+## 24. If You Make a Mistake
 
 Do not delete history.
 
 Use one of these:
 
-- `Reverse a Record` if one old movement was wrong.
-- `Correct Stock Count` if the current stock does not match a hand count.
+- `Reverse` if one old movement was wrong.
+- `Correct Count` if the current stock does not match a hand count.
 - Remove the item from `Work to Send` if it has not been sent yet.
 
 This keeps the audit trail honest.
 
-## 16. Daily Work Pattern
+## 25. Daily Work Pattern
 
 Use this simple order:
 
 1. Open `Home`.
 2. Check `Waiting to Send`.
-3. Open `Stock Overview`.
-4. Check `Total Stock` or `By Location`.
-5. Open `Stock Actions`.
-6. Prepare stock or product work.
+3. Open `Sales` for client orders that need fulfillment.
+4. Open `Purchases` for deliveries that arrived.
+5. Open `Stock Overview` for replayed balances.
+6. Open `Stock Actions` for manual stock work, product work, corrections, or sending.
 7. Review `Work to Send`.
 8. Switch to `Online`.
 9. Click `Send Saved Work`.
-10. Use `Audit` if a number needs explaining.
+10. Use `Reports` for summaries.
+11. Use `Audit Trail` if a number needs explaining.
 
-## 17. Troubleshooting
+## 26. Troubleshooting
 
 | Problem | What to do |
 | --- | --- |
 | `Send Saved Work` says you are offline | Open the account menu and switch to `Online` |
 | A batch is rejected | Review `Work to Send`, fix or remove the invalid item, then send again |
 | A product is missing from stock actions | Check `Products`; it may be inactive |
-| A stock number looks wrong | Open `Audit` and review the movement history |
-| You entered the wrong movement | Use `Reverse a Record` after sync, or remove it from `Work to Send` before sync |
+| A stock number looks wrong | Open `Audit Trail` and review the movement history |
+| You entered the wrong movement | Use `Reverse` after sync, or remove it from `Work to Send` before sync |
+| A sale did not change stock | Confirm it was fulfilled, then check `Work to Send` |
+| A purchase did not change stock | Confirm it was received, then check `Work to Send` |
+| A client contact or supplier term is hidden | Open the matching details block only if your role needs it |
 | You want the original sample data back | Use `Reset Demo` in the account menu |
 
-## 18. Words Used in the System
+## 27. Words Used in the System
 
 | Word | Meaning |
 | --- | --- |
@@ -358,12 +536,17 @@ Use this simple order:
 | Replay | Recalculating stock from event history |
 | Work to Send | Work saved in this browser and waiting to send |
 | Batch | A group of saved work sent together |
-| Audit | The history used to explain stock numbers |
+| Audit Trail | The history used to explain stock numbers |
 | Correction | A new movement that fixes a count difference |
 | Reverse | A new movement that cancels an earlier mistake |
+| Sale | A client-facing business record that can create stock-out events when fulfilled |
+| Purchase | A supplier-facing business record that can create stock-in events when received |
+| Menu | A sellable client item or bundle mapped to stock-product recipe lines |
+| Client | A customer or buyer |
+| Tenant | The StockLedger subscriber/business using the system |
 | Idempotency | A duplicate-safety check that prevents the same work from being processed twice |
 
-## 19. Prototype Boundary
+## 28. Prototype Boundary
 
 This local prototype is for testing the StockLedger workflow.
 
@@ -375,21 +558,30 @@ It does prove:
 - sync can reject a whole invalid batch
 - duplicate sends can be handled safely
 - mistakes are fixed with new records
+- sales can create stock-out work
+- purchases can create stock-in work
+- menu sales can create grouped stock work
+- reports and audit views can link stock changes back to business source records
+- sensitive contact, staff, and supplier details can stay hidden by default
 
 It does not yet include:
 
 - real NestJS API endpoints
 - PostgreSQL master and tenant databases
 - Prisma migrations
-- real authentication or RBAC
+- real authentication or RBAC enforcement
 - Electron SQLite storage
 - production tenant isolation
+- production report exports
 
-## 20. Remember
+## 29. Remember
 
 - Record what happened.
 - Do not overwrite final stock.
+- Fulfill sales only when they should deduct stock.
+- Receive purchases only when stock actually arrived.
 - Review `Work to Send` before sending.
 - Send work when online.
 - Fix mistakes with a new movement.
-- Use `Audit` when a number needs explaining.
+- Use `Reports` for summaries.
+- Use `Audit Trail` when a number needs explaining.
