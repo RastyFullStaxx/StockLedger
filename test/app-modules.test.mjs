@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { validateEvent } from "../src/domain/ledger.mjs";
+import { createInventoryEvent, validateEvent } from "../src/domain/ledger.mjs";
 import {
   DEFAULT_CLIENTS,
   DEFAULT_MENUS,
@@ -9,6 +9,8 @@ import {
   DEFAULT_PRODUCTS,
   DEFAULT_SUPPLIERS,
   DEFAULT_USERS,
+  NUMBERING_RULES,
+  SETTINGS_POLICIES,
   defaultProducts,
   defaultState,
   saleModeLabels,
@@ -34,6 +36,17 @@ import {
 } from "../src/inventory/selectors.mjs";
 import { answerAssistantQuestion, createAssistantGreeting } from "../src/assistant/assistant-engine.mjs";
 import {
+  answerAssistantQuestion as answerAssistantQuestionFromPanel,
+  assistantMessagesForRender,
+  buildGuideNotifications,
+  createAssistantContext,
+  createAssistantGreetingMessage,
+  guideCueCount,
+  pageActions,
+  renderAssistantMenu,
+  renderStockyIcon,
+} from "../src/assistant/assistant-panel.mjs";
+import {
   appendStockActionBusinessRecord,
   markStockActionBusinessRecordsSynced,
   removeStockActionBusinessRecordForUndo,
@@ -44,6 +57,20 @@ import {
   physicalCountVariance,
   quantityForProduct,
 } from "../src/stock-actions/event-builder.mjs";
+import {
+  PRODUCT_DEACTIVATION_REASON,
+  applyProductReactivation,
+  applyProductSuspension,
+  buildProductReactivationWork,
+  buildProductSuspensionWork,
+  formatDeactivationClosures,
+  formatMultiProductDeactivationClosures,
+  hasPendingProductClosureDebt,
+  nextProductId,
+  normalizeClosureQuantity,
+  productDeactivationClosures,
+  productLastStateLabel,
+} from "../src/stock-actions/product-lifecycle.mjs";
 import { buildStockActionSourceDetails } from "../src/stock-actions/source-details.mjs";
 import { buildWorkQueueItems } from "../src/stock-actions/work-queue.mjs";
 import {
@@ -540,6 +567,131 @@ test("stock action business records append, rollback, and sync linked source rec
   assert.equal(withoutSale.purchases.length, 1);
 });
 
+test("product lifecycle module builds closure work and catalog state without app rendering", () => {
+  const product = {
+    id: "prod-test-syrup",
+    name: "Test Syrup",
+    category: "Mixer",
+    unit: "bottle",
+    low: 1,
+    is_active: true,
+  };
+  const events = [
+    createInventoryEvent({
+      ...tenant,
+      event_id: "event-test-in-main",
+      idempotency_key: "idem-test-in-main",
+      sync_batch_id: "batch-test",
+      type: "STOCK_IN",
+      product_id: product.id,
+      product_name: product.name,
+      to_location: "Main Bar",
+      quantity: 5,
+      sequence_number: 1,
+      timestamp: 1710000000000,
+    }),
+    createInventoryEvent({
+      ...tenant,
+      event_id: "event-test-out-main",
+      idempotency_key: "idem-test-out-main",
+      sync_batch_id: "batch-test",
+      type: "STOCK_OUT",
+      product_id: product.id,
+      product_name: product.name,
+      from_location: "Main Bar",
+      quantity: 2,
+      sequence_number: 2,
+      timestamp: 1710000001000,
+    }),
+    createInventoryEvent({
+      ...tenant,
+      event_id: "event-test-in-cellar",
+      idempotency_key: "idem-test-in-cellar",
+      sync_batch_id: "batch-test",
+      type: "STOCK_IN",
+      product_id: product.id,
+      product_name: product.name,
+      to_location: "Cellar",
+      quantity: 1.5,
+      sequence_number: 3,
+      timestamp: 1710000002000,
+    }),
+  ];
+  const closures = productDeactivationClosures(product, events);
+
+  assert.deepEqual(closures, [
+    { location: "Main Bar", balance: 3, closureQuantity: -3 },
+    { location: "Cellar", balance: 1.5, closureQuantity: -1.5 },
+  ]);
+  assert.equal(formatDeactivationClosures(closures, { formatQuantity }), "Main Bar: +3 | Cellar: +1.5");
+  assert.equal(
+    formatMultiProductDeactivationClosures([product], { events, formatQuantity }),
+    "Test Syrup: Main Bar: +3 | Cellar: +1.5",
+  );
+  assert.equal(nextProductId("Test Syrup", [{ id: "prod-test-syrup" }]), "prod-test-syrup-1");
+  assert.equal(normalizeClosureQuantity(0.00000001), 0);
+
+  let idIndex = 0;
+  const suspensionEvents = buildProductSuspensionWork([product], events, {
+    tenant,
+    reason: "Season ended",
+    nextId: (prefix) => `${prefix}-${++idIndex}`,
+    currentBatchId: () => "batch-lifecycle",
+    nextSequence: () => 20,
+    now: () => Date.parse("2026-06-23T00:00:00Z"),
+  });
+
+  assert.deepEqual(
+    suspensionEvents.map((event) => [event.type, event.sequence_number, event.work_item_id]),
+    [
+      ["PRODUCT_DEACTIVATED", 20, "work-product-suspended-1"],
+      ["STOCK_ADJUSTMENT", 21, "work-product-suspended-1"],
+      ["STOCK_ADJUSTMENT", 22, "work-product-suspended-1"],
+    ],
+  );
+  assert.equal(suspensionEvents.every((event) => validateEvent(event).valid), true);
+  assert.equal(suspensionEvents[1].reason, PRODUCT_DEACTIVATION_REASON);
+  assert.equal(hasPendingProductClosureDebt(suspensionEvents, product.id), true);
+
+  const suspendedCatalog = applyProductSuspension([product], [product], {
+    reason: "Season ended",
+    tenant,
+    now: () => Date.parse("2026-06-23T00:00:00Z"),
+  });
+  assert.equal(suspendedCatalog[0].is_active, false);
+  assert.equal(suspendedCatalog[0].deactivated_reason, "Season ended");
+  assert.equal(
+    productLastStateLabel(suspendedCatalog[0], { displayDateTime: () => "Jun 23" }),
+    `Suspended Jun 23 by ${tenant.user_id}. Season ended`,
+  );
+
+  idIndex = 0;
+  const reactivationEvents = buildProductReactivationWork(suspendedCatalog, {
+    tenant,
+    reason: "Back on menu",
+    nextId: (prefix) => `${prefix}-${++idIndex}`,
+    currentBatchId: () => "batch-reactivate",
+    nextSequence: () => 40,
+    now: () => Date.parse("2026-06-24T00:00:00Z"),
+  });
+  assert.deepEqual(
+    reactivationEvents.map((event) => [event.type, event.sequence_number, event.work_item_id]),
+    [["PRODUCT_REACTIVATED", 40, "work-product-reactivated-3"]],
+  );
+  assert.equal(reactivationEvents.every((event) => validateEvent(event).valid), true);
+
+  const reactivatedCatalog = applyProductReactivation(suspendedCatalog, suspendedCatalog, {
+    tenant,
+    now: () => Date.parse("2026-06-24T00:00:00Z"),
+  });
+  assert.equal(reactivatedCatalog[0].is_active, true);
+  assert.equal(reactivatedCatalog[0].reactivated_by, tenant.user_id);
+  assert.equal(
+    productLastStateLabel(reactivatedCatalog[0], { displayDateTime: () => "Jun 24" }),
+    `Reactivated Jun 24 by ${tenant.user_id}`,
+  );
+});
+
 test("assistant engine answers StockLedger questions and redirects out-of-scope prompts", () => {
   const state = defaultState();
   const events = allLocalEvents(state);
@@ -578,6 +730,82 @@ test("assistant engine answers StockLedger questions and redirects out-of-scope 
   assert.match(answerAssistantQuestion("What actions can I use?", context).text, /Stock Actions can queue/);
   assert.match(answerAssistantQuestion("Who won the basketball game?", context).text, /I.m Stocky/);
 });
+
+test("assistant panel module builds notifications, context, and Stocky markup without app rendering", () => {
+  const state = {
+    ...defaultState(),
+    activeView: "compose",
+    online: false,
+    outbox: [{ event_id: "event-waiting" }],
+    assistantInput: "<check>",
+    assistantMessages: [],
+  };
+  const stockRows = [
+    { product_id: "prod-lime", product_name: "Fresh Lime", location: "Main Bar", quantity: 0 },
+    { product_id: "prod-rum", product_name: "Harbor Rum", location: "Dry Store", quantity: -1 },
+  ];
+  const productUnitForTest = (productId) => state.products.find((product) => product.id === productId)?.unit ?? "unit";
+  const productLowForTest = (productId) => state.products.find((product) => product.id === productId)?.low ?? 0;
+  const notifications = buildGuideNotifications({
+    state,
+    stockRows,
+    productLow: productLowForTest,
+    productUnit: productUnitForTest,
+    formatQuantity,
+  });
+
+  assert.equal(guideCueCount(notifications), 3);
+  assert.deepEqual(pageActions("compose").map((action) => action.view), ["dashboard", "audit"]);
+  assert.match(renderStockyIcon("stocky-avatar-test"), /stocky\.svg/);
+
+  let id = 0;
+  const context = createAssistantContext({
+    state,
+    screenMeta,
+    actionTemplates: ACTION_TEMPLATES,
+    eventLabels,
+    guideTipsForView: () => ["Choose the action that matches the real stock movement."],
+    notifications: () => notifications,
+    stockRows: () => stockRows,
+    stockTotals: () => [{ product_id: "prod-lime", product_name: "Fresh Lime", quantity: 0, location_count: 1 }],
+    products: state.products,
+    locations: state.locations,
+    clients: DEFAULT_CLIENTS,
+    suppliers: DEFAULT_SUPPLIERS,
+    menuItems: DEFAULT_MENU_ITEMS,
+    menus: DEFAULT_MENUS,
+    sales: state.sales,
+    purchases: state.purchases,
+    users: DEFAULT_USERS,
+    settingsPolicies: SETTINGS_POLICIES,
+    numberingRules: NUMBERING_RULES,
+    productUnit: productUnitForTest,
+    productLow: productLowForTest,
+    productName: (productId) => state.products.find((product) => product.id === productId)?.name ?? productId,
+    clientName: (clientId) => DEFAULT_CLIENTS.find((client) => client.id === clientId)?.name ?? clientId,
+    supplierName: (supplierId) => DEFAULT_SUPPLIERS.find((supplier) => supplier.id === supplierId)?.name ?? supplierId,
+    outbox: state.outbox,
+    workItems: () => [],
+    validations: () => [{ valid: true }],
+    formatQuantity,
+  });
+  const greeting = createAssistantGreetingMessage(context, (prefix) => `${prefix}-${++id}`);
+  const messages = assistantMessagesForRender(state, () => greeting);
+  const html = renderAssistantMenu({
+    state,
+    meta: screenMeta.compose,
+    messages,
+    icon: (name) => `<i>${name}</i>`,
+  });
+
+  assert.equal(context.activeView, "compose");
+  assert.match(answerAssistantQuestionFromPanel("what is this page", context).text, /Stock Actions/);
+  assert.match(greeting.text, /Hi, I.m Stocky/);
+  assert.match(html, /Stocky Assistant/);
+  assert.match(html, /stocky\.svg/);
+  assert.match(html, /&lt;check&gt;/);
+}
+);
 
 test("stock action work queue groups related events into operator-facing items", () => {
   const state = defaultState();

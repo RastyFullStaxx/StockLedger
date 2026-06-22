@@ -10,7 +10,12 @@
 .work-queue-panel {
   position: sticky;
   top: 18px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   padding: 16px;
+  height: calc(100dvh - 140px);
+  min-height: 520px;
+  overflow: hidden;
 }
 
 .work-queue-header {
@@ -278,8 +283,10 @@
 
 .work-queue-list {
   display: grid;
+  align-content: start;
   gap: 8px;
-  max-height: clamp(280px, calc(100dvh - 260px), 680px);
+  min-height: 0;
+  max-height: none;
   overflow: auto;
   padding-right: 4px;
   scrollbar-width: thin;
@@ -521,6 +528,9 @@
 
   .work-queue-panel {
     position: static;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
   }
 
   .work-queue-header,

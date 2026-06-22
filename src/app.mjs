@@ -1,6 +1,5 @@
 import {
   applySyncBatch,
-  computeStock,
   createInventoryEvent,
   replayAuditTrail,
   sortEvents,
@@ -64,8 +63,14 @@ import {
 } from "./inventory/selectors.mjs";
 import {
   answerAssistantQuestion as answerAssistantQuestionFromContext,
-  createAssistantGreeting as createAssistantGreetingFromContext,
-} from "./assistant/assistant-engine.mjs";
+  assistantMessagesForRender as assistantMessagesForRenderFromPanel,
+  buildGuideNotifications,
+  createAssistantContext,
+  createAssistantGreetingMessage,
+  guideCueCount as countGuideCues,
+  renderAssistantMenu,
+  renderStockyIcon,
+} from "./assistant/assistant-panel.mjs";
 import {
   appendStockActionBusinessRecord,
   markStockActionBusinessRecordsSynced,
@@ -77,6 +82,19 @@ import {
   physicalCountVariance as selectPhysicalCountVariance,
   quantityForProduct as selectQuantityForProduct,
 } from "./stock-actions/event-builder.mjs";
+import {
+  PRODUCT_EVENT_PREFIX,
+  applyProductReactivation,
+  applyProductSuspension,
+  buildProductReactivationWork,
+  buildProductSuspensionWork,
+  formatDeactivationClosures as formatLifecycleClosures,
+  formatMultiProductDeactivationClosures as formatLifecycleMultiProductClosures,
+  hasPendingProductClosureDebt as selectHasPendingProductClosureDebt,
+  nextProductId,
+  productDeactivationClosures,
+  productLastStateLabel as selectProductLastStateLabel,
+} from "./stock-actions/product-lifecycle.mjs";
 import { buildWorkQueueItems } from "./stock-actions/work-queue.mjs";
 import {
   clientSalesReportRows,
@@ -96,9 +114,6 @@ import {
 
 import "./styles.css";
 
-const PRODUCT_DEACTIVATE_EPSILON = 0.0001;
-const PRODUCT_DEACTIVATION_REASON = "Product deactivated; balances auto-closed by system";
-const PRODUCT_EVENT_PREFIX = "PRODUCT_";
 const ACTION_EVENT_TYPES = [
   "STOCK_OUT",
   "STOCK_IN",
@@ -203,10 +218,10 @@ function renderSidebar() {
         ${
           state.sidebarCollapsed
             ? `<button class="brand-mark brand-mark-toggle" data-action="toggle-sidebar" type="button" aria-label="Expand Sidebar" aria-pressed="true">
-                <img class="brand-logo" src="/logo.svg" alt="" />
+                <img class="brand-logo" src="/logo-white.svg" alt="" />
                 <span class="brand-mark-icon" aria-hidden="true">${icon("panelOpen")}</span>
               </button>`
-            : `<div class="brand-mark" aria-hidden="true"><img src="/logo.svg" alt="" /></div>`
+            : `<div class="brand-mark" aria-hidden="true"><img src="/logo-white.svg" alt="" /></div>`
         }
         <div class="brand-copy">
           <p class="brand-name"><span>Stock</span><span>Ledger</span></p>
@@ -290,7 +305,7 @@ function renderTopbar() {
         ${renderTopbarPrimaryAction()}
         <span class="guide-anchor">
           <button class="button button-secondary guide-button ${state.guideOpen ? "is-open" : ""}" data-action="toggle-guide" type="button" aria-expanded="${state.guideOpen}">
-            ${icon("spark")}
+            ${renderStockyIcon("stocky-avatar stocky-avatar-button")}
             Stocky
             ${guideCue ? `<span class="cue-badge">${guideCue}</span>` : `<span class="cue-dot" aria-hidden="true"></span>`}
           </button>
@@ -358,115 +373,32 @@ function renderLocationModal() {
 }
 
 function guideCueCount() {
-  return guideNotifications().length;
+  return countGuideCues(guideNotifications());
 }
 
 function guideNotifications() {
-  const stockRows = filteredStockRows(allLocalEvents());
-  const lowRows = stockRows.filter((row) => row.quantity >= 0 && row.quantity <= productLow(row.product_id));
-  const negativeRows = stockRows.filter((row) => row.quantity < 0);
-  const notifications = [];
-
-  if (state.outbox.length > 0) {
-    notifications.push({
-      tone: state.online ? "success" : "warning",
-      title: `${state.outbox.length} Work Item${state.outbox.length === 1 ? "" : "s"} Waiting`,
-      text: state.online ? "Send saved work now." : "Work is safe locally. Go online to send it.",
-    });
-  }
-
-  negativeRows.forEach((row) => {
-    notifications.push({
-      tone: "error",
-      title: `${row.product_name} Needs Review`,
-      text: `${row.location} is below zero. Check history before reporting.`,
-    });
+  return buildGuideNotifications({
+    state,
+    stockRows: filteredStockRows(allLocalEvents()),
+    productLow,
+    productUnit,
+    formatQuantity,
   });
-
-  lowRows.slice(0, 6).forEach((row) => {
-    notifications.push({
-      tone: row.quantity === 0 ? "error" : "warning",
-      title: `${row.product_name} Needs Restock`,
-      text: `${row.location}: ${formatQuantity(row.quantity)} ${productUnit(row.product_id)} left.`,
-    });
-  });
-
-  if (notifications.length === 0) {
-    notifications.push({
-      tone: "success",
-      title: "No Urgent Notifications",
-      text: "Stock levels and saved work look clear right now.",
-    });
-  }
-
-  return notifications;
 }
 
 function renderGuideMenu() {
   const meta = screenMeta[state.activeView] ?? screenMeta.dashboard;
   const messages = assistantMessagesForRender();
 
-  return `
-    <div class="guide-menu assistant-menu" role="dialog" aria-label="Stocky Assistant">
-      <div class="guide-menu-header">
-        <div>
-          <span>Stocky</span>
-          <strong>${meta.title}</strong>
-        </div>
-        <button class="icon-button" data-action="toggle-guide" type="button" aria-label="Close Stocky">${icon("close")}</button>
-      </div>
-      <div class="assistant-feed" aria-live="polite">
-        ${messages.map(renderAssistantMessage).join("")}
-      </div>
-      <form class="assistant-form" data-form="assistant">
-        <label class="assistant-input-label">
-          <span>Ask about StockLedger</span>
-          <textarea name="assistant-question" rows="2" placeholder="Ask Stocky about inventory, actions, saved work, audit, reports, or what to do next.">${escapeHtml(state.assistantInput ?? "")}</textarea>
-        </label>
-        <button class="button button-primary" type="submit">${icon("send")}Send</button>
-      </form>
-    </div>
-  `;
+  return renderAssistantMenu({ state, meta, messages, icon });
 }
 
 function assistantMessagesForRender() {
-  if (Array.isArray(state.assistantMessages) && state.assistantMessages.length > 0) {
-    return state.assistantMessages;
-  }
-
-  return [createAssistantGreeting()];
+  return assistantMessagesForRenderFromPanel(state, createAssistantGreeting);
 }
 
 function createAssistantGreeting() {
-  const greeting = createAssistantGreetingFromContext(assistantContext());
-
-  return {
-    id: nextId("assistant"),
-    role: "assistant",
-    ...greeting,
-  };
-}
-
-function renderAssistantMessage(message) {
-  const role = message.role === "user" ? "user" : "assistant";
-  const actions = Array.isArray(message.actions) ? message.actions : [];
-  return `
-    <article class="assistant-message is-${role}">
-      <span>${role === "user" ? "You" : "Stocky"}</span>
-      <p>${formatAssistantText(message.text)}</p>
-      ${
-        actions.length
-          ? `<div class="assistant-message-actions">
-              ${actions.map((action) => `<button class="table-action" data-view="${escapeAttr(action.view)}" type="button">${escapeHtml(action.label)}</button>`).join("")}
-            </div>`
-          : ""
-      }
-    </article>
-  `;
-}
-
-function formatAssistantText(text) {
-  return escapeHtml(text).replace(/\n/g, "<br />");
+  return createAssistantGreetingMessage(assistantContext(), nextId);
 }
 
 function submitAssistantQuestion(rawQuestion) {
@@ -498,14 +430,13 @@ function answerAssistantQuestion(question) {
 }
 
 function assistantContext() {
-  return {
-    activeView: state.activeView,
+  return createAssistantContext({
+    state,
     screenMeta,
     actionTemplates: ACTION_TEMPLATES,
     eventLabels,
     guideTipsForView,
     notifications: guideNotifications,
-    pageActions,
     stockRows: () => filteredStockRows(allLocalEvents()),
     stockTotals: (rows) => stockTotalRows(rows),
     products: getProductCatalog(),
@@ -531,18 +462,7 @@ function assistantContext() {
     },
     validations: () => state.outbox.map((event) => validateEvent(event)),
     formatQuantity,
-  };
-}
-
-function pageActions(view) {
-  if (view === "home") return [{ label: "Open Stock Overview", view: "dashboard" }, { label: "Open Stock Actions", view: "compose" }];
-  if (view === "dashboard") return [{ label: "Open Stock Actions", view: "compose" }, { label: "Open Reports", view: "reports" }];
-  if (view === "compose") return [{ label: "Open Stock Overview", view: "dashboard" }, { label: "Open Audit Trail", view: "audit" }];
-  if (view === "audit") return [{ label: "Open Stock Actions", view: "compose" }, { label: "Open Stock Overview", view: "dashboard" }];
-  if (view === "sales") return [{ label: "Open Stock Actions", view: "compose" }, { label: "Open Clients", view: "clients" }];
-  if (view === "purchases") return [{ label: "Open Stock Actions", view: "compose" }, { label: "Open Suppliers", view: "suppliers" }];
-  if (view === "products") return [{ label: "Open Stock Actions", view: "compose" }, { label: "Open Stock Overview", view: "dashboard" }];
-  return [{ label: "Open Stock Actions", view: "compose" }, { label: "Open Audit Trail", view: "audit" }];
+  });
 }
 
 function renderToast() {
@@ -4574,20 +4494,6 @@ function createProductFromAction() {
   commit();
 }
 
-function nextProductId(name, catalog) {
-  const normalized = `${name}`.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "product";
-  const ids = new Set(catalog.map((product) => product.id));
-  let candidate = `prod-${normalized}`;
-  let suffix = 1;
-
-  while (ids.has(candidate)) {
-    candidate = `prod-${normalized}-${suffix}`;
-    suffix += 1;
-  }
-
-  return candidate;
-}
-
 function readSaleForm(form) {
   const data = new FormData(form);
   const defaults = defaultState().saleForm;
@@ -5679,61 +5585,23 @@ function ensureProductSelectionIntegrity() {
 }
 
 function productLastStateLabel(product) {
-  if (product.is_active) {
-    return product.reactivated_at ? `Reactivated ${displayDateTime(product.reactivated_at)} by ${product.reactivated_by || "operator"}` : "Active";
-  }
-
-  const base = product.deactivated_at ? `Suspended ${displayDateTime(product.deactivated_at)} by ${product.deactivated_by || "operator"}` : "Suspended";
-  const reason = `${product.deactivated_reason || ""}`.trim();
-  return reason ? `${base}. ${reason}` : base;
-}
-
-function normalizeClosureQuantity(value) {
-  const amount = Number(value);
-  if (!Number.isFinite(amount) || Math.abs(amount) < PRODUCT_DEACTIVATE_EPSILON) return 0;
-  return Number(amount.toFixed(6));
+  return selectProductLastStateLabel(product, { displayDateTime });
 }
 
 function getProductDeactivationClosures(product) {
-  const stock = computeStock(allLocalEvents());
-  const balances = stock[product.id];
-  if (!balances) return [];
-
-  return Object.entries(balances)
-    .map(([location, quantity]) => {
-      const safeQuantity = normalizeClosureQuantity(quantity);
-      if (safeQuantity === 0) return null;
-
-      return {
-        location,
-        balance: safeQuantity,
-        closureQuantity: normalizeClosureQuantity(-safeQuantity),
-      };
-    })
-    .filter(Boolean);
+  return productDeactivationClosures(product, allLocalEvents());
 }
 
 function formatDeactivationClosures(closures) {
-  if (!closures.length) return "No stock remains to close.";
-
-  return closures
-    .map((entry) => `${entry.location}: ${entry.balance > 0 ? "+" : ""}${formatQuantity(entry.balance)}`)
-    .join(" | ");
+  return formatLifecycleClosures(closures, { formatQuantity });
 }
 
 function formatMultiProductDeactivationClosures(products) {
-  return products
-    .map((product) => `${product.name}: ${formatDeactivationClosures(getProductDeactivationClosures(product))}`)
-    .join(" / ");
+  return formatLifecycleMultiProductClosures(products, { events: allLocalEvents(), formatQuantity });
 }
 
 function hasPendingProductClosureDebt(productId) {
-  return state.outbox.some(
-    (event) =>
-      event.type === "STOCK_ADJUSTMENT" &&
-      event.product_id === productId &&
-      event.reason === PRODUCT_DEACTIVATION_REASON,
-  );
+  return selectHasPendingProductClosureDebt(state.outbox, productId);
 }
 
 function suspendProductFromAction() {
@@ -5759,65 +5627,22 @@ function suspendProductFromAction() {
   productLifecycleBusy = busyKey;
   try {
     const actorReason = `${state.form.reason ?? ""}`.trim();
-    const batchId = currentBatchId();
-    let sequence = nextSequence();
-    const queuedEvents = selectedProducts.flatMap((product) => {
-      const workItemId = nextId("work-product-suspended");
-      const lifecycleEvent = withWorkItem(
-        createInventoryEvent({
-          ...tenant,
-          event_id: nextId("suspend"),
-          idempotency_key: nextId("idem-suspend"),
-          sync_batch_id: batchId,
-          type: "PRODUCT_DEACTIVATED",
-          product_id: product.id,
-          product_name: product.name,
-          quantity: 0,
-          reason: actorReason ? `Product suspended: ${actorReason}` : "Product suspended",
-          sequence_number: sequence++,
-          timestamp: Date.now(),
-          status: "queued",
-        }),
-        workItemId,
-      );
-      const closureEvents = getProductDeactivationClosures(product).map((entry) =>
-        withWorkItem(
-          createInventoryEvent({
-            ...tenant,
-            event_id: nextId("suspend-closure"),
-            idempotency_key: nextId("idem-suspend-closure"),
-            sync_batch_id: batchId,
-            type: "STOCK_ADJUSTMENT",
-            product_id: product.id,
-            product_name: product.name,
-            to_location: entry.location,
-            quantity: entry.closureQuantity,
-            reason: PRODUCT_DEACTIVATION_REASON,
-            sequence_number: sequence++,
-            timestamp: Date.now(),
-            status: "queued",
-          }),
-          workItemId,
-        ),
-      );
-      return [lifecycleEvent, ...closureEvents];
+    const timestamp = Date.now();
+    const queuedEvents = buildProductSuspensionWork(selectedProducts, allLocalEvents(), {
+      tenant,
+      reason: actorReason,
+      nextId,
+      currentBatchId,
+      nextSequence,
+      now: () => timestamp,
     });
 
-    const selectedIds = new Set(selectedProducts.map((product) => product.id));
     state.outbox = [...state.outbox, ...queuedEvents];
-    state.products = getProductCatalog().map((current) =>
-      selectedIds.has(current.id)
-        ? {
-            ...current,
-            is_active: false,
-            deactivated_at: new Date().toISOString(),
-            deactivated_by: tenant.user_id,
-            deactivated_reason: actorReason || "",
-            reactivated_at: null,
-            reactivated_by: null,
-          }
-        : current,
-    );
+    state.products = applyProductSuspension(getProductCatalog(), selectedProducts, {
+      reason: actorReason,
+      tenant,
+      now: () => timestamp,
+    });
 
     showToast(`${selectedProducts.length} product${selectedProducts.length === 1 ? "" : "s"} suspended locally. ${queuedEvents.length} event${queuedEvents.length === 1 ? "" : "s"} waiting to send.`);
 
@@ -5847,39 +5672,17 @@ function reactivateProductFromAction() {
   );
   if (!shouldProceed) return;
   const actorReason = `${state.form.reason ?? ""}`.trim();
-  const batchId = currentBatchId();
-  let sequence = nextSequence();
-  const reactivationEvents = selectedProducts.map((product) =>
-    withWorkItem(
-      createInventoryEvent({
-        ...tenant,
-        event_id: nextId("reactivate"),
-        idempotency_key: nextId("idem-reactivate"),
-        sync_batch_id: batchId,
-        type: "PRODUCT_REACTIVATED",
-        product_id: product.id,
-        product_name: product.name,
-        quantity: 0,
-        reason: actorReason ? `Product reactivated: ${actorReason}` : "Product reactivated",
-        sequence_number: sequence++,
-        timestamp: Date.now(),
-        status: "queued",
-      }),
-      nextId("work-product-reactivated"),
-    ),
-  );
+  const timestamp = Date.now();
+  const reactivationEvents = buildProductReactivationWork(selectedProducts, {
+    tenant,
+    reason: actorReason,
+    nextId,
+    currentBatchId,
+    nextSequence,
+    now: () => timestamp,
+  });
 
-  const selectedIds = new Set(selectedProducts.map((product) => product.id));
-  state.products = getProductCatalog().map((current) =>
-    selectedIds.has(current.id)
-      ? {
-          ...current,
-          is_active: true,
-          reactivated_at: new Date().toISOString(),
-          reactivated_by: tenant.user_id,
-        }
-      : current,
-  );
+  state.products = applyProductReactivation(getProductCatalog(), selectedProducts, { tenant, now: () => timestamp });
   state.outbox = [...state.outbox, ...reactivationEvents];
 
   showToast(`${selectedProducts.length} product${selectedProducts.length === 1 ? "" : "s"} active again. Reactivation does not create stock movement events.`);
