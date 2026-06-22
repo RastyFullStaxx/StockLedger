@@ -381,7 +381,7 @@ const screenMeta = {
 
 const eventLabels = {
   STOCK_IN: "Stock In",
-  STOCK_OUT: "Stock Use",
+  STOCK_OUT: "Use Stock",
   STOCK_TRANSFER: "Move Stock",
   STOCK_ADJUSTMENT: "Correct Stock Count",
   STOCK_REVERT: "Reverse a Record",
@@ -415,7 +415,7 @@ const ACTION_TEMPLATES = {
     },
   },
   STOCK_OUT: {
-    template: "Stock Use Template",
+    template: "Use Stock Template",
     summary: "Product left one location.",
     help: "Use this when stock was sold, used, wasted, or broken. Choose where it left from.",
     requiredFields: ["product_id", "from_location", "quantity"],

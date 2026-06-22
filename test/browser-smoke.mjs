@@ -48,7 +48,7 @@ try {
   const actionLabels = await page.locator("[data-select-menu][data-select-name='type'] [data-select-option]").evaluateAll((options) =>
     options.map((option) => option.textContent?.trim()),
   );
-  for (const label of ["Stock In", "Stock Use", "Correct Stock Count", "Reverse a Record", "Enroll Product", "Suspend Product"]) {
+  for (const label of ["Stock In", "Use Stock", "Correct Stock Count", "Reverse a Record", "Enroll Product", "Suspend Product"]) {
     if (!actionLabels.includes(label)) {
       throw new Error(`Expected action label "${label}" in Stock Actions selector.`);
     }
@@ -60,7 +60,7 @@ try {
   if (queuedCount !== 1) {
     throw new Error(`Expected one queued event after one append click, saw ${queuedCount}.`);
   }
-  await page.locator(".work-queue-table table").getByText("Stock Use", { exact: true }).waitFor();
+  await page.locator(".work-queue-table table").getByText("Use Stock", { exact: true }).waitFor();
   await page.locator(".work-queue-table table").getByText("Juniper Gin").waitFor();
   const sendWorkNavCount = await page.getByRole("button", { name: /Send Work/ }).count();
   if (sendWorkNavCount !== 0) {
