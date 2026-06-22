@@ -178,9 +178,21 @@
   table-layout: fixed;
 }
 
+.stock-overview-grid .stock-table:not(.product-table-wrap) {
+  height: clamp(320px, calc(100dvh - 260px), 680px);
+  overflow: auto;
+}
+
 .stock-table th,
 .stock-table td {
   padding: 12px;
+}
+
+.stock-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: rgba(237, 246, 243, 0.96);
 }
 
 .stock-table th:nth-child(1),

@@ -8,41 +8,6 @@
   gap: 10px;
 }
 
-.module-section-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 18px;
-}
-
-.module-section-card {
-  display: grid;
-  gap: 5px;
-  padding: 12px 0;
-  border-top: 1px solid var(--color-border);
-}
-
-.module-section-card h3 {
-  margin: 0;
-  color: var(--color-primary-strong);
-  font-size: 1rem;
-}
-
-.module-section-card p {
-  margin: 0;
-  color: var(--color-text-muted);
-}
-
-.module-workflow ul {
-  display: grid;
-  gap: 8px;
-  margin: 0;
-  padding-left: 20px;
-}
-
-.module-workflow li {
-  color: var(--color-text-muted);
-}
-
 .business-work-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.12fr) minmax(360px, 0.88fr);
@@ -222,6 +187,10 @@
 
 .report-table-shell {
   height: clamp(210px, 28dvh, 320px);
+}
+
+.support-table-shell {
+  height: clamp(220px, 30dvh, 340px);
 }
 
 .report-summary-table {
@@ -696,15 +665,13 @@
 }
 
 .report-row-list,
-.report-source-list,
-.review-signal-list {
+.report-source-list {
   display: grid;
   gap: 8px;
 }
 
 .report-row,
-.report-source-row,
-.review-signal {
+.report-source-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
@@ -714,30 +681,26 @@
 }
 
 .report-row:first-child,
-.report-source-row:first-child,
-.review-signal:first-child {
+.report-source-row:first-child {
   border-top: 0;
   padding-top: 0;
 }
 
 .report-row strong,
-.report-source-row strong,
-.review-signal strong {
+.report-source-row strong {
   display: block;
   color: var(--color-text);
 }
 
 .report-row span,
 .report-source-row span,
-.report-source-row small,
-.review-signal span {
+.report-source-row small {
   color: var(--color-text-muted);
   font-size: 0.84rem;
   font-weight: 680;
 }
 
-.report-row b,
-.review-signal b {
+.report-row b {
   color: var(--color-primary-strong);
   font-size: 1rem;
 }
@@ -750,24 +713,6 @@
   color: var(--color-primary);
   font-weight: 820;
   text-transform: uppercase;
-}
-
-.review-signal {
-  grid-template-columns: minmax(0, 1fr) auto;
-  border-left: 3px solid var(--color-info);
-  padding-left: 10px;
-}
-
-.review-signal.is-success {
-  border-left-color: var(--color-success);
-}
-
-.review-signal.is-warning {
-  border-left-color: var(--color-warning);
-}
-
-.review-signal.is-error {
-  border-left-color: var(--color-error);
 }
 
 .report-export-note {
@@ -797,20 +742,14 @@
 
 .access-user-list,
 .role-matrix,
-.device-trust-list,
-.settings-policy-list,
-.numbering-list,
-.ci-lane-list {
+.device-trust-list {
   display: grid;
   gap: 8px;
 }
 
 .access-user-card,
 .role-matrix-row,
-.device-trust-row,
-.settings-policy-row,
-.numbering-rule,
-.ci-lane {
+.device-trust-row {
   display: grid;
   gap: 9px;
   padding: 11px 0;
@@ -819,10 +758,7 @@
 
 .access-user-card:first-child,
 .role-matrix-row:first-child,
-.device-trust-row:first-child,
-.settings-policy-row:first-child,
-.numbering-rule:first-child,
-.ci-lane:first-child {
+.device-trust-row:first-child {
   border-top: 0;
   padding-top: 0;
 }
@@ -831,9 +767,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
-.access-user-card > div:first-child span,
-.ci-lane strong,
-.numbering-rule strong {
+.access-user-card > div:first-child span {
   color: var(--color-primary);
   font-size: 0.8rem;
   font-weight: 820;
@@ -845,8 +779,7 @@
   margin-top: 2px;
 }
 
-.access-user-card > b,
-.settings-policy-row > b {
+.access-user-card > b {
   color: var(--color-primary-strong);
 }
 
@@ -877,8 +810,7 @@
 }
 
 .role-matrix-row strong,
-.device-trust-row strong,
-.settings-policy-row strong {
+.device-trust-row strong {
   color: var(--color-text);
 }
 
@@ -899,41 +831,28 @@
   border-left-color: var(--color-error);
 }
 
-.device-trust-row span,
-.settings-policy-row span,
-.numbering-rule span,
-.ci-lane span {
+.device-trust-row span {
   color: var(--color-text-muted);
   font-size: 0.86rem;
   font-weight: 680;
 }
 
-.settings-policy-row {
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-}
-
-.settings-policy-row strong,
-.settings-policy-row span,
-.ci-lane strong,
-.ci-lane code,
-.ci-lane span {
-  display: block;
-}
-
-.numbering-rule {
-  grid-template-columns: 72px minmax(0, 1fr);
-}
-
-.numbering-rule code,
-.ci-lane code {
+.settings-numbering-table code,
+.settings-ci-table code {
   color: var(--color-primary-strong);
   font-weight: 760;
 }
 
+.settings-table-shell {
+  height: clamp(220px, calc(100dvh - 560px), 360px);
+}
+
+.settings-guardrail-shell {
+  height: clamp(220px, calc(100dvh - 560px), 360px);
+}
+
 @media (max-width: 900px) {
   .module-metrics,
-  .module-section-grid,
   .business-work-grid,
   .business-form,
   .business-record dl,

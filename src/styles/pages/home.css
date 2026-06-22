@@ -102,8 +102,7 @@
 }
 
 .landing-ledger span,
-.landing-card p,
-.landing-timeline small {
+.landing-card p {
   color: var(--color-text-muted);
 }
 
@@ -149,39 +148,6 @@
   justify-self: start;
 }
 
-.landing-recent {
-  padding: 15px;
-}
-
-.landing-timeline {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.landing-timeline div {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-  padding: 11px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--surface-panel-soft-muted);
-}
-
-.landing-timeline span {
-  color: var(--color-primary);
-  font-size: 0.82rem;
-  font-weight: 760;
-}
-
-.landing-timeline strong,
-.landing-timeline small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 @supports not (backdrop-filter: blur(1px)) {
   .dashboard-kpi-card {
     background: var(--color-card-solid);
@@ -191,8 +157,7 @@
 @media (max-width: 1100px) {
   .dashboard-kpi-grid,
   .landing-hero,
-  .landing-grid,
-  .landing-timeline {
+  .landing-grid {
     grid-template-columns: 1fr;
   }
 }

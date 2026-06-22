@@ -65,7 +65,10 @@ try {
     await page.getByRole("heading", { name: heading, exact: true }).waitFor();
   }
   await page.locator(".nav-item[data-view='clients']").click();
-  await page.getByText("House Pour Menu", { exact: true }).waitFor();
+  await page.locator("[data-client-row]").filter({ hasText: "House Pour Menu" }).waitFor();
+  await page.getByLabel("Search clients").fill("Sunfold");
+  await page.locator("[data-client-row]").filter({ hasText: "Sunfold Events" }).waitFor();
+  await page.getByLabel("Search clients").fill("");
   await page.locator("[data-client-row]").filter({ hasText: "Harbor Room" }).click();
   await page.getByText("Private contact", { exact: true }).first().waitFor();
   await page.locator(".nav-item[data-view='suppliers']").click();
@@ -76,7 +79,10 @@ try {
   await page.locator("[data-supplier-row]").filter({ hasText: "Coastal Spirits Supply" }).click();
   await page.getByText("Sensitive terms", { exact: true }).first().waitFor();
   await page.locator(".nav-item[data-view='menus']").click();
-  await page.getByText("Juniper Gin & Tonic", { exact: true }).waitFor();
+  await page.getByLabel("Search menus").fill("Rum");
+  await page.locator("[data-menu-row]").filter({ hasText: "Event Service Menu" }).waitFor();
+  await page.getByLabel("Search menus").fill("");
+  await page.locator("[data-menu-row]").filter({ hasText: "Juniper Gin & Tonic" }).waitFor();
   await page.locator("[data-menu-row]").filter({ hasText: "House Pour Menu" }).click();
   await page.getByText("Technical details", { exact: true }).first().waitFor();
   await page.getByText("Fulfillment Rule", { exact: true }).waitFor();
@@ -93,6 +99,9 @@ try {
   await page.locator(".nav-item[data-view='users']").click();
   await page.getByText("Role Matrix", { exact: true }).waitFor();
   await page.getByText("Device Trust", { exact: true }).waitFor();
+  await page.getByLabel("Search users").fill("Eli");
+  await page.locator("[data-user-row]").filter({ hasText: "Eli R." }).waitFor();
+  await page.getByLabel("Search users").fill("");
   await page.locator("[data-user-row]").filter({ hasText: "Mara V." }).click();
   await page.getByText("Private staff details", { exact: true }).first().waitFor();
   await page.locator(".nav-item[data-view='settings']").click();
@@ -154,6 +163,9 @@ try {
 
   await page.getByRole("button", { name: "Audit Trail" }).click();
   await page.getByRole("heading", { name: "Audit Trail" }).waitFor();
+  await page.getByLabel("Search audit trail").fill("Tonic");
+  await page.locator("[data-audit-row]").filter({ hasText: "Tonic Water" }).first().waitFor();
+  await page.getByLabel("Search audit trail").fill("");
   await page.locator("[data-audit-row]").first().click();
   await page.locator("[data-record-detail-panel]").getByText("Technical details", { exact: true }).waitFor();
   await page.locator("[data-record-detail-panel]").getByRole("button", { name: "Prepare undo record" }).click();
@@ -207,9 +219,16 @@ try {
 
   await page.locator(".nav-item[data-view='purchases']").click();
   await page.getByRole("heading", { name: "Purchases", exact: true }).waitFor();
+  await page.getByRole("button", { name: "Stock In Without Purchase", exact: true }).click();
+  await page.getByRole("heading", { name: "Stock Actions" }).waitFor();
+  await page.locator(".action-type-tab.is-active").getByText("Stock In", { exact: true }).waitFor();
+  await page.locator(".nav-item[data-view='purchases']").click();
+  await page.getByRole("heading", { name: "Purchases", exact: true }).waitFor();
   await page.getByRole("button", { name: "Receive Purchase", exact: true }).click();
   await page.getByText("Purchase received locally. STOCK_IN is waiting to send.", { exact: true }).waitFor();
-  await page.locator(".business-record-panel").getByText("Coastal Spirits Supply", { exact: true }).waitFor();
+  await page.getByLabel("Search purchases").fill("Coastal");
+  await page.locator("[data-purchase-row]").filter({ hasText: "Coastal Spirits Supply" }).waitFor();
+  await page.getByLabel("Search purchases").fill("");
   await page.locator("[data-purchase-row]").filter({ hasText: "Coastal Spirits Supply" }).click();
   await page.locator("[data-record-detail-panel]").getByText("Technical source", { exact: true }).waitFor();
 

@@ -55,8 +55,8 @@ Check these items first:
 2. `Low Stock`
 3. `Total Stock`
 4. `By Location`
-5. `Recent Activity`
-6. `Reports`
+5. `Reports`
+6. `Audit Trail`
 
 Use the `Guide` button in the top bar when you need a short hint for the current screen.
 
@@ -66,7 +66,7 @@ The left sidebar is grouped by how people work.
 
 | Group | Screen | Use it for |
 | --- | --- | --- |
-| Daily Work | `Home` | Quick start, recent activity, and shortcuts |
+| Daily Work | `Home` | Quick start and shortcuts |
 | Daily Work | `Stock Overview` | Current calculated stock totals |
 | Daily Work | `Sales` | Fulfill client sales, recurring orders, menu sales, and direct stock sales |
 | Daily Work | `Purchases` | Receive supplier deliveries and create stock-in work |
@@ -159,9 +159,9 @@ Purchases separate ordering from receiving:
 - Receiving creates `STOCK_IN` work.
 - Supplier, product, quantity, location, and notes stay linked to the stock event.
 
-Use `Receive Purchase` after checking what actually arrived. The stock-in work waits in `Work to Send` until sent.
+Use `Receive Purchase` after checking what actually arrived. The stock-in work waits in `Work to Send` until sent. Use `Stock In Without Purchase` when stock arrived without a supplier receipt or purchase plan.
 
-Receipt history uses a filtered table. Click a purchase row to open the receiving details on the right side of the table. The detail panel shows notes, supplier reliability, technical source IDs, and bottom actions for closing, opening the supplier, or opening the queued work.
+Receipt history uses a filtered table with status tabs, search, and supplier filtering. Click a purchase row to open the receiving details on the right side of the table. The detail panel shows notes, supplier reliability, technical source IDs, and bottom actions for closing, opening the supplier, or opening the queued work.
 
 ## 9. Stock Actions
 
@@ -323,7 +323,7 @@ When online:
 
 Use `Clients` for customers or buyers, not StockLedger tenant administration.
 
-The Clients page uses a table-first layout. Click a client row to open full details on the right side of the table.
+The Clients page uses a table-first layout with segment tabs, client search, and menu filtering. Click a client row to open full details on the right side of the table.
 
 The table shows:
 
@@ -359,7 +359,7 @@ Use `Receive Purchase` from the detail panel when a delivery should become stock
 
 Use `Menus` to connect sellable items to stock products.
 
-The Menus page uses a filtered table. Click a menu row to open its full details on the right side of the table.
+The Menus page uses a filtered table with status/cadence tabs, search, and client filtering. Click a menu row to open its full details on the right side of the table.
 
 The table shows:
 
@@ -427,6 +427,8 @@ Before exporting final reports in production, the system should require role che
 
 Use `Audit Trail` when a stock number needs explaining.
 
+Use the filter tabs, search bar, and product filter to narrow the trail before opening a record.
+
 The audit view uses a row-detail layout. The table shows:
 
 - action type
@@ -444,12 +446,11 @@ If a movement was wrong, choose `Prepare undo record` from the detail panel. Thi
 
 Use `Users & Roles` to review access, not to edit historical records.
 
-The page shows:
+The page uses a staff table with status tabs, search, and role filtering. It also shows support tables for:
 
 - staff access table
 - role matrix
 - device trust
-- access review signals
 
 Click a staff row to open access scope, role permissions, sensitive-view count, and private staff details on the right side of the table. Private staff details are hidden by default. Role changes, invite changes, and device trust changes should create audit records in production.
 

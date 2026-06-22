@@ -532,17 +532,28 @@ function defaultState() {
     selectedLocationId: null,
     selectedUserId: null,
     selectedAuditEventId: null,
+    auditViewFilter: "all",
+    auditSearch: "",
+    auditProductFilter: "all",
     clientViewFilter: "all",
+    clientSearch: "",
+    clientMenuFilter: "all",
     saleViewFilter: "all",
     saleSearch: "",
     saleClientFilter: "all",
     purchaseViewFilter: "all",
+    purchaseSearch: "",
+    purchaseSupplierFilter: "all",
     supplierViewFilter: "all",
     supplierSearch: "",
     supplierProductFilter: "all",
     menuViewFilter: "all",
+    menuSearch: "",
+    menuClientFilter: "all",
     locationViewFilter: "all",
     userViewFilter: "all",
+    userSearch: "",
+    userRoleFilter: "all",
     message: "",
     toast: null,
     accountOpen: false,
@@ -694,217 +705,6 @@ const navigationGroups = [
     items: ["reports", "audit", "users", "settings"],
   },
 ];
-
-const modulePageContent = {
-  sales: {
-    title: "Sales workspace",
-    summary: "Sales are client-facing records first. Stock only changes when the sale is fulfilled and posted.",
-    primaryAction: "Create Sale",
-    secondaryAction: "Review Recurring",
-    metrics: [
-      ["Due Today", "7"],
-      ["Recurring", "4"],
-      ["Menu Sales", "2"],
-      ["To Fulfill", "5"],
-    ],
-    sections: [
-      ["New Sale", "Client, sale date, items, price notes, and fulfillment location."],
-      ["Recurring Orders", "Standing orders with frequency, next due date, and default menu items."],
-      ["Menu Sales", "Client menu items that expand into stock-use recipe lines."],
-      ["Direct Stock Sales", "One-off sales that use stock directly without a menu template."],
-      ["To Fulfill", "Approved sales waiting to post stock-out events."],
-      ["Sales History", "Completed sales linked to stock deductions and audit trail records."],
-    ],
-    workflow: [
-      "Draft sale does not affect stock.",
-      "Fulfillment posts one or more STOCK_OUT events.",
-      "Voids use compensating records and stock reversals.",
-    ],
-  },
-  purchases: {
-    title: "Purchasing and receiving",
-    summary: "Purchases separate what was ordered from what actually arrived, so stock-in happens from receiving.",
-    primaryAction: "Create Purchase",
-    secondaryAction: "Receive Stock",
-    metrics: [
-      ["Incoming", "3"],
-      ["Late", "1"],
-      ["Variance", "2"],
-      ["Suppliers", "6"],
-    ],
-    sections: [
-      ["New Purchase", "Supplier, expected date, requested items, quantities, and notes."],
-      ["Incoming Deliveries", "Open purchase orders and receiving schedule."],
-      ["Receive Stock", "Confirm actual quantities, destination location, and delivery condition."],
-      ["Supplier History", "Previous deliveries, short shipments, and reliability notes."],
-    ],
-    workflow: [
-      "Purchase order does not affect stock.",
-      "Receiving posts STOCK_IN events.",
-      "Short or damaged deliveries are recorded explicitly.",
-    ],
-  },
-  clients: {
-    title: "Client relationships",
-    summary: "Clients are customers or buyers. Their private contact data should be shown only when needed.",
-    primaryAction: "Add Client",
-    secondaryAction: "Open Client Menus",
-    metrics: [
-      ["Active", "24"],
-      ["Recurring", "8"],
-      ["Seasonal", "5"],
-      ["Needs Follow-up", "3"],
-    ],
-    sections: [
-      ["Client Profile", "Business name, delivery notes, and privacy-protected contact details."],
-      ["Default Menu", "Client-specific menu or price list used during sales entry."],
-      ["Recurring Orders", "Standing sales templates and next due dates."],
-      ["Seasonal Activity", "Event-based or date-ranged transactions."],
-      ["Sales History", "Past orders linked back to stock movements."],
-    ],
-    workflow: [
-      "Use opaque record IDs in URLs and logs.",
-      "Hide contact details unless the role needs them.",
-      "Audit exports and profile access.",
-    ],
-  },
-  suppliers: {
-    title: "Supplier management",
-    summary: "Suppliers explain where stock came from and how reliable deliveries are.",
-    primaryAction: "Add Supplier",
-    secondaryAction: "View Purchases",
-    metrics: [
-      ["Active", "9"],
-      ["Due This Week", "4"],
-      ["Late Deliveries", "1"],
-      ["Variance Cases", "2"],
-    ],
-    sections: [
-      ["Supplier Profile", "Business details, order notes, and preferred delivery days."],
-      ["Products Supplied", "Catalog links for products usually bought from this supplier."],
-      ["Purchase History", "Orders, receipts, short deliveries, and damaged goods."],
-      ["Reliability", "Delivery variance and timing indicators."],
-    ],
-    workflow: [
-      "Costs and supplier terms are business-sensitive.",
-      "Receiving remains the only purchase step that changes stock.",
-      "Supplier reports link to purchase and audit records.",
-    ],
-  },
-  menus: {
-    title: "Client menus and recipes",
-    summary: "Menus translate sellable items into deterministic stock deductions when sales are fulfilled.",
-    primaryAction: "Create Menu Item",
-    secondaryAction: "Preview Deductions",
-    metrics: [
-      ["Menu Items", "18"],
-      ["Client Menus", "6"],
-      ["Seasonal", "3"],
-      ["Draft Changes", "2"],
-    ],
-    sections: [
-      ["Menu Items", "Sellable items, bundles, or client-specific order lines."],
-      ["Recipe Mapping", "Which stock products and quantities each menu item deducts."],
-      ["Client Menus", "Default menus for recurring customers."],
-      ["Seasonal Menus", "Effective dates and limited-time item availability."],
-      ["Deduction Preview", "Test stock impact before publishing changes."],
-    ],
-    workflow: [
-      "Menu versions must be replayable.",
-      "Old sales use the menu version active at fulfillment time.",
-      "Menu setup does not change stock by itself.",
-    ],
-  },
-  locations: {
-    title: "Location setup",
-    summary: "Locations are event attributes, not stored stock buckets. They organize replay views.",
-    primaryAction: "Add Location",
-    secondaryAction: "Review Balances",
-    metrics: [
-      ["Active", String(locations.length)],
-      ["Storage", "2"],
-      ["Service", "1"],
-      ["Kitchen", "1"],
-    ],
-    sections: locations.map((location) => [location.name, "Available for stock movements, receiving, and location-level reports."]),
-    workflow: [
-      "Location changes should preserve historical event meaning.",
-      "Deactivate unused locations instead of rewriting old records.",
-      "Reports filter by location attributes during replay.",
-    ],
-  },
-  reports: {
-    title: "Detailed reports",
-    summary: "Reports are grouped by decisions: stock, movement, sales, purchases, clients, variance, and audit.",
-    primaryAction: "Build Report",
-    secondaryAction: "Export Summary",
-    metrics: [
-      ["Stock Reports", "4"],
-      ["Sales Reports", "5"],
-      ["Purchase Reports", "3"],
-      ["Audit Reports", "3"],
-    ],
-    sections: [
-      ["Stock", "Current stock, low stock, negative stock, and stock by location."],
-      ["Movement", "Stock in, out, transfer, adjustment, and reversal history."],
-      ["Sales", "Sales by client, item, period, recurring, and seasonal source."],
-      ["Purchases", "Received stock, supplier totals, and delivery variance."],
-      ["Variance", "Physical count differences, shrinkage, and corrections."],
-      ["Audit", "User actions, device actions, reversals, and sync batches."],
-    ],
-    workflow: [
-      "Filters should include date range, product, location, client, and supplier.",
-      "Every report row should link back to source records.",
-      "Exports must respect role and PII rules.",
-    ],
-  },
-  users: {
-    title: "Users, roles, and devices",
-    summary: "User administration needs role clarity, device trust, and audit-safe privacy controls.",
-    primaryAction: "Invite User",
-    secondaryAction: "Review Devices",
-    metrics: [
-      ["Users", "12"],
-      ["Managers", "3"],
-      ["Trusted Devices", "5"],
-      ["Pending Invites", "2"],
-    ],
-    sections: [
-      ["Users", "Staff accounts, status, and role assignment."],
-      ["Roles", "GLOBAL_ADMIN, CLIENT_ADMIN, MANAGER, STAFF, and AUDITOR."],
-      ["Device Trust", "Approved terminals, mobile devices, and offline sync access."],
-      ["Access History", "Sensitive access and export activity."],
-    ],
-    workflow: [
-      "Never expose user PII in logs or error text.",
-      "Device trust changes must be audited.",
-      "Role changes require manager or admin authority.",
-    ],
-  },
-  settings: {
-    title: "Tenant settings",
-    summary: "Settings collect site defaults without mixing them into daily work pages.",
-    primaryAction: "Review Defaults",
-    secondaryAction: "Sync Settings",
-    metrics: [
-      ["Site", "1"],
-      ["Devices", "5"],
-      ["Numbering", "3"],
-      ["Retention Rules", "2"],
-    ],
-    sections: [
-      ["Site Profile", "Tenant name, operating locations, and default work location."],
-      ["Sync", "Offline retention, retry behavior, and send-work defaults."],
-      ["Numbering", "Readable prefixes for sales, purchases, receiving, and adjustments."],
-      ["Privacy", "Local cache policy, export permissions, and data retention."],
-    ],
-    workflow: [
-      "Settings should not change historical events.",
-      "Tenant-level settings need audit records.",
-      "Offline cache policy must protect PII and business-sensitive data.",
-    ],
-  },
-};
 
 const eventLabels = {
   STOCK_IN: "Stock In",
@@ -1106,7 +906,12 @@ function loadState() {
       selectedLocationId: parsed.selectedLocationId ?? null,
       selectedUserId: parsed.selectedUserId ?? null,
       selectedAuditEventId: parsed.selectedAuditEventId ?? null,
+      auditViewFilter: parsed.auditViewFilter ?? "all",
+      auditSearch: parsed.auditSearch ?? "",
+      auditProductFilter: parsed.auditProductFilter ?? "all",
       clientViewFilter: parsed.clientViewFilter ?? "all",
+      clientSearch: parsed.clientSearch ?? "",
+      clientMenuFilter: parsed.clientMenuFilter ?? "all",
       saleViewFilter: parsed.saleViewFilter ?? "all",
       saleSearch: parsed.saleSearch ?? "",
       saleClientFilter: parsed.saleClientFilter ?? "all",
@@ -1114,12 +919,18 @@ function loadState() {
       productStatusFilter: parsed.productStatusFilter ?? "active",
       productCategoryFilter: parsed.productCategoryFilter ?? "all",
       purchaseViewFilter: parsed.purchaseViewFilter ?? "all",
+      purchaseSearch: parsed.purchaseSearch ?? "",
+      purchaseSupplierFilter: parsed.purchaseSupplierFilter ?? "all",
       supplierViewFilter: parsed.supplierViewFilter ?? "all",
       supplierSearch: parsed.supplierSearch ?? "",
       supplierProductFilter: parsed.supplierProductFilter ?? "all",
       menuViewFilter: parsed.menuViewFilter ?? "all",
+      menuSearch: parsed.menuSearch ?? "",
+      menuClientFilter: parsed.menuClientFilter ?? "all",
       locationViewFilter: parsed.locationViewFilter ?? "all",
       userViewFilter: parsed.userViewFilter ?? "all",
+      userSearch: parsed.userSearch ?? "",
+      userRoleFilter: parsed.userRoleFilter ?? "all",
       products: sanitizeProducts(parsed.products),
       locations: sanitizeLocations(parsed.locations),
       locationModalOpen: false,
@@ -1586,15 +1397,10 @@ function renderActiveView(localLedger, stockRows, outboxValidation) {
   if (state.activeView === "users") return renderUsersPage();
   if (state.activeView === "settings") return renderSettingsPage();
   if (state.activeView === "products") return renderProducts();
-  if (modulePageContent[state.activeView]) return renderModulePage(state.activeView);
   return renderDashboard(localLedger, stockRows, outboxValidation);
 }
 
 function renderLanding(localLedger, stockRows, outboxValidation) {
-  const lowRows = stockRows.filter((row) => row.quantity >= 0 && row.quantity <= productLow(row.product_id));
-  const invalidOutbox = outboxValidation.filter((entry) => !entry.validation.valid).length;
-  const recentRows = replayAuditTrail(localLedger).reverse().slice(0, 4);
-
   return `
     <section class="landing-shell" aria-label="StockLedger Home">
       <div class="landing-hero">
@@ -1639,25 +1445,6 @@ function renderLanding(localLedger, stockRows, outboxValidation) {
             <button class="table-action" data-view="compose" type="button">Open Stock Actions</button>
           </article>
         </div>
-      <article class="panel landing-recent">
-        <div class="panel-header panel-header--compact">
-          <h2>Recent Ledger Activity</h2>
-          <button class="table-action" data-view="audit" type="button">View All</button>
-        </div>
-        <div class="landing-timeline">
-          ${recentRows
-            .map(
-              (entry) => `
-                <div>
-                  <span>${eventLabels[entry.type] ?? entry.type}</span>
-                  <strong>${entry.product_name}</strong>
-                  <small>${entry.location} &middot; ${entry.delta > 0 ? "+" : ""}${formatQuantity(entry.delta)} ${productUnit(entry.product_id)}</small>
-                </div>
-              `,
-            )
-            .join("")}
-        </div>
-      </article>
     </section>
   `;
 }
@@ -1676,51 +1463,15 @@ function renderDashboard(localLedger, stockRows, outboxValidation) {
   `;
 }
 
-function renderModulePage(key) {
-  const content = modulePageContent[key];
-  if (!content) return "";
-
-  return `
-    <section class="content-grid module-page" aria-label="${escapeAttr(content.title)}">
-      <section class="module-metrics" aria-label="${escapeAttr(content.title)} metrics">
-        ${content.metrics.map(([label, value]) => metricCard(label, value)).join("")}
-      </section>
-      <article class="panel panel-wide">
-        <div class="panel-header panel-header--compact">
-          <h2>Page Sections</h2>
-        </div>
-        <div class="module-section-grid">
-          ${content.sections
-            .map(
-              ([title, text]) => `
-                <section class="module-section-card">
-                  <h3>${title}</h3>
-                  <p>${text}</p>
-                </section>
-              `,
-            )
-            .join("")}
-        </div>
-      </article>
-      <article class="panel panel-wide module-workflow">
-        <div class="panel-header panel-header--compact">
-          <h2>Ledger Rules</h2>
-        </div>
-        <ul>
-          ${content.workflow.map((item) => `<li>${item}</li>`).join("")}
-        </ul>
-      </article>
-    </section>
-  `;
-}
-
 function renderClientsPage() {
-  const content = modulePageContent.clients;
   const fulfilledSales = Array.isArray(state.sales) ? state.sales : [];
   const recurringClients = DEFAULT_CLIENTS.filter((client) => client.segment.toLowerCase().includes("recurring")).length;
   const seasonalClients = DEFAULT_CLIENTS.filter((client) => client.segment.toLowerCase().includes("seasonal")).length;
-  const filter = state.clientViewFilter ?? "all";
-  const clients = filteredClients(filter);
+  const clients = filteredClients({
+    filter: state.clientViewFilter ?? "all",
+    search: state.clientSearch ?? "",
+    menuId: state.clientMenuFilter ?? "all",
+  });
   const selectedClient = clients.find((client) => client.id === state.selectedClientId) ?? null;
 
   return `
@@ -1733,28 +1484,74 @@ function renderClientsPage() {
       </section>
       <section class="record-workspace ${selectedClient ? "has-detail" : ""}" data-record-workspace="clients" aria-label="Client records">
         <article class="panel record-table-panel">
-          <div class="record-toolbar">
-            <div class="record-filter-tabs" role="group" aria-label="Filter clients">
-              ${renderClientFilterTab("all", "All")}
-              ${renderClientFilterTab("recurring", "Recurring")}
-              ${renderClientFilterTab("seasonal", "Seasonal")}
-              ${renderClientFilterTab("wholesale", "Wholesale")}
-            </div>
-          </div>
+          ${renderClientControls()}
           ${renderClientTable(clients, selectedClient)}
         </article>
         ${selectedClient ? renderClientDetailPanel(selectedClient) : ""}
       </section>
-      ${renderModuleSections(content)}
     </section>
   `;
 }
 
-function filteredClients(filter) {
-  if (filter === "recurring") return DEFAULT_CLIENTS.filter((client) => client.segment.toLowerCase().includes("recurring"));
-  if (filter === "seasonal") return DEFAULT_CLIENTS.filter((client) => client.segment.toLowerCase().includes("seasonal"));
-  if (filter === "wholesale") return DEFAULT_CLIENTS.filter((client) => client.segment.toLowerCase().includes("wholesale"));
-  return DEFAULT_CLIENTS;
+function filteredClients({ filter, search = "", menuId = "all" }) {
+  const query = `${search}`.trim().toLowerCase();
+  return DEFAULT_CLIENTS.filter((client) => {
+    if (filter === "recurring" && !client.segment.toLowerCase().includes("recurring")) return false;
+    if (filter === "seasonal" && !client.segment.toLowerCase().includes("seasonal")) return false;
+    if (filter === "wholesale" && !client.segment.toLowerCase().includes("wholesale")) return false;
+    if (menuId !== "all" && client.default_menu_id !== menuId) return false;
+    if (!query) return true;
+
+    const menu = getMenuById(client.default_menu_id);
+    return [
+      client.name,
+      client.segment,
+      client.order_pattern,
+      client.next_order,
+      client.delivery_window,
+      menu?.name ?? "",
+    ].join(" ").toLowerCase().includes(query);
+  });
+}
+
+function renderClientControls() {
+  const safeSearch = escapeAttr(state.clientSearch ?? "");
+  return `
+    <div class="record-table-controls stock-overview-toolbar" aria-label="Client table controls">
+      <div class="record-filter-tabs stock-overview-view-switch" role="group" aria-label="Filter clients">
+        ${renderClientFilterTab("all", "All")}
+        ${renderClientFilterTab("recurring", "Recurring")}
+        ${renderClientFilterTab("seasonal", "Seasonal")}
+        ${renderClientFilterTab("wholesale", "Wholesale")}
+      </div>
+      <div class="stock-overview-filter-slot">
+        <div class="stock-overview-field stock-overview-field--search">
+          <input
+            class="stock-overview-search-input"
+            type="search"
+            placeholder="Search clients"
+            value="${safeSearch}"
+            data-filter="client-search"
+            aria-label="Search clients"
+          />
+        </div>
+        <label class="stock-overview-compact-select field-select-wrap field-select-wrap--stock-overview-filter stock-overview-field">
+          ${renderFieldSelect({
+            name: "client-menu-filter",
+            menuStyle: "styled",
+            className: "field-select--stock-overview-filter",
+            menuClassName: "field-select-menu--stock-overview-filter",
+            menuMode: "stock-overview-filter",
+            attrs: 'data-filter="client-menu"',
+            options: `
+              <option value="all">All menus</option>
+              ${DEFAULT_MENUS.map((menu) => `<option value="${menu.id}" ${state.clientMenuFilter === menu.id ? "selected" : ""}>${menu.name}</option>`).join("")}
+            `,
+          })}
+        </label>
+      </div>
+    </div>
+  `;
 }
 
 function renderClientFilterTab(value, label) {
@@ -1847,40 +1644,6 @@ function renderClientDetailPanel(client) {
         </button>
       </div>
     </aside>
-  `;
-}
-
-function renderClientCard(client) {
-  const menu = getMenuById(client.default_menu_id);
-  const menuItems = menu ? menuItemsForMenu(menu.id) : [];
-  const fulfilled = (Array.isArray(state.sales) ? state.sales : []).filter((sale) => sale.client_id === client.id).length;
-
-  return `
-    <article class="panel relationship-card client-card">
-      <div class="relationship-card-topline">
-        <span>${escapeHtml(client.segment)}</span>
-        <strong>${escapeHtml(client.name)}</strong>
-      </div>
-      <dl class="relationship-facts">
-        <div><dt>Default Menu</dt><dd>${escapeHtml(menu?.name ?? "No menu assigned")}</dd></div>
-        <div><dt>Order Pattern</dt><dd>${escapeHtml(client.order_pattern)}</dd></div>
-        <div><dt>Next Order</dt><dd>${escapeHtml(client.next_order)}</dd></div>
-        <div><dt>Fulfilled Locally</dt><dd>${fulfilled}</dd></div>
-      </dl>
-      <div class="relationship-menu-strip">
-        ${menuItems
-          .map((item) => `<span>${escapeHtml(item.name)}</span>`)
-          .join("")}
-      </div>
-      <details class="privacy-details">
-        <summary>Private contact</summary>
-        <p>${escapeHtml(client.private_contact)}. Reveal this only for roles that need customer contact details.</p>
-        <p>Delivery window: ${escapeHtml(client.delivery_window)}</p>
-      </details>
-      <button class="button button-secondary relationship-action" data-action="start-client-sale" data-client-id="${escapeAttr(client.id)}" type="button">
-        ${icon("send")}Fulfill Sale
-      </button>
-    </article>
   `;
 }
 
@@ -2099,11 +1862,14 @@ function renderSupplierCard(supplier, purchases, receivingEvents) {
 }
 
 function renderMenusPage() {
-  const content = modulePageContent.menus;
   const activeMenus = DEFAULT_MENUS.filter((menu) => menu.status === "Active").length;
   const recipeLines = DEFAULT_MENU_ITEMS.reduce((total, item) => total + item.recipe.length, 0);
   const seasonalItems = DEFAULT_MENUS.filter((menu) => menu.cadence.toLowerCase().includes("seasonal")).length;
-  const menus = filteredMenus(state.menuViewFilter ?? "all");
+  const menus = filteredMenus({
+    filter: state.menuViewFilter ?? "all",
+    search: state.menuSearch ?? "",
+    clientId: state.menuClientFilter ?? "all",
+  });
   const selectedMenu = menus.find((menu) => menu.id === state.selectedMenuId) ?? null;
 
   return `
@@ -2116,15 +1882,7 @@ function renderMenusPage() {
       </section>
       <section class="record-workspace ${selectedMenu ? "has-detail" : ""}" data-record-workspace="menus" aria-label="Menu records">
         <article class="panel record-table-panel">
-          <div class="record-toolbar">
-            <div class="record-filter-tabs" role="group" aria-label="Filter menus">
-              ${renderMenuFilterTab("all", "All")}
-              ${renderMenuFilterTab("active", "Active")}
-              ${renderMenuFilterTab("draft", "Draft Review")}
-              ${renderMenuFilterTab("recurring", "Recurring")}
-              ${renderMenuFilterTab("seasonal", "Seasonal")}
-            </div>
-          </div>
+          ${renderMenuControls()}
           ${renderMenuTable(menus, selectedMenu)}
         </article>
         ${selectedMenu ? renderMenuDetailPanel(selectedMenu) : ""}
@@ -2135,17 +1893,72 @@ function renderMenusPage() {
         </div>
         <p>Menu setup does not move stock. A fulfilled menu sale creates grouped STOCK_OUT events from the recipe lines, then the normal sync batch sends them atomically.</p>
       </article>
-      ${renderModuleSections(content)}
     </section>
   `;
 }
 
-function filteredMenus(filter) {
-  if (filter === "active") return DEFAULT_MENUS.filter((menu) => menu.status === "Active");
-  if (filter === "draft") return DEFAULT_MENUS.filter((menu) => menu.status !== "Active");
-  if (filter === "recurring") return DEFAULT_MENUS.filter((menu) => menu.cadence.toLowerCase().includes("recurring"));
-  if (filter === "seasonal") return DEFAULT_MENUS.filter((menu) => menu.cadence.toLowerCase().includes("seasonal"));
-  return DEFAULT_MENUS;
+function filteredMenus({ filter, search = "", clientId = "all" }) {
+  const query = `${search}`.trim().toLowerCase();
+  return DEFAULT_MENUS.filter((menu) => {
+    if (filter === "active" && menu.status !== "Active") return false;
+    if (filter === "draft" && menu.status === "Active") return false;
+    if (filter === "recurring" && !menu.cadence.toLowerCase().includes("recurring")) return false;
+    if (filter === "seasonal" && !menu.cadence.toLowerCase().includes("seasonal")) return false;
+    if (clientId !== "all" && menu.client_id !== clientId) return false;
+    if (!query) return true;
+
+    const client = DEFAULT_CLIENTS.find((candidate) => candidate.id === menu.client_id);
+    const items = menuItemsForMenu(menu.id);
+    return [
+      menu.name,
+      menu.cadence,
+      menu.status,
+      client?.name ?? "",
+      ...items.map((item) => item.name),
+      ...items.flatMap((item) => item.recipe.map((line) => productName(line.product_id))),
+    ].join(" ").toLowerCase().includes(query);
+  });
+}
+
+function renderMenuControls() {
+  const safeSearch = escapeAttr(state.menuSearch ?? "");
+  return `
+    <div class="record-table-controls stock-overview-toolbar" aria-label="Menu table controls">
+      <div class="record-filter-tabs stock-overview-view-switch" role="group" aria-label="Filter menus">
+        ${renderMenuFilterTab("all", "All")}
+        ${renderMenuFilterTab("active", "Active")}
+        ${renderMenuFilterTab("draft", "Draft Review")}
+        ${renderMenuFilterTab("recurring", "Recurring")}
+        ${renderMenuFilterTab("seasonal", "Seasonal")}
+      </div>
+      <div class="stock-overview-filter-slot">
+        <div class="stock-overview-field stock-overview-field--search">
+          <input
+            class="stock-overview-search-input"
+            type="search"
+            placeholder="Search menus"
+            value="${safeSearch}"
+            data-filter="menu-search"
+            aria-label="Search menus"
+          />
+        </div>
+        <label class="stock-overview-compact-select field-select-wrap field-select-wrap--stock-overview-filter stock-overview-field">
+          ${renderFieldSelect({
+            name: "menu-client-filter",
+            menuStyle: "styled",
+            className: "field-select--stock-overview-filter",
+            menuClassName: "field-select-menu--stock-overview-filter",
+            menuMode: "stock-overview-filter",
+            attrs: 'data-filter="menu-client"',
+            options: `
+              <option value="all">All clients</option>
+              ${DEFAULT_CLIENTS.map((client) => `<option value="${client.id}" ${state.menuClientFilter === client.id ? "selected" : ""}>${client.name}</option>`).join("")}
+            `,
+          })}
+        </label>
+      </div>
+    </div>
+  `;
 }
 
 function renderMenuFilterTab(value, label) {
@@ -2412,57 +2225,6 @@ function renderLocationDetailPanel(location, stockRows, localLedger) {
   `;
 }
 
-function renderLocationCard(location, stockRows, localLedger) {
-  const rows = stockRows.filter((row) => row.location === location.name);
-  const stockedRows = rows.filter((row) => Number(row.quantity) !== 0);
-  const lowRows = rows.filter((row) => row.quantity > 0 && row.quantity <= productLow(row.product_id));
-  const negativeRows = rows.filter((row) => row.quantity < 0);
-  const recentEvents = replayAuditTrail(localLedger).filter((entry) => entry.location === location.name).slice(-3).reverse();
-
-  return `
-    <article class="panel location-card">
-      <div class="relationship-card-topline">
-        <span>${escapeHtml(location.kind)}</span>
-        <strong>${escapeHtml(location.name)}</strong>
-      </div>
-      <dl class="relationship-facts">
-        <div><dt>Owner</dt><dd>${escapeHtml(location.owner)}</dd></div>
-        <div><dt>Status</dt><dd>${escapeHtml(location.status)}</dd></div>
-        <div><dt>Stocked Rows</dt><dd>${stockedRows.length}</dd></div>
-        <div><dt>Needs Review</dt><dd>${negativeRows.length + lowRows.length}</dd></div>
-      </dl>
-      <div class="location-balance-list">
-        ${
-          stockedRows.length === 0
-            ? `<div class="empty-state"><strong>No stock currently replayed here.</strong></div>`
-            : stockedRows
-                .slice(0, 4)
-                .map(
-                  (row) => `
-                    <div class="location-balance-row">
-                      <strong>${escapeHtml(row.product_name)}</strong>
-                      <span class="${row.quantity < 0 ? "danger-text" : ""}">${formatQuantity(row.quantity)} ${productUnit(row.product_id)}</span>
-                    </div>
-                  `,
-                )
-                .join("")
-        }
-      </div>
-      <details class="privacy-details">
-        <summary>Recent activity</summary>
-        ${
-          recentEvents.length === 0
-            ? `<p>No recent replayed activity.</p>`
-            : recentEvents.map((entry) => `<p>${eventLabels[entry.type] ?? entry.type}: ${escapeHtml(entry.product_name)} ${entry.delta > 0 ? "+" : ""}${formatQuantity(entry.delta)}</p>`).join("")
-        }
-      </details>
-      <button class="button button-secondary relationship-action" data-view="dashboard" type="button">
-        ${icon("layers")}Open Stock View
-      </button>
-    </article>
-  `;
-}
-
 function renderReportsPage(localLedger, stockRows) {
   const sales = Array.isArray(state.sales) ? state.sales : [];
   const purchases = Array.isArray(state.purchases) ? state.purchases : [];
@@ -2530,12 +2292,15 @@ function renderReportsPage(localLedger, stockRows) {
 }
 
 function renderUsersPage() {
-  const content = modulePageContent.users;
   const activeUsers = DEFAULT_USERS.filter((user) => user.status === "Active").length;
   const pendingUsers = DEFAULT_USERS.filter((user) => user.status.includes("pending")).length;
   const trustedDevices = TRUSTED_DEVICES.filter((device) => device.trust === "Trusted").length;
   const sensitiveReviews = DEFAULT_USERS.reduce((total, user) => total + Number(user.sensitive_access), 0);
-  const users = filteredUsers(state.userViewFilter ?? "all");
+  const users = filteredUsers({
+    filter: state.userViewFilter ?? "all",
+    search: state.userSearch ?? "",
+    role: state.userRoleFilter ?? "all",
+  });
   const selectedUser = users.find((user) => user.id === state.selectedUserId) ?? null;
 
   return `
@@ -2548,57 +2313,86 @@ function renderUsersPage() {
       </section>
       <section class="record-workspace ${selectedUser ? "has-detail" : ""}" data-record-workspace="users" aria-label="Staff access records">
         <article class="panel record-table-panel">
-          <div class="record-toolbar">
-            <div class="record-filter-tabs" role="group" aria-label="Filter users">
-              ${renderUserFilterTab("all", "All")}
-              ${renderUserFilterTab("active", "Active")}
-              ${renderUserFilterTab("pending", "Pending")}
-              ${renderUserFilterTab("sensitive", "Sensitive Views")}
-            </div>
-          </div>
+          ${renderUserControls()}
           ${renderUserTable(users, selectedUser)}
         </article>
         ${selectedUser ? renderUserDetailPanel(selectedUser) : ""}
       </section>
-      <section class="access-grid" aria-label="Role and device access">
+      <section class="access-grid" aria-label="Role permissions">
         <article class="panel access-panel">
           <div class="panel-header panel-header--compact">
             <h2>Role Matrix</h2>
           </div>
-          <div class="role-matrix">
-            ${ROLE_MATRIX.map(renderRoleMatrixRow).join("")}
-          </div>
+          ${renderRoleMatrixTable()}
         </article>
-      </section>
-      <section class="access-grid" aria-label="Device trust and audit review">
         <article class="panel access-panel">
           <div class="panel-header panel-header--compact">
             <h2>Device Trust</h2>
           </div>
-          <div class="device-trust-list">
-            ${TRUSTED_DEVICES.map(renderDeviceTrustRow).join("")}
-          </div>
-        </article>
-        <article class="panel access-panel">
-          <div class="panel-header panel-header--compact">
-            <h2>Access Review</h2>
-          </div>
-          <div class="review-signal-list">
-            ${renderReviewSignal("Role changes", "Audit required", "Any role or device trust change should create an admin audit record.", "warning")}
-            ${renderReviewSignal("PII display", "Hidden by default", "Staff profile and contact fields stay behind role checks.", "success")}
-            ${renderReviewSignal("Exports", "Controlled", "Report exports need user role, device ID, and audit reason.", "info")}
-          </div>
+          ${renderDeviceTrustTable()}
         </article>
       </section>
     </section>
   `;
 }
 
-function filteredUsers(filter) {
-  if (filter === "active") return DEFAULT_USERS.filter((user) => user.status === "Active");
-  if (filter === "pending") return DEFAULT_USERS.filter((user) => user.status.toLowerCase().includes("pending"));
-  if (filter === "sensitive") return DEFAULT_USERS.filter((user) => Number(user.sensitive_access) > 0);
-  return DEFAULT_USERS;
+function filteredUsers({ filter, search = "", role = "all" }) {
+  const query = `${search}`.trim().toLowerCase();
+  return DEFAULT_USERS.filter((user) => {
+    if (filter === "active" && user.status !== "Active") return false;
+    if (filter === "pending" && !user.status.toLowerCase().includes("pending")) return false;
+    if (filter === "sensitive" && Number(user.sensitive_access) <= 0) return false;
+    if (role !== "all" && user.role !== role) return false;
+    if (!query) return true;
+
+    return [
+      user.display_name,
+      user.role,
+      user.status,
+      user.access_scope,
+      user.last_active,
+    ].join(" ").toLowerCase().includes(query);
+  });
+}
+
+function renderUserControls() {
+  const safeSearch = escapeAttr(state.userSearch ?? "");
+  return `
+    <div class="record-table-controls stock-overview-toolbar" aria-label="User table controls">
+      <div class="record-filter-tabs stock-overview-view-switch" role="group" aria-label="Filter users">
+        ${renderUserFilterTab("all", "All")}
+        ${renderUserFilterTab("active", "Active")}
+        ${renderUserFilterTab("pending", "Pending")}
+        ${renderUserFilterTab("sensitive", "Sensitive Views")}
+      </div>
+      <div class="stock-overview-filter-slot">
+        <div class="stock-overview-field stock-overview-field--search">
+          <input
+            class="stock-overview-search-input"
+            type="search"
+            placeholder="Search users"
+            value="${safeSearch}"
+            data-filter="user-search"
+            aria-label="Search users"
+          />
+        </div>
+        <label class="stock-overview-compact-select field-select-wrap field-select-wrap--stock-overview-filter stock-overview-field">
+          ${renderFieldSelect({
+            name: "user-role-filter",
+            menuStyle: "styled",
+            className: "field-select--stock-overview-filter",
+            menuClassName: "field-select-menu--stock-overview-filter",
+            menuMode: "stock-overview-filter",
+            attrs: 'data-filter="user-role"',
+            options: `
+              <option value="all">All roles</option>
+              ${ROLE_MATRIX.map((role) => `<option value="${role.role}" ${state.userRoleFilter === role.role ? "selected" : ""}>${role.role}</option>`).join("")}
+            `,
+          })}
+        </label>
+      </div>
+    </div>
+  `;
 }
 
 function renderUserFilterTab(value, label) {
@@ -2695,63 +2489,70 @@ function renderUserDetailPanel(user) {
   `;
 }
 
-function renderAccessUserCard(user) {
+function renderRoleMatrixTable() {
   return `
-    <article class="access-user-card">
-      <div>
-        <span>${escapeHtml(user.role)}</span>
-        <strong>${escapeHtml(user.display_name)}</strong>
-      </div>
-      <b>${escapeHtml(user.status)}</b>
-      <dl>
-        <div><dt>Scope</dt><dd>${escapeHtml(user.access_scope)}</dd></div>
-        <div><dt>Last Active</dt><dd>${escapeHtml(user.last_active)}</dd></div>
-        <div><dt>Sensitive Views</dt><dd>${escapeHtml(user.sensitive_access)}</dd></div>
-      </dl>
-      <details class="privacy-details">
-        <summary>Private staff details</summary>
-        <p>${escapeHtml(user.private_note)}</p>
-        <p>Record ID: <code>${escapeHtml(user.id)}</code></p>
-      </details>
-    </article>
-  `;
-}
-
-function renderRoleMatrixRow(row) {
-  return `
-    <div class="role-matrix-row">
-      <strong>${escapeHtml(row.role)}</strong>
-      <dl>
-        <div><dt>Stock</dt><dd>${escapeHtml(row.stock)}</dd></div>
-        <div><dt>Sales</dt><dd>${escapeHtml(row.sales)}</dd></div>
-        <div><dt>Reports</dt><dd>${escapeHtml(row.reports)}</dd></div>
-        <div><dt>Users</dt><dd>${escapeHtml(row.users)}</dd></div>
-      </dl>
+    <div class="record-table-shell support-table-shell">
+      <table class="record-table role-matrix-table">
+        <thead>
+          <tr>
+            <th>Role</th>
+            <th>Stock</th>
+            <th>Sales</th>
+            <th>Reports</th>
+            <th>Users</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${ROLE_MATRIX.map(
+            (row) => `
+              <tr>
+                <td><strong>${escapeHtml(row.role)}</strong></td>
+                <td>${escapeHtml(row.stock)}</td>
+                <td>${escapeHtml(row.sales)}</td>
+                <td>${escapeHtml(row.reports)}</td>
+                <td>${escapeHtml(row.users)}</td>
+              </tr>
+            `,
+          ).join("")}
+        </tbody>
+      </table>
     </div>
   `;
 }
 
-function renderDeviceTrustRow(device) {
-  const tone = device.trust === "Trusted" ? "success" : device.trust === "Review" ? "warning" : "error";
-
+function renderDeviceTrustTable() {
   return `
-    <div class="device-trust-row is-${tone}">
-      <div>
-        <strong>${escapeHtml(device.name)}</strong>
-        <span>${escapeHtml(device.id)}</span>
-      </div>
-      <dl>
-        <div><dt>Trust</dt><dd>${escapeHtml(device.trust)}</dd></div>
-        <div><dt>Offline</dt><dd>${escapeHtml(device.offline)}</dd></div>
-        <div><dt>Last Sync</dt><dd>${escapeHtml(device.last_sync)}</dd></div>
-      </dl>
+    <div class="record-table-shell support-table-shell">
+      <table class="record-table device-trust-table">
+        <thead>
+          <tr>
+            <th>Device</th>
+            <th>Trust</th>
+            <th>Offline</th>
+            <th>Last Sync</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${TRUSTED_DEVICES.map(
+            (device) => `
+              <tr>
+                <td>
+                  <strong>${escapeHtml(device.name)}</strong>
+                  <span>${escapeHtml(device.id)}</span>
+                </td>
+                <td><span class="badge ${device.trust === "Trusted" ? "is-valid" : device.trust === "Review" ? "is-warning" : "is-error"}">${escapeHtml(device.trust)}</span></td>
+                <td>${escapeHtml(device.offline)}</td>
+                <td>${escapeHtml(device.last_sync)}</td>
+              </tr>
+            `,
+          ).join("")}
+        </tbody>
+      </table>
     </div>
   `;
 }
 
 function renderSettingsPage() {
-  const content = modulePageContent.settings;
-
   return `
     <section class="content-grid module-page settings-workspace" aria-label="Settings">
       <section class="module-metrics" aria-label="Settings metrics">
@@ -2765,17 +2566,13 @@ function renderSettingsPage() {
           <div class="panel-header panel-header--compact">
             <h2>Tenant Defaults</h2>
           </div>
-          <div class="settings-policy-list">
-            ${SETTINGS_POLICIES.map(renderSettingsPolicy).join("")}
-          </div>
+          ${renderSettingsPolicyTable()}
         </article>
         <article class="panel settings-panel">
           <div class="panel-header panel-header--compact">
             <h2>Numbering Rules</h2>
           </div>
-          <div class="numbering-list">
-            ${NUMBERING_RULES.map(renderNumberingRule).join("")}
-          </div>
+          ${renderNumberingRuleTable()}
         </article>
       </section>
       <section class="settings-grid" aria-label="Development and privacy settings">
@@ -2783,20 +2580,13 @@ function renderSettingsPage() {
           <div class="panel-header panel-header--compact">
             <h2>CI Lanes</h2>
           </div>
-          <div class="ci-lane-list">
-            ${CI_LANES.map(renderCiLane).join("")}
-          </div>
+          ${renderCiLaneTable()}
         </article>
         <article class="panel settings-panel">
           <div class="panel-header panel-header--compact">
             <h2>Privacy Guardrails</h2>
           </div>
-          <div class="review-signal-list">
-            ${renderReviewSignal("Local cache", "Minimized", "Prototype state avoids full private staff/contact records.", "success")}
-            ${renderReviewSignal("Tenant data", "Scoped", "All visible data is under the Northstar Hospitality demo tenant.", "success")}
-            ${renderReviewSignal("Exports", "Role gated", "Detailed exports should require reason, role, and audit entry.", "warning")}
-            ${renderReviewSignal("Sync", state.outbox.length, "Saved work count that would be sent in the next atomic batch.", state.outbox.length > 0 ? "warning" : "success")}
-          </div>
+          ${renderPrivacyGuardrailTable()}
         </article>
       </section>
       <article class="panel panel-wide report-export-note">
@@ -2810,36 +2600,119 @@ function renderSettingsPage() {
   `;
 }
 
-function renderSettingsPolicy(policy) {
+function renderSettingsPolicyTable() {
   return `
-    <div class="settings-policy-row">
-      <div>
-        <strong>${escapeHtml(policy.label)}</strong>
-        <span>${escapeHtml(policy.detail)}</span>
-      </div>
-      <b>${escapeHtml(policy.value)}</b>
+    <div class="record-table-shell settings-table-shell">
+      <table class="record-table settings-policy-table">
+        <thead>
+          <tr>
+            <th>Setting</th>
+            <th>Value</th>
+            <th>Use</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${SETTINGS_POLICIES.map(
+            (policy) => `
+              <tr>
+                <td><strong>${escapeHtml(policy.label)}</strong></td>
+                <td>${escapeHtml(policy.value)}</td>
+                <td>${escapeHtml(policy.detail)}</td>
+              </tr>
+            `,
+          ).join("")}
+        </tbody>
+      </table>
     </div>
   `;
 }
 
-function renderNumberingRule(rule) {
+function renderNumberingRuleTable() {
   return `
-    <div class="numbering-rule">
-      <strong>${escapeHtml(rule.prefix)}</strong>
-      <div>
-        <code>${escapeHtml(rule.example)}</code>
-        <span>${escapeHtml(rule.use)}</span>
-      </div>
+    <div class="record-table-shell settings-table-shell">
+      <table class="record-table settings-numbering-table">
+        <thead>
+          <tr>
+            <th>Prefix</th>
+            <th>Example</th>
+            <th>Use</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${NUMBERING_RULES.map(
+            (rule) => `
+              <tr>
+                <td><strong>${escapeHtml(rule.prefix)}</strong></td>
+                <td><code>${escapeHtml(rule.example)}</code></td>
+                <td>${escapeHtml(rule.use)}</td>
+              </tr>
+            `,
+          ).join("")}
+        </tbody>
+      </table>
     </div>
   `;
 }
 
-function renderCiLane(lane) {
+function renderCiLaneTable() {
   return `
-    <div class="ci-lane">
-      <strong>${escapeHtml(lane.name)}</strong>
-      <code>${escapeHtml(lane.command)}</code>
-      <span>${escapeHtml(lane.purpose)}</span>
+    <div class="record-table-shell settings-table-shell">
+      <table class="record-table settings-ci-table">
+        <thead>
+          <tr>
+            <th>Lane</th>
+            <th>Command</th>
+            <th>Purpose</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${CI_LANES.map(
+            (lane) => `
+              <tr>
+                <td><strong>${escapeHtml(lane.name)}</strong></td>
+                <td><code>${escapeHtml(lane.command)}</code></td>
+                <td>${escapeHtml(lane.purpose)}</td>
+              </tr>
+            `,
+          ).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderPrivacyGuardrailTable() {
+  const guardrails = [
+    ["Local cache", "Minimized", "Prototype state avoids full private staff/contact records.", "success"],
+    ["Tenant data", "Scoped", "All visible data is under the Northstar Hospitality demo tenant.", "success"],
+    ["Exports", "Role gated", "Detailed exports require reason, role, and audit entry.", "warning"],
+    ["Sync", `${state.outbox.length} saved`, "Saved work count that would be sent in the next atomic batch.", state.outbox.length > 0 ? "warning" : "success"],
+  ];
+
+  return `
+    <div class="record-table-shell settings-guardrail-shell">
+      <table class="record-table settings-guardrail-table">
+        <thead>
+          <tr>
+            <th>Guardrail</th>
+            <th>Status</th>
+            <th>Policy</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${guardrails
+            .map(
+              ([label, status, policy, tone]) => `
+                <tr>
+                  <td><strong>${escapeHtml(label)}</strong></td>
+                  <td><span class="badge ${tone === "warning" ? "is-warning" : "is-valid"}">${escapeHtml(status)}</span></td>
+                  <td>${escapeHtml(policy)}</td>
+                </tr>
+              `,
+            )
+            .join("")}
+        </tbody>
+      </table>
     </div>
   `;
 }
@@ -2881,16 +2754,6 @@ function renderReportPanel({ eyebrow, title, summary, rows, empty }) {
         </table>
       </div>
     </article>
-  `;
-}
-
-function renderReviewSignal(label, value, text, tone) {
-  return `
-    <div class="review-signal is-${tone}">
-      <strong>${escapeHtml(label)}</strong>
-      <b>${escapeHtml(value)}</b>
-      <span>${escapeHtml(text)}</span>
-    </div>
   `;
 }
 
@@ -2949,48 +2812,6 @@ function movementReportRows(events) {
     .filter((row) => !row.value.startsWith("0 "));
 }
 
-function renderMenuPanel(menu) {
-  const client = DEFAULT_CLIENTS.find((candidate) => candidate.id === menu.client_id);
-  const items = menuItemsForMenu(menu.id);
-
-  return `
-    <article class="panel menu-panel">
-      <div class="relationship-card-topline">
-        <span>${escapeHtml(menu.cadence)} menu</span>
-        <strong>${escapeHtml(menu.name)}</strong>
-      </div>
-      <div class="menu-panel-meta">
-        <span>${escapeHtml(client?.name ?? "Unassigned client")}</span>
-        <span>${escapeHtml(menu.status)}</span>
-      </div>
-      <div class="menu-item-list">
-        ${items.map((item) => renderMenuItemCard(item)).join("")}
-      </div>
-    </article>
-  `;
-}
-
-function renderMenuItemCard(item) {
-  const menu = getMenuById(item.menu_id);
-  const client = menu ? DEFAULT_CLIENTS.find((candidate) => candidate.id === menu.client_id) : null;
-
-  return `
-    <section class="menu-item-card">
-      <div>
-        <span>${saleTypeLabels[item.sale_type] ?? "Sale"}</span>
-        <strong>${escapeHtml(item.name)}</strong>
-      </div>
-      <ul>
-        ${item.recipe.map((line) => `<li>${formatQuantity(line.quantity)} ${productUnit(line.product_id)} ${escapeHtml(productName(line.product_id))}</li>`).join("")}
-      </ul>
-      <button class="table-action" data-action="start-menu-sale" data-menu-item-id="${escapeAttr(item.id)}" type="button">
-        Fulfill in Sales
-      </button>
-      <small>${escapeHtml(client?.name ?? "No client")} &middot; ${escapeHtml(item.default_location)}</small>
-    </section>
-  `;
-}
-
 function renderRecipePreview(item) {
   if (!item) {
     return `
@@ -3013,7 +2834,6 @@ function renderRecipePreview(item) {
 }
 
 function renderSalesPage() {
-  const content = modulePageContent.sales;
   const form = state.saleForm ?? defaultState().saleForm;
   const sales = Array.isArray(state.sales) ? state.sales : [];
   const queuedSaleEvents = state.outbox.filter((event) => event.source_type === "sale").length;
@@ -3132,7 +2952,6 @@ function renderSalesPage() {
           selectedRecord: selectedSale,
         })}
       </section>
-      ${renderModuleSections(content)}
     </section>
   `;
 }
@@ -3172,11 +2991,15 @@ function renderSaleFilterTab(value, label) {
 }
 
 function renderPurchasesPage() {
-  const content = modulePageContent.purchases;
   const form = state.purchaseForm ?? defaultState().purchaseForm;
   const purchases = Array.isArray(state.purchases) ? state.purchases : [];
   const queuedPurchaseEvents = state.outbox.filter((event) => event.source_type === "purchase").length;
-  const filteredPurchases = filteredPurchaseRecords(state.purchaseViewFilter ?? "all", purchases);
+  const filteredPurchases = filteredPurchaseRecords({
+    filter: state.purchaseViewFilter ?? "all",
+    purchases,
+    search: state.purchaseSearch ?? "",
+    supplierId: state.purchaseSupplierFilter ?? "all",
+  });
   const selectedPurchase = filteredPurchases.find((purchase) => purchase.id === state.selectedPurchaseId) ?? null;
 
   return `
@@ -3191,6 +3014,7 @@ function renderPurchasesPage() {
         <article class="panel business-form-panel">
           <div class="panel-header panel-header--compact">
             <h2>Receive Purchase</h2>
+            <button class="button button-secondary" data-action="open-stock-in-action" type="button">${icon("clipboardPlus")}Stock In Without Purchase</button>
           </div>
           <form class="business-form" data-form="purchase">
             <label class="field-select-wrap">
@@ -3229,7 +3053,7 @@ function renderPurchasesPage() {
               <textarea name="notes" rows="3" placeholder="Example: received complete delivery">${escapeHtml(form.notes)}</textarea>
             </label>
             <div class="business-form-note form-field-span-2">
-              Receiving queues a STOCK_IN event. Purchase orders stay separate until actual stock arrives.
+              Receiving queues a STOCK_IN event linked to this supplier receipt. Use Stock In Without Purchase for unplanned stock-in work.
             </div>
             <div class="form-footer business-form-footer form-field-span-2">
               <div class="validation is-valid">Ready to queue as saved work.</div>
@@ -3245,19 +3069,30 @@ function renderPurchasesPage() {
           selectedRecord: selectedPurchase,
         })}
       </section>
-      ${renderModuleSections(content)}
     </section>
   `;
 }
 
-function filteredPurchaseRecords(filter, purchases) {
-  if (filter === "review") {
-    const reviewSupplierIds = new Set(DEFAULT_SUPPLIERS.filter((supplier) => supplier.variance_cases > 0).map((supplier) => supplier.id));
-    return purchases.filter((purchase) => reviewSupplierIds.has(purchase.supplier_id));
-  }
-  if (filter === "spirits") return purchases.filter((purchase) => getProductById(purchase.product_id)?.category === "Spirits");
-  if (filter === "produce") return purchases.filter((purchase) => getProductById(purchase.product_id)?.category === "Kitchen");
-  return purchases;
+function filteredPurchaseRecords({ filter, purchases, search = "", supplierId = "all" }) {
+  const query = `${search}`.trim().toLowerCase();
+  return purchases.filter((purchase) => {
+    if (filter === "review") {
+      const supplier = DEFAULT_SUPPLIERS.find((candidate) => candidate.id === purchase.supplier_id);
+      if (!(supplier?.variance_cases > 0)) return false;
+    }
+    if (filter === "spirits" && getProductById(purchase.product_id)?.category !== "Spirits") return false;
+    if (filter === "produce" && getProductById(purchase.product_id)?.category !== "Kitchen") return false;
+    if (supplierId !== "all" && purchase.supplier_id !== supplierId) return false;
+    if (!query) return true;
+
+    return [
+      supplierName(purchase.supplier_id),
+      productName(purchase.product_id),
+      purchase.location,
+      purchase.notes,
+      purchase.status,
+    ].join(" ").toLowerCase().includes(query);
+  });
 }
 
 function renderPurchaseFilterTab(value, label) {
@@ -3266,36 +3101,6 @@ function renderPurchaseFilterTab(value, label) {
     <button class="record-filter-tab stock-overview-view-tab ${active ? "is-active" : ""}" data-purchase-filter="${escapeAttr(value)}" type="button" aria-pressed="${active}">
       ${escapeHtml(label)}
     </button>
-  `;
-}
-
-function renderModuleSections(content) {
-  return `
-    <article class="panel panel-wide">
-      <div class="panel-header panel-header--compact">
-        <h2>Page Sections</h2>
-      </div>
-      <div class="module-section-grid">
-        ${content.sections
-          .map(
-            ([title, text]) => `
-              <section class="module-section-card">
-                <h3>${title}</h3>
-                <p>${text}</p>
-              </section>
-            `,
-          )
-          .join("")}
-      </div>
-    </article>
-    <article class="panel panel-wide module-workflow">
-      <div class="panel-header panel-header--compact">
-        <h2>Ledger Rules</h2>
-      </div>
-      <ul>
-        ${content.workflow.map((item) => `<li>${item}</li>`).join("")}
-      </ul>
-    </article>
   `;
 }
 
@@ -3327,17 +3132,46 @@ function renderBusinessRecordPanel({ title, empty, records, type, selectedRecord
 
 function renderPurchaseRecordWorkspace({ title, empty, records, selectedRecord }) {
   const safeRecords = [...records].slice().reverse();
+  const safeSearch = escapeAttr(state.purchaseSearch ?? "");
 
   return `
     <article class="panel business-record-panel record-table-panel sales-record-panel">
       <div class="panel-header panel-header--compact">
         <h2>${title}</h2>
       </div>
-      <div class="record-filter-tabs" role="group" aria-label="Filter purchases">
-        ${renderPurchaseFilterTab("all", "All")}
-        ${renderPurchaseFilterTab("spirits", "Spirits")}
-        ${renderPurchaseFilterTab("produce", "Produce")}
-        ${renderPurchaseFilterTab("review", "Needs Review")}
+      <div class="record-table-controls stock-overview-toolbar" aria-label="Purchase table controls">
+        <div class="record-filter-tabs stock-overview-view-switch" role="group" aria-label="Filter purchases">
+          ${renderPurchaseFilterTab("all", "All")}
+          ${renderPurchaseFilterTab("spirits", "Spirits")}
+          ${renderPurchaseFilterTab("produce", "Produce")}
+          ${renderPurchaseFilterTab("review", "Needs Review")}
+        </div>
+        <div class="stock-overview-filter-slot">
+          <div class="stock-overview-field stock-overview-field--search">
+            <input
+              class="stock-overview-search-input"
+              type="search"
+              placeholder="Search purchases"
+              value="${safeSearch}"
+              data-filter="purchase-search"
+              aria-label="Search purchases"
+            />
+          </div>
+          <label class="stock-overview-compact-select field-select-wrap field-select-wrap--stock-overview-filter stock-overview-field">
+            ${renderFieldSelect({
+              name: "purchase-supplier-filter",
+              menuStyle: "styled",
+              className: "field-select--stock-overview-filter",
+              menuClassName: "field-select-menu--stock-overview-filter",
+              menuMode: "stock-overview-filter",
+              attrs: 'data-filter="purchase-supplier"',
+              options: `
+                <option value="all">All suppliers</option>
+                ${DEFAULT_SUPPLIERS.map((supplier) => `<option value="${supplier.id}" ${state.purchaseSupplierFilter === supplier.id ? "selected" : ""}>${supplier.name}</option>`).join("")}
+              `,
+            })}
+          </label>
+        </div>
       </div>
       <section class="record-workspace purchase-record-workspace ${selectedRecord ? "has-detail" : ""}" data-record-workspace="purchases" aria-label="Purchase records">
         <div class="record-table-shell">
@@ -4266,21 +4100,100 @@ function renderWorkQueue(outboxValidation) {
 }
 
 function renderAudit(localLedger) {
-  const rows = [...replayAuditTrail(localLedger)].reverse();
+  const rows = filterAuditRows([...replayAuditTrail(localLedger)].reverse());
   const selectedEntry = rows.find((entry) => entry.event_id === state.selectedAuditEventId) ?? null;
 
   return `
     <section class="content-grid module-page audit-workspace">
       <section class="record-workspace audit-record-workspace ${selectedEntry ? "has-detail" : ""}" data-record-workspace="audit" aria-label="Audit records">
         <article class="panel panel-wide panel--flush-table record-table-panel">
-          <div class="panel-header panel-header--compact">
-            <h2>Movement History</h2>
-          </div>
+          ${renderAuditControls()}
           ${renderAuditTable(rows, selectedEntry)}
         </article>
         ${selectedEntry ? renderAuditDetailPanel(selectedEntry) : ""}
       </section>
     </section>
+  `;
+}
+
+function filterAuditRows(rows) {
+  const query = `${state.auditSearch ?? ""}`.trim().toLowerCase();
+  const productId = state.auditProductFilter ?? "all";
+  const filter = state.auditViewFilter ?? "all";
+
+  return rows.filter((entry) => {
+    if (productId !== "all" && entry.product_id !== productId) return false;
+    if (filter === "stock-in" && entry.type !== "STOCK_IN") return false;
+    if (filter === "use-stock" && entry.type !== "STOCK_OUT") return false;
+    if (filter === "movement" && entry.type !== "STOCK_TRANSFER") return false;
+    if (filter === "correction" && entry.type !== "STOCK_ADJUSTMENT") return false;
+    if (filter === "undo" && entry.type !== "STOCK_REVERT") return false;
+    if (filter === "catalog" && !["PRODUCT_CREATED", "PRODUCT_DEACTIVATED", "PRODUCT_REACTIVATED"].includes(entry.type)) return false;
+    if (!query) return true;
+
+    return [
+      eventLabels[entry.type] ?? entry.type,
+      entry.product_name,
+      entry.location,
+      entry.reason,
+      auditSourceLabel(entry),
+      entry.actor_name,
+    ]
+      .join(" ")
+      .toLowerCase()
+      .includes(query);
+  });
+}
+
+function renderAuditControls() {
+  const safeSearch = escapeAttr(state.auditSearch ?? "");
+  return `
+    <div class="record-table-controls stock-overview-toolbar" aria-label="Audit table controls">
+      <div class="record-filter-tabs stock-overview-view-switch" role="group" aria-label="Filter audit trail">
+        ${renderAuditFilterTab("all", "All")}
+        ${renderAuditFilterTab("stock-in", "Stock In")}
+        ${renderAuditFilterTab("use-stock", "Use Stock")}
+        ${renderAuditFilterTab("movement", "Moves")}
+        ${renderAuditFilterTab("correction", "Corrections")}
+        ${renderAuditFilterTab("undo", "Undo")}
+        ${renderAuditFilterTab("catalog", "Catalog")}
+      </div>
+      <div class="stock-overview-filter-slot">
+        <div class="stock-overview-field stock-overview-field--search">
+          <input
+            class="stock-overview-search-input"
+            type="search"
+            placeholder="Search audit trail"
+            value="${safeSearch}"
+            data-filter="audit-search"
+            aria-label="Search audit trail"
+          />
+        </div>
+        <label class="stock-overview-compact-select field-select-wrap field-select-wrap--stock-overview-filter stock-overview-field">
+          ${renderFieldSelect({
+            name: "audit-product-filter",
+            menuStyle: "styled",
+            className: "field-select--stock-overview-filter",
+            menuClassName: "field-select-menu--stock-overview-filter",
+            menuMode: "stock-overview-filter",
+            attrs: 'data-filter="audit-product"',
+            options: `
+              <option value="all">All products</option>
+              ${getProductCatalog().map((product) => `<option value="${product.id}" ${state.auditProductFilter === product.id ? "selected" : ""}>${escapeHtml(product.name)}</option>`).join("")}
+            `,
+          })}
+        </label>
+      </div>
+    </div>
+  `;
+}
+
+function renderAuditFilterTab(value, label) {
+  const active = (state.auditViewFilter ?? "all") === value;
+  return `
+    <button class="record-filter-tab stock-overview-view-tab ${active ? "is-active" : ""}" data-audit-filter="${escapeAttr(value)}" type="button" aria-pressed="${active}">
+      ${escapeHtml(label)}
+    </button>
   `;
 }
 
@@ -4581,6 +4494,13 @@ function renderAuditTable(allRows, selectedEntry = null) {
   return `
     <div class="record-table-shell audit-table-shell">
       <table class="record-table audit-table">
+        <colgroup>
+          <col class="audit-col-sequence" />
+          <col class="audit-col-action" />
+          <col class="audit-col-product" />
+          <col class="audit-col-change" />
+          <col class="audit-col-source" />
+        </colgroup>
         <thead>
           <tr>
             <th class="table-cell--numeric">No.</th>
@@ -4588,7 +4508,6 @@ function renderAuditTable(allRows, selectedEntry = null) {
             <th>Product</th>
             <th class="table-cell--numeric">Change</th>
             <th>Source</th>
-            <th class="detail-optional">Actor</th>
           </tr>
         </thead>
         <tbody>
@@ -4602,7 +4521,6 @@ function renderAuditTable(allRows, selectedEntry = null) {
                   <td>${entry.product_name}</td>
                   <td class="table-cell--numeric ${entry.delta < 0 ? "danger-text" : ""}">${entry.delta > 0 ? "+" : ""}${formatQuantity(entry.delta)}</td>
                   <td>${auditSourceLabel(entry)}</td>
-                  <td class="detail-optional">${entry.actor_name}</td>
                 </tr>
               `;
             })
@@ -4955,6 +4873,38 @@ function bindEvents() {
     });
   });
 
+  document.querySelectorAll("[data-filter='client-search']").forEach((input) => {
+    input.addEventListener("input", () => {
+      state.clientSearch = input.value;
+      state.selectedClientId = null;
+      commit();
+    });
+  });
+
+  document.querySelectorAll("[data-filter='client-menu']").forEach((select) => {
+    select.addEventListener("change", () => {
+      state.clientMenuFilter = select.value || "all";
+      state.selectedClientId = null;
+      commit();
+    });
+  });
+
+  document.querySelectorAll("[data-filter='purchase-search']").forEach((input) => {
+    input.addEventListener("input", () => {
+      state.purchaseSearch = input.value;
+      state.selectedPurchaseId = null;
+      commit();
+    });
+  });
+
+  document.querySelectorAll("[data-filter='purchase-supplier']").forEach((select) => {
+    select.addEventListener("change", () => {
+      state.purchaseSupplierFilter = select.value || "all";
+      state.selectedPurchaseId = null;
+      commit();
+    });
+  });
+
   document.querySelectorAll("[data-filter='product-search']").forEach((input) => {
     input.addEventListener("input", () => {
       state.productSearch = input.value;
@@ -4981,6 +4931,54 @@ function bindEvents() {
     select.addEventListener("change", () => {
       state.supplierProductFilter = select.value || "all";
       state.selectedSupplierId = null;
+      commit();
+    });
+  });
+
+  document.querySelectorAll("[data-filter='menu-search']").forEach((input) => {
+    input.addEventListener("input", () => {
+      state.menuSearch = input.value;
+      state.selectedMenuId = null;
+      commit();
+    });
+  });
+
+  document.querySelectorAll("[data-filter='menu-client']").forEach((select) => {
+    select.addEventListener("change", () => {
+      state.menuClientFilter = select.value || "all";
+      state.selectedMenuId = null;
+      commit();
+    });
+  });
+
+  document.querySelectorAll("[data-filter='user-search']").forEach((input) => {
+    input.addEventListener("input", () => {
+      state.userSearch = input.value;
+      state.selectedUserId = null;
+      commit();
+    });
+  });
+
+  document.querySelectorAll("[data-filter='user-role']").forEach((select) => {
+    select.addEventListener("change", () => {
+      state.userRoleFilter = select.value || "all";
+      state.selectedUserId = null;
+      commit();
+    });
+  });
+
+  document.querySelectorAll("[data-filter='audit-search']").forEach((input) => {
+    input.addEventListener("input", () => {
+      state.auditSearch = input.value;
+      state.selectedAuditEventId = null;
+      commit();
+    });
+  });
+
+  document.querySelectorAll("[data-filter='audit-product']").forEach((select) => {
+    select.addEventListener("change", () => {
+      state.auditProductFilter = select.value || "all";
+      state.selectedAuditEventId = null;
       commit();
     });
   });
@@ -5101,6 +5099,14 @@ function bindEvents() {
     button.addEventListener("click", () => {
       state.userViewFilter = button.dataset.userFilter ?? "all";
       state.selectedUserId = null;
+      commit();
+    });
+  });
+
+  document.querySelectorAll("[data-audit-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.auditViewFilter = button.dataset.auditFilter ?? "all";
+      state.selectedAuditEventId = null;
       commit();
     });
   });
@@ -5236,9 +5242,9 @@ function bindEvents() {
     if (!["clients", "sales", "purchases", "suppliers", "menus", "locations", "users", "audit"].includes(state.activeView)) return;
     if (event.target.closest("[data-record-detail-panel]")) return;
     if (event.target.closest("[data-client-row], [data-sale-row], [data-purchase-row], [data-supplier-row], [data-menu-row], [data-location-row], [data-user-row], [data-audit-row]")) return;
-    if (event.target.closest("[data-client-filter], [data-sale-filter], [data-purchase-filter], [data-supplier-filter], [data-menu-filter], [data-location-record-filter], [data-user-filter]")) return;
-    if (event.target.closest("[data-filter='supplier-search'], [data-filter='supplier-product'], [data-custom-select]")) return;
-    if (event.target.closest("[data-action='start-client-sale'], [data-action='start-supplier-purchase'], [data-view], [data-action='close-record-detail']")) return;
+    if (event.target.closest("[data-client-filter], [data-sale-filter], [data-purchase-filter], [data-supplier-filter], [data-menu-filter], [data-location-record-filter], [data-user-filter], [data-audit-filter]")) return;
+    if (event.target.closest("[data-filter='client-search'], [data-filter='client-menu'], [data-filter='purchase-search'], [data-filter='purchase-supplier'], [data-filter='supplier-search'], [data-filter='supplier-product'], [data-filter='menu-search'], [data-filter='menu-client'], [data-filter='user-search'], [data-filter='user-role'], [data-filter='audit-search'], [data-filter='audit-product'], [data-custom-select]")) return;
+    if (event.target.closest("[data-action='start-client-sale'], [data-action='start-supplier-purchase'], [data-action='open-stock-in-action'], [data-view], [data-action='close-record-detail']")) return;
     state.selectedClientId = null;
     state.selectedSaleId = null;
     state.selectedPurchaseId = null;
@@ -5260,6 +5266,10 @@ function bindEvents() {
 
   document.querySelectorAll("[data-action='start-supplier-purchase']").forEach((button) => {
     button.addEventListener("click", () => startSupplierPurchase(button.dataset.supplierId));
+  });
+
+  document.querySelectorAll("[data-action='open-stock-in-action']").forEach((button) => {
+    button.addEventListener("click", () => openStockInAction());
   });
 
   const form = document.querySelector("[data-form='event']");
@@ -5607,6 +5617,26 @@ function startSupplierPurchase(supplierId) {
   state.selectedSupplierId = null;
   state.guideOpen = false;
   state.accountOpen = false;
+  commit();
+}
+
+function openStockInAction() {
+  const currentForm = state.form ?? defaultState().form;
+  state.form = {
+    ...currentForm,
+    type: "STOCK_IN",
+    from_location: "",
+    to_location: currentForm.to_location || state.purchaseForm?.location || "Cellar",
+    quantity: currentForm.quantity || 1,
+    reason: currentForm.reason || "",
+    original_event_id: "",
+  };
+  normalizeFormForType({ resetTemplateDefaults: false });
+  state.activeView = "compose";
+  state.selectedPurchaseId = null;
+  state.guideOpen = false;
+  state.accountOpen = false;
+  shouldFocusActionOnCompose = true;
   commit();
 }
 
@@ -6448,17 +6478,17 @@ function navIcon(view) {
     home: "home",
     dashboard: "layers",
     sales: "send",
-    purchases: "plus",
-    clients: "home",
-    suppliers: "layers",
-    menus: "list",
-    products: "list",
+    purchases: "receipt",
+    clients: "briefcase",
+    suppliers: "truck",
+    menus: "utensils",
+    products: "package",
     locations: "map",
-    compose: "plus",
-    reports: "list",
+    compose: "clipboardPlus",
+    reports: "chart",
     audit: "history",
-    users: "home",
-    settings: "refresh",
+    users: "users",
+    settings: "sliders",
   };
 
   return icons[view] ?? "layers";
@@ -6473,6 +6503,15 @@ function icon(name) {
     check: '<path d="M20 6 9 17l-5-5"/>',
     map: '<path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6Z"/><path d="M9 3v15"/><path d="M15 6v15"/>',
     list: '<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>',
+    receipt: '<path d="M6 3h12v18l-2-1.2-2 1.2-2-1.2-2 1.2-2-1.2L6 21V3Z"/><path d="M9 7h6"/><path d="M9 11h6"/><path d="M9 15h4"/>',
+    briefcase: '<path d="M10 6V5a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v1"/><path d="M3 8h18v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8Z"/><path d="M3 13h18"/><path d="M10 13v2h4v-2"/>',
+    truck: '<path d="M3 6h11v10H3z"/><path d="M14 10h4l3 3v3h-7z"/><path d="M7 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/><path d="M17 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/>',
+    utensils: '<path d="M6 3v8"/><path d="M4 3v4a2 2 0 0 0 4 0V3"/><path d="M6 11v10"/><path d="M17 3v18"/><path d="M14 3h3a3 3 0 0 1 0 6h-3"/>',
+    package: '<path d="m12 3 8 4-8 4-8-4 8-4Z"/><path d="M4 7v10l8 4 8-4V7"/><path d="M12 11v10"/><path d="m8 5 8 4"/>',
+    clipboardPlus: '<path d="M9 4h6"/><path d="M10 2h4a2 2 0 0 1 2 2v2H8V4a2 2 0 0 1 2-2Z"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2"/><path d="M12 11v6"/><path d="M9 14h6"/>',
+    chart: '<path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 16v-5"/><path d="M12 16V8"/><path d="M16 16v-3"/>',
+    users: '<path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><path d="M9.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+    sliders: '<path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M2 14h4"/><path d="M10 8h4"/><path d="M18 16h4"/>',
     spark: '<path d="M12 2l1.6 5.4L19 9l-5.4 1.6L12 16l-1.6-5.4L5 9l5.4-1.6L12 2Z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z"/>',
     close: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
     chevron: '<path d="m6 9 6 6 6-6"/>',

@@ -1,23 +1,21 @@
-.audit-table th:nth-child(1),
-.audit-table td:nth-child(1) {
-  width: 68px;
+.audit-table col.audit-col-sequence {
+  width: 72px;
 }
 
-.audit-table th:nth-child(2),
-.audit-table td:nth-child(2) {
-  width: 150px;
+.audit-table col.audit-col-action {
+  width: 160px;
 }
 
-.audit-table th:nth-child(5),
-.audit-table td:nth-child(5),
-.audit-table th:nth-child(6),
-.audit-table td:nth-child(6) {
-  width: 118px;
+.audit-table col.audit-col-product {
+  width: 30%;
 }
 
-.audit-table th:nth-child(7),
-.audit-table td:nth-child(7) {
-  min-width: 190px;
+.audit-table col.audit-col-change {
+  width: 110px;
+}
+
+.audit-table col.audit-col-source {
+  width: 28%;
 }
 
 .audit-technical {

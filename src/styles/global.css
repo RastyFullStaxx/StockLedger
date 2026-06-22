@@ -1058,8 +1058,7 @@ textarea:focus-visible {
 }
 
 .landing-ledger span,
-.landing-card p,
-.landing-timeline small {
+.landing-card p {
   color: var(--color-text-muted);
 }
 
@@ -1103,39 +1102,6 @@ textarea:focus-visible {
 
 .landing-card .table-action {
   justify-self: start;
-}
-
-.landing-recent {
-  padding: 15px;
-}
-
-.landing-timeline {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.landing-timeline div {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-  padding: 11px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: rgba(244, 249, 247, 0.74);
-}
-
-.landing-timeline span {
-  color: var(--color-primary);
-  font-size: 0.82rem;
-  font-weight: 760;
-}
-
-.landing-timeline strong,
-.landing-timeline small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .panel {
@@ -1743,9 +1709,21 @@ table {
   table-layout: fixed;
 }
 
+.stock-overview-grid .stock-table:not(.product-table-wrap) {
+  height: clamp(320px, calc(100dvh - 260px), 680px);
+  overflow: auto;
+}
+
 .stock-table th,
 .stock-table td {
   padding: 12px;
+}
+
+.stock-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: rgba(237, 246, 243, 0.96);
 }
 
 .stock-table th:nth-child(1),
@@ -2317,8 +2295,7 @@ th.numeric {
   .composer-grid,
   .status-grid,
   .landing-hero,
-  .landing-grid,
-  .landing-timeline {
+  .landing-grid {
     grid-template-columns: 1fr;
   }
 
