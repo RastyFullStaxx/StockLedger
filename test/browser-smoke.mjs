@@ -50,6 +50,24 @@ async function setProductAmount(productId, amount) {
   }, String(amount));
 }
 
+async function expectFilterTabsNotClipped(label) {
+  const clipped = await page.locator(".record-filter-tabs, .stock-overview-view-switch").evaluateAll((groups) =>
+    groups
+      .filter((group) => group.offsetParent !== null)
+      .map((group) => ({
+        text: group.textContent?.trim() ?? "",
+        scrollWidth: group.scrollWidth,
+        clientWidth: group.clientWidth,
+        scrollHeight: group.scrollHeight,
+        clientHeight: group.clientHeight,
+      }))
+      .filter((group) => group.scrollWidth > group.clientWidth + 1 || group.scrollHeight > group.clientHeight + 1),
+  );
+  if (clipped.length > 0) {
+    throw new Error(`${label} filter tabs should fit without internal scrollbars: ${JSON.stringify(clipped)}`);
+  }
+}
+
 try {
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -81,6 +99,9 @@ try {
   await page.getByLabel("Ask about StockLedger").fill("How many stocks do we have?");
   await page.getByRole("button", { name: "Send", exact: true }).click();
   await page.locator(".assistant-message").filter({ hasText: "products with replayed stock" }).waitFor();
+  await page.getByLabel("Ask about StockLedger").fill("Who won the basketball game?");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await page.locator(".assistant-message").filter({ hasText: "I’m built for StockLedger" }).waitFor();
   const persistedAssistantChat = await page.evaluate(() => {
     const saved = JSON.parse(localStorage.getItem("stockledger-local-prototype-state-v1") || "{}");
     return Boolean(saved.assistantMessages || saved.assistantInput || saved.guideOpen);
@@ -108,6 +129,7 @@ try {
   await page.locator("[data-client-row]").filter({ hasText: "Harbor Room" }).click();
   await page.getByText("Private contact", { exact: true }).first().waitFor();
   await page.locator(".nav-item[data-view='suppliers']").click();
+  await expectFilterTabsNotClipped("Suppliers");
   await page.getByText("Coastal Spirits Supply", { exact: true }).waitFor();
   await page.getByLabel("Search suppliers").fill("Marketline");
   await page.locator("[data-supplier-row]").filter({ hasText: "Marketline Produce" }).waitFor();
@@ -115,6 +137,7 @@ try {
   await page.locator("[data-supplier-row]").filter({ hasText: "Coastal Spirits Supply" }).click();
   await page.getByText("Sensitive terms", { exact: true }).first().waitFor();
   await page.locator(".nav-item[data-view='menus']").click();
+  await expectFilterTabsNotClipped("Menus");
   await page.getByLabel("Search menus").fill("Rum");
   await page.locator("[data-menu-row]").filter({ hasText: "Event Service Menu" }).waitFor();
   await page.getByLabel("Search menus").fill("");
@@ -123,6 +146,7 @@ try {
   await page.getByText("Technical details", { exact: true }).first().waitFor();
   await page.getByText("Fulfillment Rule", { exact: true }).waitFor();
   await page.locator(".nav-item[data-view='locations']").click();
+  await expectFilterTabsNotClipped("Locations");
   await page.getByRole("button", { name: "Add Location", exact: true }).waitFor();
   await page.getByLabel("Search locations").fill("Cellar");
   await page.locator("[data-location-row]").filter({ hasText: "Cellar" }).waitFor();
@@ -136,6 +160,7 @@ try {
   await page.locator("[data-location-row]").filter({ hasText: "Main Bar" }).click();
   await page.locator("[data-record-detail-panel]").getByText("Technical details", { exact: true }).waitFor();
   await page.locator(".nav-item[data-view='users']").click();
+  await expectFilterTabsNotClipped("Users");
   await page.getByText("Role Matrix", { exact: true }).waitFor();
   await page.getByText("Device Trust", { exact: true }).waitFor();
   await page.getByLabel("Search users").fill("Eli");
@@ -152,6 +177,7 @@ try {
 
   await page.locator(".nav-item[data-view='dashboard']").click();
   await page.getByRole("heading", { name: "Stock Overview" }).waitFor();
+  await expectFilterTabsNotClipped("Stock Overview");
   await page.locator(".nav-item[data-view='compose']").click();
   await page.getByRole("heading", { name: "Stock Actions" }).waitFor();
   await page.getByText("Work to Send", { exact: true }).waitFor();
@@ -209,7 +235,7 @@ try {
   await page.getByLabel("Search audit trail").fill("");
   await page.locator("[data-audit-row]").first().click();
   await page.locator("[data-record-detail-panel]").getByText("Technical details", { exact: true }).waitFor();
-  await page.locator("[data-record-detail-panel]").getByRole("button", { name: "Prepare undo record" }).click();
+  await page.locator("[data-record-detail-panel]").getByRole("button", { name: "Undo", exact: true }).click();
   await page.getByRole("heading", { name: "Stock Actions" }).waitFor();
   await page.locator(".action-type-tab.is-active").getByText("Undo Record", { exact: true }).waitFor();
   await page.getByText("Reversal Amount", { exact: true }).waitFor();
@@ -220,6 +246,10 @@ try {
 
   await page.getByRole("button", { name: "Products" }).click();
   await page.getByRole("heading", { name: "Products", exact: true }).waitFor();
+  await expectFilterTabsNotClipped("Products");
+  if (await page.locator(".product-workspace .panel-header h2", { hasText: "Product Catalog" }).count()) {
+    throw new Error("Products should not repeat the Product Catalog table title.");
+  }
   await page.getByLabel("Search products").fill("Tonic");
   await page.locator(".product-table").getByText("Tonic Water", { exact: true }).waitFor();
   await page.getByRole("button", { name: "Suspended", exact: true }).click();
@@ -249,12 +279,24 @@ try {
 
   await page.locator(".nav-item[data-view='sales']").click();
   await page.getByRole("heading", { name: "Sales", exact: true }).waitFor();
+  await expectFilterTabsNotClipped("Sales");
+  if (await page.locator(".sales-record-panel .panel-header h2", { hasText: "Sales Records" }).count()) {
+    throw new Error("Sales should not repeat the Sales Records table title.");
+  }
   if (await page.getByRole("button", { name: "Fulfill Sale", exact: true }).count()) {
     throw new Error("Sales tab should not fulfill stock directly; use Stock Actions with optional sale details.");
   }
 
   await page.locator(".nav-item[data-view='purchases']").click();
   await page.getByRole("heading", { name: "Purchases", exact: true }).waitFor();
+  await expectFilterTabsNotClipped("Purchases");
+  if (await page.locator(".purchase-record-workspace").count()) {
+    const repeatedPurchaseTitle = await page.locator(".business-record-panel .panel-header h2", { hasText: "Receiving Records" }).count();
+    if (repeatedPurchaseTitle) {
+      throw new Error("Purchases should not repeat the Receiving Records table title.");
+    }
+  }
+  await page.locator("[data-purchase-row]").filter({ hasText: "Coastal Spirits Supply" }).first().waitFor();
   if (await page.getByRole("button", { name: "Receive Purchase", exact: true }).count()) {
     throw new Error("Purchases tab should not receive stock directly; use Stock Actions with optional purchase details.");
   }
@@ -305,18 +347,16 @@ try {
 
   await page.locator(".nav-item[data-view='sales']").click();
   await page.getByRole("heading", { name: "Sales", exact: true }).waitFor();
-  await page.locator("[data-sale-row]").filter({ hasText: "Harbor Room" }).waitFor();
-  await page.locator("[data-sale-row]").filter({ hasText: "2 products" }).waitFor();
-  await page.locator("[data-sale-row]").filter({ hasText: "Harbor Room" }).click();
+  await page.locator("[data-sale-row]").filter({ hasText: "Harbor Room" }).filter({ hasText: "2 products" }).waitFor();
+  await page.locator("[data-sale-row]").filter({ hasText: "Harbor Room" }).filter({ hasText: "2 products" }).click();
   await page.locator("[data-record-detail-panel]").getByText("Technical source", { exact: true }).waitFor();
 
   await page.locator(".nav-item[data-view='purchases']").click();
   await page.getByRole("heading", { name: "Purchases", exact: true }).waitFor();
   await page.getByLabel("Search purchases").fill("Coastal");
-  await page.locator("[data-purchase-row]").filter({ hasText: "Coastal Spirits Supply" }).waitFor();
-  await page.locator("[data-purchase-row]").filter({ hasText: "2 products" }).waitFor();
+  await page.locator("[data-purchase-row]").filter({ hasText: "Matched supplier delivery" }).filter({ hasText: "2 products" }).waitFor();
   await page.getByLabel("Search purchases").fill("");
-  await page.locator("[data-purchase-row]").filter({ hasText: "Coastal Spirits Supply" }).click();
+  await page.locator("[data-purchase-row]").filter({ hasText: "Matched supplier delivery" }).filter({ hasText: "2 products" }).click();
   await page.locator("[data-record-detail-panel]").getByText("Technical source", { exact: true }).waitFor();
 
   await page.locator(".nav-item[data-view='reports']").click();

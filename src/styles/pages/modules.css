@@ -107,18 +107,19 @@
 
 .record-filter-tabs {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 8px;
   align-items: stretch;
-  width: fit-content;
+  width: auto;
   max-width: 100%;
   min-height: var(--stock-overview-control-height);
+  height: auto;
   padding: 0;
-  overflow-x: auto;
+  overflow: visible;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   background: rgba(244, 249, 247, 0.72);
-  scrollbar-width: thin;
+  scrollbar-width: none;
 }
 
 .record-filter-tab {

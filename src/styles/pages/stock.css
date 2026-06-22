@@ -89,21 +89,22 @@
 .stock-overview-view-switch {
   display: flex;
   gap: 8px;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   flex: 0 1 auto;
   justify-self: end;
   align-items: stretch;
   min-height: var(--stock-overview-control-height);
-  height: var(--stock-overview-control-height);
+  height: auto;
   padding: 0;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   background: rgba(244, 249, 247, 0.72);
+  overflow: visible;
 }
 
 .stock-overview-view-tab {
   min-height: var(--stock-overview-control-height);
-  height: 100%;
+  height: auto;
   padding: 0 13px;
   display: inline-flex;
   align-items: center;
@@ -321,7 +322,7 @@
   }
 
   .stock-overview-view-switch {
-    overflow-x: auto;
+    overflow: visible;
     justify-content: flex-start;
   }
 

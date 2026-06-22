@@ -470,35 +470,154 @@ function bindTabMotion() {
 function seedEvents() {
   const start = Date.now() - 1000 * 60 * 60 * 4;
   const seed = [
-    ["STOCK_IN", "prod-gin", null, "Dry Store", 24, "Supplier delivery accepted"],
-    ["STOCK_IN", "prod-rum", null, "Cellar", 18, "Supplier delivery accepted"],
-    ["STOCK_IN", "prod-lime", null, "Kitchen", 32, "Morning prep count"],
-    ["STOCK_IN", "prod-tonic", null, "Dry Store", 15, "Supplier delivery accepted"],
-    ["STOCK_TRANSFER", "prod-gin", "Dry Store", "Main Bar", 8, "Opening bar par level"],
-    ["STOCK_TRANSFER", "prod-tonic", "Dry Store", "Main Bar", 6, "Opening bar par level"],
-    ["STOCK_OUT", "prod-gin", "Main Bar", null, 3, "Service usage"],
-    ["STOCK_OUT", "prod-lime", "Kitchen", null, 9, "Prep usage"],
-    ["STOCK_ADJUSTMENT", "prod-tonic", null, "Main Bar", -1, "Physical count variance"],
+    { type: "STOCK_IN", product_id: "prod-gin", from_location: null, to_location: "Dry Store", quantity: 24, reason: "Coastal Spirits delivery accepted", source_type: "purchase", source_id: "seed-purchase-coastal-001", source_label: "Purchase - Coastal Spirits Supply - 2 products" },
+    { type: "STOCK_IN", product_id: "prod-rum", from_location: null, to_location: "Cellar", quantity: 18, reason: "Coastal Spirits delivery accepted", source_type: "purchase", source_id: "seed-purchase-coastal-001", source_label: "Purchase - Coastal Spirits Supply - 2 products" },
+    { type: "STOCK_IN", product_id: "prod-lime", from_location: null, to_location: "Kitchen", quantity: 32, reason: "Marketline produce delivery accepted", source_type: "purchase", source_id: "seed-purchase-marketline-001", source_label: "Purchase - Marketline Produce - 1 product" },
+    { type: "STOCK_IN", product_id: "prod-tonic", from_location: null, to_location: "Dry Store", quantity: 15, reason: "Cellar & Case delivery accepted", source_type: "purchase", source_id: "seed-purchase-cellar-001", source_label: "Purchase - Cellar & Case Distribution - 1 product" },
+    { type: "STOCK_TRANSFER", product_id: "prod-gin", from_location: "Dry Store", to_location: "Main Bar", quantity: 8, reason: "Opening bar par level" },
+    { type: "STOCK_TRANSFER", product_id: "prod-rum", from_location: "Cellar", to_location: "Main Bar", quantity: 7, reason: "Event service par level" },
+    { type: "STOCK_TRANSFER", product_id: "prod-tonic", from_location: "Dry Store", to_location: "Main Bar", quantity: 6, reason: "Opening bar par level" },
+    { type: "STOCK_OUT", product_id: "prod-gin", from_location: "Main Bar", to_location: null, quantity: 1.5, reason: "Recurring menu sale fulfilled for Harbor Room", source_type: "sale", source_id: "seed-sale-harbor-001", source_label: "Sale - Harbor Room - Juniper Gin & Tonic" },
+    { type: "STOCK_OUT", product_id: "prod-tonic", from_location: "Main Bar", to_location: null, quantity: 1.5, reason: "Recurring menu sale fulfilled for Harbor Room", source_type: "sale", source_id: "seed-sale-harbor-001", source_label: "Sale - Harbor Room - Juniper Gin & Tonic" },
+    { type: "STOCK_OUT", product_id: "prod-rum", from_location: "Main Bar", to_location: null, quantity: 2, reason: "Seasonal event service fulfilled for Sunfold Events", source_type: "sale", source_id: "seed-sale-sunfold-001", source_label: "Sale - Sunfold Events - Harbor Rum" },
+    { type: "STOCK_OUT", product_id: "prod-lime", from_location: "Kitchen", to_location: null, quantity: 9, reason: "Prep usage" },
+    { type: "STOCK_ADJUSTMENT", product_id: "prod-tonic", from_location: null, to_location: "Main Bar", quantity: -1, reason: "Physical count variance" },
+    { type: "STOCK_TRANSFER", product_id: "prod-lime", from_location: "Kitchen", to_location: "Main Bar", quantity: 4, reason: "Bar garnish prep" },
+    { type: "STOCK_OUT", product_id: "prod-lime", from_location: "Main Bar", to_location: null, quantity: 1.2, reason: "Direct stock sale fulfilled for North Pier Cafe", source_type: "sale", source_id: "seed-sale-north-pier-001", source_label: "Sale - North Pier Cafe - Fresh Lime" },
   ];
 
-  return seed.map(([type, product_id, from_location, to_location, quantity, reason], index) =>
+  return seed.map((entry, index) =>
     createInventoryEvent({
       ...tenant,
       event_id: `seed-event-${index + 1}`,
       idempotency_key: `seed-idem-${index + 1}`,
       sync_batch_id: "batch-seed-001",
-      type,
-      product_id,
-      product_name: DEFAULT_PRODUCTS.find((product) => product.id === product_id)?.name ?? product_id,
-      from_location,
-      to_location,
-      quantity,
-      reason,
+      type: entry.type,
+      product_id: entry.product_id,
+      product_name: DEFAULT_PRODUCTS.find((product) => product.id === entry.product_id)?.name ?? entry.product_id,
+      from_location: entry.from_location,
+      to_location: entry.to_location,
+      quantity: entry.quantity,
+      reason: entry.reason,
+      source_type: entry.source_type,
+      source_id: entry.source_id,
+      source_label: entry.source_label,
       sequence_number: index + 1,
       timestamp: start + index * 1000 * 60 * 8,
       status: "synced",
     }),
   );
+}
+
+function seedSales() {
+  const now = Date.now() - 1000 * 60 * 60 * 2;
+  return [
+    {
+      id: "seed-sale-harbor-001",
+      client_id: "client-harbor-room",
+      sale_type: "recurring",
+      sale_mode: "menu_item",
+      menu_item_id: "menu-item-gin-tonic",
+      product_id: "prod-gin",
+      product_ids: ["prod-gin", "prod-tonic"],
+      item_label: "Juniper Gin & Tonic",
+      location: "Main Bar",
+      quantity: 6,
+      notes: "Seeded fulfilled menu sale for dashboard and reports.",
+      event_id: "seed-event-8",
+      event_count: 2,
+      work_item_id: "seed-work-sale-harbor-001",
+      created_at: new Date(now).toISOString(),
+      status: "synced",
+    },
+    {
+      id: "seed-sale-sunfold-001",
+      client_id: "client-sunfold-events",
+      sale_type: "one_time",
+      sale_mode: "direct_stock",
+      menu_item_id: null,
+      product_id: "prod-rum",
+      product_ids: ["prod-rum"],
+      item_label: "Harbor Rum",
+      location: "Main Bar",
+      quantity: 2,
+      notes: "Seeded direct stock sale for event service.",
+      event_id: "seed-event-10",
+      event_count: 1,
+      work_item_id: "seed-work-sale-sunfold-001",
+      created_at: new Date(now + 1000 * 60 * 14).toISOString(),
+      status: "synced",
+    },
+    {
+      id: "seed-sale-north-pier-001",
+      client_id: "client-north-pier",
+      sale_type: "recurring",
+      sale_mode: "direct_stock",
+      menu_item_id: null,
+      product_id: "prod-lime",
+      product_ids: ["prod-lime"],
+      item_label: "Fresh Lime",
+      location: "Main Bar",
+      quantity: 1.2,
+      notes: "Seeded wholesale refill usage.",
+      event_id: "seed-event-14",
+      event_count: 1,
+      work_item_id: "seed-work-sale-north-pier-001",
+      created_at: new Date(now + 1000 * 60 * 26).toISOString(),
+      status: "synced",
+    },
+  ];
+}
+
+function seedPurchases() {
+  const now = Date.now() - 1000 * 60 * 60 * 3;
+  return [
+    {
+      id: "seed-purchase-coastal-001",
+      supplier_id: "supplier-coastal",
+      product_id: "prod-gin",
+      product_ids: ["prod-gin", "prod-rum"],
+      item_label: "2 products",
+      location: "Dry Store / Cellar",
+      quantity: 42,
+      notes: "Seeded supplier delivery for spirits stock.",
+      event_id: "seed-event-1",
+      event_count: 2,
+      work_item_id: "seed-work-purchase-coastal-001",
+      created_at: new Date(now).toISOString(),
+      status: "synced",
+    },
+    {
+      id: "seed-purchase-marketline-001",
+      supplier_id: "supplier-marketline",
+      product_id: "prod-lime",
+      product_ids: ["prod-lime"],
+      item_label: "Fresh Lime",
+      location: "Kitchen",
+      quantity: 32,
+      notes: "Seeded produce run with quality watch enabled.",
+      event_id: "seed-event-3",
+      event_count: 1,
+      work_item_id: "seed-work-purchase-marketline-001",
+      created_at: new Date(now + 1000 * 60 * 10).toISOString(),
+      status: "synced",
+    },
+    {
+      id: "seed-purchase-cellar-001",
+      supplier_id: "supplier-cellar",
+      product_id: "prod-tonic",
+      product_ids: ["prod-tonic"],
+      item_label: "Tonic Water",
+      location: "Dry Store",
+      quantity: 15,
+      notes: "Seeded mixer delivery for par levels.",
+      event_id: "seed-event-4",
+      event_count: 1,
+      work_item_id: "seed-work-purchase-cellar-001",
+      created_at: new Date(now + 1000 * 60 * 20).toISOString(),
+      status: "synced",
+    },
+  ];
 }
 
 function defaultState() {
@@ -522,8 +641,8 @@ function defaultState() {
     outboxPage: 1,
     activeProductsPage: 1,
     inactiveProductsPage: 1,
-    sales: [],
-    purchases: [],
+    sales: seedSales(),
+    purchases: seedPurchases(),
     selectedClientId: null,
     selectedSaleId: null,
     selectedPurchaseId: null,
@@ -1429,6 +1548,19 @@ function submitAssistantQuestion(rawQuestion) {
 function answerAssistantQuestion(question) {
   const normalized = normalizeAssistantText(question);
   const meta = screenMeta[state.activeView] ?? screenMeta.dashboard;
+  const smallTalk = assistantSmallTalkAnswer(normalized, meta);
+
+  if (smallTalk) return smallTalk;
+
+  if (matchesAny(normalized, ["what should i do", "what next", "next step", "help me", "guide me", "where should i start"])) {
+    return {
+      text: `On ${meta.title}, I would start with the highest-signal work: ${guideTips().slice(0, 3).join(" ")} If you are unsure, check notifications first, then use the action button that matches the work you are actually doing.`,
+      actions: [
+        ...pageAssistantActions(state.activeView).slice(0, 2),
+        { label: "Notifications", view: state.activeView },
+      ],
+    };
+  }
 
   if (matchesAny(normalized, ["what is this page", "current page", "this page for", "where am i", "about this page"])) {
     const tips = guideTips().slice(0, 4).map((tip) => `- ${tip}`).join("\n");
@@ -1491,6 +1623,10 @@ function answerAssistantQuestion(question) {
     };
   }
 
+  if (isLikelyOutOfScopeQuestion(normalized)) {
+    return assistantOutOfScopeAnswer();
+  }
+
   const matches = retrieveAssistantKnowledge(question).slice(0, 3);
   if (matches.length > 0) {
     return {
@@ -1500,12 +1636,54 @@ function answerAssistantQuestion(question) {
   }
 
   return {
-    text: "I can answer from the current StockLedger session: stock on hand, low stock, saved work, page purpose, actions, audit behavior, products, locations, sales, purchases, users, reports, and settings. Try asking “How many stocks do we have?”, “What needs attention?”, or “What is Undo Record for?”",
+    ...assistantOutOfScopeAnswer(),
+  };
+}
+
+function assistantOutOfScopeAnswer() {
+  return {
+    text: "I’m built for StockLedger, so I will not guess at general-world questions from inside this local system. I can still help right here with stock on hand, low stock, saved work, page purpose, actions, audit behavior, products, locations, sales, purchases, users, reports, and settings. Try asking “What needs attention?”, “How many stocks do we have?”, or “What should I do next?”",
     actions: [
       { label: "Open Stock Overview", view: "dashboard" },
       { label: "Open Stock Actions", view: "compose" },
     ],
   };
+}
+
+function assistantSmallTalkAnswer(normalized, meta) {
+  if (!normalized) {
+    return {
+      text: `I’m here. Ask me about ${meta.title}, saved work, stock counts, audit history, sales, purchases, or what needs attention.`,
+      actions: pageAssistantActions(state.activeView),
+    };
+  }
+
+  if (matchesAny(normalized, ["hello", "hi", "hey", "good morning", "good afternoon", "good evening"])) {
+    return {
+      text: `Hi. I’m your StockLedger assistant for this session. On ${meta.title}, I can explain what the page is for, point out what needs attention, and help you choose the right stock action without exposing private details unnecessarily.`,
+      actions: pageAssistantActions(state.activeView),
+    };
+  }
+
+  if (matchesAny(normalized, ["thank", "thanks", "appreciate"])) {
+    return {
+      text: "You’re welcome. I’ll stay focused on the ledger and keep the answers practical.",
+      actions: pageAssistantActions(state.activeView).slice(0, 2),
+    };
+  }
+
+  if (matchesAny(normalized, ["who are you", "what can you do", "what can i ask"])) {
+    return {
+      text: "I’m a local StockLedger support bot. I answer from this session’s screens, seeded demo data, saved work, and the event-sourced rules: stock is replayed from immutable events, corrections create new events, and private operational details stay tucked away unless they are useful.",
+      actions: [
+        { label: "Current Page", view: state.activeView },
+        { label: "Stock Overview", view: "dashboard" },
+        { label: "Stock Actions", view: "compose" },
+      ],
+    };
+  }
+
+  return null;
 }
 
 function assistantNotificationAnswer() {
@@ -1675,12 +1853,65 @@ function normalizeAssistantText(value) {
 }
 
 function assistantTokens(value) {
-  const stop = new Set(["the", "a", "an", "is", "are", "to", "for", "of", "and", "or", "we", "do", "have", "what", "this", "that", "how", "many", "much"]);
+  const stop = new Set(["the", "a", "an", "is", "are", "to", "for", "of", "and", "or", "we", "do", "have", "what", "this", "that", "how", "many", "much", "who", "won", "did", "was", "were", "when", "where", "why"]);
   return normalizeAssistantText(value).split(" ").filter((token) => token.length > 2 && !stop.has(token));
 }
 
 function matchesAny(value, phrases) {
   return phrases.some((phrase) => value.includes(phrase));
+}
+
+function isLikelyOutOfScopeQuestion(normalized) {
+  if (!normalized) return false;
+  const stockledgerWords = [
+    "stock",
+    "inventory",
+    "ledger",
+    "audit",
+    "product",
+    "location",
+    "sale",
+    "purchase",
+    "supplier",
+    "client",
+    "menu",
+    "report",
+    "user",
+    "role",
+    "sync",
+    "outbox",
+    "queue",
+    "undo",
+    "reverse",
+    "event",
+    "batch",
+    "low",
+    "restock",
+    "count",
+    "settings",
+    "page",
+    "screen",
+  ];
+  if (stockledgerWords.some((word) => normalized.includes(word))) return false;
+
+  return matchesAny(normalized, [
+    "basketball",
+    "football",
+    "baseball",
+    "nba",
+    "nfl",
+    "weather",
+    "news",
+    "recipe",
+    "movie",
+    "song",
+    "politics",
+    "president",
+    "stock market",
+    "crypto",
+    "who won",
+    "tell me a joke",
+  ]);
 }
 
 function renderToast() {
@@ -1747,50 +1978,97 @@ function renderActiveView(localLedger, stockRows, outboxValidation) {
 }
 
 function renderLanding(localLedger, stockRows, outboxValidation) {
+  const totals = stockTotalRows(stockRows).filter((row) => Number(row.quantity) !== 0);
+  const totalUnits = totals.reduce((sum, row) => sum + Number(row.quantity), 0);
+  const lowRows = stockRows.filter((row) => Number(row.quantity) >= 0 && Number(row.quantity) <= productLow(row.product_id));
+  const negativeRows = stockRows.filter((row) => Number(row.quantity) < 0);
+  const attentionRows = [...negativeRows, ...lowRows].slice(0, 4);
+  const invalidWork = outboxValidation.filter((entry) => !entry.validation.valid).length;
+  const recentAudit = replayAuditTrail(localLedger).slice(-5).reverse();
+  const recentWork = recentAudit
+    .map((entry) => `
+      <li>
+        <span>${escapeHtml(eventLabels[entry.type] ?? entry.type)}</span>
+        <strong>${escapeHtml(entry.product_name)}</strong>
+        <small>${escapeHtml(entry.location)} · ${formatQuantity(entry.delta ?? entry.quantity ?? 0)}</small>
+      </li>
+    `)
+    .join("");
+  const attentionList = attentionRows
+    .map((row) => `
+      <li>
+        <span>${escapeHtml(row.quantity < 0 ? "Below zero" : "Low stock")}</span>
+        <strong>${escapeHtml(row.product_name)}</strong>
+        <small>${escapeHtml(row.location)} · ${formatQuantity(row.quantity)} ${productUnit(row.product_id)}</small>
+      </li>
+    `)
+    .join("");
+
   return `
     <section class="landing-shell" aria-label="StockLedger Home">
-      <div class="landing-hero">
-        <div class="landing-copy">
-          <h2>Inventory That Explains Every Number.</h2>
-          <p>Record movements, keep work safe offline, and replay the ledger when a count needs proof.</p>
-        <div class="landing-actions">
-            <button class="button button-primary" data-view="sales" type="button">${icon("send")}Record Sale</button>
-            <button class="button button-secondary" data-view="purchases" type="button">${icon("plus")}Review Purchases</button>
+      <section class="home-command">
+        <div class="home-command-main">
+          <span>Today at ${escapeHtml(tenant.device_name)}</span>
+          <h2>Local workbench is ready.</h2>
+          <p>${totals.length} stocked products, ${formatQuantity(totalUnits)} replayed units, ${state.outbox.length} saved work item${state.outbox.length === 1 ? "" : "s"} waiting.</p>
         </div>
-      </div>
-    </div>
-        <div class="landing-grid">
-          <article class="landing-card">
-            <span>${icon("send")}</span>
-            <h3>Record Sales</h3>
-            <button class="table-action" data-view="sales" type="button">Open Sales</button>
-          </article>
-          <article class="landing-card">
-            <span>${icon("plus")}</span>
-            <h3>Review Purchases</h3>
-            <button class="table-action" data-view="purchases" type="button">Open Purchases</button>
-          </article>
-          <article class="landing-card">
-            <span>${icon("layers")}</span>
-            <h3>See The Master Stock</h3>
-            <button class="table-action" data-view="dashboard" type="button">View Stock</button>
-          </article>
-          <article class="landing-card">
-            <span>${icon("history")}</span>
-            <h3>Trace Every Change</h3>
-            <button class="table-action" data-view="audit" type="button">Audit Trail</button>
-          </article>
-          <article class="landing-card">
+        <div class="home-command-actions" aria-label="Primary home actions">
+          <button class="button button-primary" data-view="compose" type="button">${icon("plus")}Stock Action</button>
+          <button class="button button-secondary" data-view="dashboard" type="button">${icon("layers")}View Stock</button>
+          <button class="button button-secondary" data-view="audit" type="button">${icon("history")}Audit</button>
+        </div>
+      </section>
+      <section class="dashboard-kpi-grid" aria-label="Home metrics">
+        ${metricCard("Products Stocked", totals.length)}
+        ${metricCard("Units On Hand", formatQuantity(totalUnits))}
+        ${metricCard("Saved Work", state.outbox.length)}
+        ${metricCard("Needs Review", invalidWork + attentionRows.length)}
+      </section>
+      <section class="home-work-grid">
+        <article class="home-panel">
+          <div class="home-panel-heading">
             <span>${icon("list")}</span>
-            <h3>Build Reports</h3>
-            <button class="table-action" data-view="reports" type="button">Open Reports</button>
-          </article>
-          <article class="landing-card">
-            <span>${icon("plus")}</span>
-            <h3>Send Saved Work</h3>
-            <button class="table-action" data-view="compose" type="button">Open Stock Actions</button>
-          </article>
-        </div>
+            <h3>Attention</h3>
+          </div>
+          <ul class="home-compact-list">
+            ${attentionList || `<li><span>Clear</span><strong>No low or negative stock rows.</strong><small>Replay is balanced against thresholds.</small></li>`}
+          </ul>
+          <button class="table-action" data-view="dashboard" type="button">Review Stock</button>
+        </article>
+        <article class="home-panel">
+          <div class="home-panel-heading">
+            <span>${icon("send")}</span>
+            <h3>Saved Work</h3>
+          </div>
+          <ul class="home-compact-list">
+            <li><span>${state.online ? "Online" : "Offline"}</span><strong>${state.outbox.length} event${state.outbox.length === 1 ? "" : "s"} saved locally</strong><small>${invalidWork ? `${invalidWork} need validation` : "Ready when the device goes online."}</small></li>
+            <li><span>Batch</span><strong>${currentBatchId()}</strong><small>Atomic send boundary for this device.</small></li>
+          </ul>
+          <button class="table-action" data-view="compose" type="button">Open Work Queue</button>
+        </article>
+        <article class="home-panel">
+          <div class="home-panel-heading">
+            <span>${icon("history")}</span>
+            <h3>Recent Ledger</h3>
+          </div>
+          <ul class="home-compact-list">
+            ${recentWork || `<li><span>Empty</span><strong>No events yet.</strong><small>Start with Stock Actions.</small></li>`}
+          </ul>
+          <button class="table-action" data-view="audit" type="button">Trace History</button>
+        </article>
+        <article class="home-panel home-panel--actions">
+          <div class="home-panel-heading">
+            <span>${icon("layers")}</span>
+            <h3>Shortcuts</h3>
+          </div>
+          <div class="home-shortcuts">
+            <button class="button button-secondary" data-view="sales" type="button">Sales</button>
+            <button class="button button-secondary" data-view="purchases" type="button">Purchases</button>
+            <button class="button button-secondary" data-view="products" type="button">Products</button>
+            <button class="button button-secondary" data-view="reports" type="button">Reports</button>
+          </div>
+        </article>
+      </section>
     </section>
   `;
 }
@@ -3436,9 +3714,6 @@ function renderPurchaseRecordWorkspace({ title, empty, records, selectedRecord }
 
   return `
     <article class="panel business-record-panel record-table-panel sales-record-panel">
-      <div class="panel-header panel-header--compact">
-        <h2>${title}</h2>
-      </div>
       <div class="record-table-controls stock-overview-toolbar" aria-label="Purchase table controls">
         <div class="record-filter-tabs stock-overview-view-switch" role="group" aria-label="Filter purchases">
           ${renderPurchaseFilterTab("all", "All")}
@@ -3571,9 +3846,6 @@ function renderSalesRecordWorkspace({ title, empty, records, selectedRecord }) {
 
   return `
     <article class="panel business-record-panel record-table-panel sales-record-panel">
-      <div class="panel-header panel-header--compact">
-        <h2>${title}</h2>
-      </div>
       <div class="record-table-controls stock-overview-toolbar" aria-label="Sales table controls">
         <div class="record-filter-tabs stock-overview-view-switch" role="group" aria-label="Filter sales">
           ${renderSaleFilterTab("all", "All")}
@@ -3765,7 +4037,6 @@ function renderProducts() {
       </section>
       <article class="panel panel-wide panel--flush-table record-table-panel">
         <div class="panel-header panel-header--compact">
-          <h2>Product Catalog</h2>
           <button class="button button-primary" data-view="compose" type="button">${icon("plus")}Open Stock Actions</button>
         </div>
         ${renderProductControls()}
@@ -4964,7 +5235,7 @@ function renderAuditDetailPanel(entry) {
       <div class="record-detail-actions">
         <button class="button button-secondary" data-action="close-record-detail" type="button">Close</button>
         <button class="button button-primary" data-action="prepare-revert" data-event-id="${escapeAttr(entry.event_id)}" type="button" ${!isRevertibleEvent(entry.type) || hasReversalForEvent(entry.event_id) ? "disabled" : ""}>
-          ${icon("history")}Prepare undo record
+          ${icon("history")}Undo
         </button>
       </div>
     </aside>
