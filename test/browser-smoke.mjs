@@ -50,6 +50,15 @@ async function setProductAmount(productId, amount) {
   }, String(amount));
 }
 
+async function setPhysicalCount(productId, count) {
+  await page.locator(`input[name="physical_count_${productId}"]`).evaluate((input, nextValue) => {
+    input.value = nextValue;
+    input.setAttribute("value", nextValue);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  }, String(count));
+}
+
 async function expectFilterTabsNotClipped(label) {
   const clipped = await page.locator(".record-filter-tabs, .stock-overview-view-switch").evaluateAll((groups) =>
     groups
@@ -68,6 +77,44 @@ async function expectFilterTabsNotClipped(label) {
   }
 }
 
+async function expectRecordWorkspaceFits(label) {
+  const metrics = await page.locator(".record-workspace.has-detail").first().evaluate((workspace) => {
+    const children = Array.from(workspace.children);
+    const tableSide = children.find((child) => child.classList.contains("record-table-panel") || child.classList.contains("record-table-shell"));
+    const tableShell = workspace.querySelector(".record-table-shell");
+    const table = workspace.querySelector(".record-table");
+    const detail = workspace.querySelector("[data-record-detail-panel]");
+    const rect = (element) => {
+      const box = element?.getBoundingClientRect();
+      return box ? { x: box.x, y: box.y, width: box.width, height: box.height, right: box.right, bottom: box.bottom } : null;
+    };
+
+    return {
+      tableSide: rect(tableSide),
+      tableShell: rect(tableShell),
+      table: rect(table),
+      detail: rect(detail),
+      viewportHeight: window.innerHeight,
+    };
+  });
+
+  if (!metrics.tableSide || !metrics.tableShell || !metrics.table || !metrics.detail) {
+    throw new Error(`${label} record workspace should expose table and detail geometry.`);
+  }
+
+  const sideGap = metrics.detail.x - metrics.tableSide.right;
+  const tableRightGap = metrics.tableShell.right - metrics.table.right;
+  if (sideGap > 18) {
+    throw new Error(`${label} record detail gap is too wide: ${JSON.stringify(metrics)}.`);
+  }
+  if (tableRightGap > 4) {
+    throw new Error(`${label} retracted table leaves an empty right gap: ${JSON.stringify(metrics)}.`);
+  }
+  if (metrics.detail.height < metrics.tableSide.height - 4 || metrics.detail.height < metrics.viewportHeight * 0.62) {
+    throw new Error(`${label} detail panel should use the full record workspace height: ${JSON.stringify(metrics)}.`);
+  }
+}
+
 try {
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -80,8 +127,8 @@ try {
   await page.reload({ waitUntil: "networkidle" });
 
   await page.getByRole("heading", { name: "StockLedger" }).waitFor();
-  await page.getByRole("button", { name: /Assistant/ }).click();
-  await page.getByRole("dialog", { name: "StockLedger Assistant" }).waitFor();
+  await page.getByRole("button", { name: /Stocky/ }).click();
+  await page.getByRole("dialog", { name: "Stocky Assistant" }).waitFor();
   const assistantBounds = await page.locator(".guide-menu").boundingBox();
   const viewport = page.viewportSize();
   if (!assistantBounds || !viewport) {
@@ -95,13 +142,16 @@ try {
   ) {
     throw new Error(`Assistant menu is clipped: ${JSON.stringify(assistantBounds)} in ${JSON.stringify(viewport)}.`);
   }
-  await page.getByText("Hi. I can help with StockLedger from the current screen.").waitFor();
+  await page.getByText("Hi, I’m Stocky.", { exact: false }).waitFor();
+  if (await page.locator(".assistant-context, .assistant-quick-actions").count()) {
+    throw new Error("Stocky should render as a chat-only panel without outside guide details.");
+  }
   await page.getByLabel("Ask about StockLedger").fill("How many stocks do we have?");
   await page.getByRole("button", { name: "Send", exact: true }).click();
   await page.locator(".assistant-message").filter({ hasText: "products with replayed stock" }).waitFor();
   await page.getByLabel("Ask about StockLedger").fill("Who won the basketball game?");
   await page.getByRole("button", { name: "Send", exact: true }).click();
-  await page.locator(".assistant-message").filter({ hasText: "I’m built for StockLedger" }).waitFor();
+  await page.locator(".assistant-message").filter({ hasText: "can’t reliably answer that from this local inventory session" }).waitFor();
   const persistedAssistantChat = await page.evaluate(() => {
     const saved = JSON.parse(localStorage.getItem("stockledger-local-prototype-state-v1") || "{}");
     return Boolean(saved.assistantMessages || saved.assistantInput || saved.guideOpen);
@@ -109,7 +159,7 @@ try {
   if (persistedAssistantChat) {
     throw new Error("Assistant chat state should stay session-only and out of localStorage.");
   }
-  await page.getByRole("button", { name: "Close Assistant" }).click();
+  await page.getByRole("button", { name: "Close Stocky" }).click();
   for (const [view, heading] of [
     ["sales", "Sales"],
     ["purchases", "Purchases"],
@@ -128,6 +178,7 @@ try {
   await page.getByLabel("Search clients").fill("");
   await page.locator("[data-client-row]").filter({ hasText: "Harbor Room" }).click();
   await page.getByText("Private contact", { exact: true }).first().waitFor();
+  await expectRecordWorkspaceFits("Clients");
   await page.locator(".nav-item[data-view='suppliers']").click();
   await expectFilterTabsNotClipped("Suppliers");
   await page.getByText("Coastal Spirits Supply", { exact: true }).waitFor();
@@ -276,6 +327,33 @@ try {
   await saveActionByDomClick();
   await page.locator(".work-queue-list").getByText("Suspend Product", { exact: true }).waitFor();
   await page.locator(".work-queue-list").getByText("Grouped work: 3 events", { exact: true }).waitFor();
+
+  await chooseAction("Correct Count");
+  await chooseProduct("Juniper Gin");
+  await addProduct("Harbor Rum");
+  await page.getByText("Physical Counts", { exact: true }).waitFor();
+  await setPhysicalCount("prod-gin", 99);
+  await setPhysicalCount("prod-rum", 88);
+  await saveActionByDomClick();
+  const correctionWorkCard = page.locator("[data-work-queue-card]").filter({ hasText: "Correct Stock Count" }).first();
+  await correctionWorkCard.waitFor();
+  await correctionWorkCard.getByText("Grouped work: 2 events", { exact: true }).waitFor();
+  const queuedCorrectionCounts = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem("stockledger-local-prototype-state-v1") || "{}")
+      .outbox
+      .filter((event) => event.type === "STOCK_ADJUSTMENT" && `${event.reason ?? ""}`.startsWith("Physical count"))
+      .map((event) => [event.product_name, event.reason])
+      .sort(),
+  );
+  if (
+    queuedCorrectionCounts.length !== 2 ||
+    queuedCorrectionCounts[0]?.[0] !== "Harbor Rum" ||
+    !queuedCorrectionCounts[0]?.[1]?.startsWith("Physical count 88 vs system ") ||
+    queuedCorrectionCounts[1]?.[0] !== "Juniper Gin" ||
+    !queuedCorrectionCounts[1]?.[1]?.startsWith("Physical count 99 vs system ")
+  ) {
+    throw new Error(`Expected separate physical count reasons per corrected product, saw ${JSON.stringify(queuedCorrectionCounts)}.`);
+  }
 
   await page.locator(".nav-item[data-view='sales']").click();
   await page.getByRole("heading", { name: "Sales", exact: true }).waitFor();

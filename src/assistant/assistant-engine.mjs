@@ -1,3 +1,19 @@
+export function createAssistantGreeting(context) {
+  const activeView = context.activeView ?? "dashboard";
+  const meta = context.screenMeta[activeView] ?? context.screenMeta.dashboard;
+  const tips = context.guideTipsForView(activeView).slice(0, 3);
+  const notifications = context.notifications().slice(0, 2);
+  const actionLines = pageAssistantActions(activeView, context).slice(0, 3);
+  const notificationText = notifications.length
+    ? notifications.map((item) => `- ${item.title}: ${item.text}`).join("\n")
+    : "- Nothing urgent is showing right now.";
+
+  return {
+    text: `Hi, I’m Stocky. You’re on ${meta.title}.\n\n${pagePurposeText(meta)}\n\nYou can ${humanJoin(tips.map(cleanTipForSentence))}.\n\nRight now:\n${notificationText}\n\nAsk me about stock counts, saved work, what to do next, how an action works, or why a number looks off.`,
+    actions: actionLines,
+  };
+}
+
 export function answerAssistantQuestion(question, context) {
   const normalized = normalizeAssistantText(question);
   const activeView = context.activeView ?? "dashboard";
@@ -8,7 +24,7 @@ export function answerAssistantQuestion(question, context) {
 
   if (matchesAny(normalized, ["what should i do", "what next", "next step", "help me", "guide me", "where should i start"])) {
     return {
-      text: `On ${meta.title}, I would start with the highest-signal work: ${context.guideTipsForView(activeView).slice(0, 3).join(" ")} If you are unsure, check notifications first, then use the action button that matches the work you are actually doing.`,
+      text: `On ${meta.title}, I’d start with what is most operationally useful: ${humanJoin(context.guideTipsForView(activeView).slice(0, 3).map(cleanTipForSentence))}. If anything feels unclear, check notifications first, then record the action that matches what actually happened.`,
       actions: [
         ...pageAssistantActions(activeView, context).slice(0, 2),
         { label: "Notifications", view: activeView },
@@ -19,16 +35,16 @@ export function answerAssistantQuestion(question, context) {
   if (matchesAny(normalized, ["what is this page", "current page", "this page for", "where am i", "about this page"])) {
     const tips = context.guideTipsForView(activeView).slice(0, 4).map((tip) => `- ${tip}`).join("\n");
     return {
-      text: `${meta.title} is for ${meta.guide.toLowerCase()}\n\nWhat to do here:\n${tips}`,
+      text: `${meta.title}: ${pagePurposeText(meta)}\n\nWhat you can do here:\n${tips}`,
       actions: pageAssistantActions(activeView, context),
     };
   }
 
-  if (matchesAny(normalized, ["notification", "attention", "urgent", "need review", "needs attention", "problem", "warning"])) {
+  if (matchesAny(normalized, ["notification", "attention", "urgent", "need review", "needs attention", "problem", "warning", "issue", "alert"])) {
     return assistantNotificationAnswer(context);
   }
 
-  if (matchesAny(normalized, ["how many stock", "how much stock", "stock count", "total stock", "inventory count", "on hand", "available"])) {
+  if (matchesAny(normalized, ["how many stock", "how much stock", "stock count", "total stock", "inventory count", "on hand", "available", "how many product", "product count", "inventory total"])) {
     return assistantStockAnswer(question, context);
   }
 
@@ -38,6 +54,24 @@ export function answerAssistantQuestion(question, context) {
 
   if (matchesAny(normalized, ["work to send", "saved work", "outbox", "send work", "pending", "queue", "sync"])) {
     return assistantOutboxAnswer(context);
+  }
+
+  if (matchesAny(normalized, ["what actions", "available actions", "action type", "stock action", "stock in", "use stock", "move stock", "correct count", "correct stock", "enroll", "suspend", "reactivate"])) {
+    return assistantActionAnswer(question, context);
+  }
+
+  if (matchesAny(normalized, ["location", "where is", "place", "bar", "cellar", "store", "kitchen"])) {
+    return assistantLocationAnswer(question, context);
+  }
+
+  if (matchesAny(normalized, ["client", "customer", "supplier", "vendor", "menu", "recipe", "user", "role", "setting", "policy"])) {
+    const matches = retrieveAssistantKnowledge(question, context).slice(0, 4);
+    if (matches.length > 0) {
+      return {
+        text: `Here’s the most relevant StockLedger context I found:\n\n${matches.map((entry) => `- ${entry.title}: ${entry.body}`).join("\n")}`,
+        actions: assistantActionsFromKnowledge(matches, context),
+      };
+    }
   }
 
   if (matchesAny(normalized, ["undo", "reverse", "mistake", "revert"])) {
@@ -94,7 +128,7 @@ export function answerAssistantQuestion(question, context) {
 
 function assistantOutOfScopeAnswer() {
   return {
-    text: "I’m built for StockLedger, so I will not guess at general-world questions from inside this local system. I can still help right here with stock on hand, low stock, saved work, page purpose, actions, audit behavior, products, locations, sales, purchases, users, reports, and settings. Try asking “What needs attention?”, “How many stocks do we have?”, or “What should I do next?”",
+    text: "I’m Stocky, and I’m here to help with StockLedger. I can’t reliably answer that from this local inventory session, and I don’t want to guess. I can help with stock on hand, low stock, saved work, page purpose, actions, audit behavior, products, locations, sales, purchases, users, reports, and settings. Try “What needs attention?”, “How many stocks do we have?”, or “What should I do next?”",
     actions: [
       { label: "Open Stock Overview", view: "dashboard" },
       { label: "Open Stock Actions", view: "compose" },
@@ -114,7 +148,7 @@ function assistantSmallTalkAnswer(normalized, meta, context) {
 
   if (matchesAny(normalized, ["hello", "hi", "hey", "good morning", "good afternoon", "good evening"])) {
     return {
-      text: `Hi. I’m your StockLedger assistant for this session. On ${meta.title}, I can explain what the page is for, point out what needs attention, and help you choose the right stock action without exposing private details unnecessarily.`,
+      text: `Hi, I’m Stocky. I’ll keep things practical and stay with the ledger. On ${meta.title}, I can explain the page, point out what needs attention, and help you choose the right stock action without exposing private details unnecessarily.`,
       actions: pageAssistantActions(activeView, context),
     };
   }
@@ -128,7 +162,7 @@ function assistantSmallTalkAnswer(normalized, meta, context) {
 
   if (matchesAny(normalized, ["who are you", "what can you do", "what can i ask"])) {
     return {
-      text: "I’m a local StockLedger support bot. I answer from this session’s screens, seeded demo data, saved work, and the event-sourced rules: stock is replayed from immutable events, corrections create new events, and private operational details stay tucked away unless they are useful.",
+      text: "I’m Stocky, the local StockLedger support bot. I answer from this session’s screens, seeded demo data, saved work, and the event-sourced rules: stock is replayed from immutable events, corrections create new events, and private operational details stay tucked away unless they are useful.",
       actions: [
         { label: "Current Page", view: activeView },
         { label: "Stock Overview", view: "dashboard" },
@@ -209,14 +243,72 @@ function assistantOutboxAnswer(context) {
   };
 }
 
+function assistantActionAnswer(question, context) {
+  const normalized = normalizeAssistantText(question);
+  const actionEntries = Object.entries(context.actionTemplates)
+    .map(([type, template]) => ({
+      type,
+      label: context.eventLabels[type] ?? type,
+      template,
+      normalizedLabel: normalizeAssistantText(`${context.eventLabels[type] ?? type} ${type} ${template.summary} ${template.help ?? ""}`),
+    }));
+  const directMatch = actionEntries.find((entry) => entry.normalizedLabel.split(" ").some((token) => token.length > 3 && normalized.includes(token)));
+
+  if (directMatch && !matchesAny(normalized, ["what actions", "available actions", "action type", "stock action"])) {
+    return {
+      text: `${directMatch.label}: ${directMatch.template.summary} ${directMatch.template.help ?? ""}\n\nRequired: ${(directMatch.template.requiredFields ?? []).join(", ") || "No special fields"}.`,
+      actions: [{ label: "Open Stock Actions", view: "compose" }],
+    };
+  }
+
+  return {
+    text: `Stock Actions can queue the daily work without editing stock directly:\n\n${actionEntries
+      .map((entry) => `- ${entry.label}: ${entry.template.summary}`)
+      .join("\n")}\n\nUse the action name that matches what happened in real life. Stocky will prefer corrections and undo records over changing history.`,
+    actions: [{ label: "Open Stock Actions", view: "compose" }],
+  };
+}
+
+function assistantLocationAnswer(question, context) {
+  const normalized = normalizeAssistantText(question);
+  const mentioned = (context.locations ?? []).find((location) => normalizeAssistantText(location.name).split(" ").every((part) => normalized.includes(part)));
+  const rows = context.stockRows();
+
+  if (mentioned) {
+    const locationRows = rows.filter((row) => row.location === mentioned.name && Number(row.quantity) !== 0);
+    const lines = locationRows
+      .slice(0, 8)
+      .map((row) => `- ${row.product_name}: ${context.formatQuantity(row.quantity)} ${context.productUnit(row.product_id)}`)
+      .join("\n");
+    return {
+      text: `${mentioned.name} is a ${mentioned.kind} location owned by ${mentioned.owner}. Status: ${mentioned.status}.\n${lines || "No replayed stock is currently showing there."}`,
+      actions: [
+        { label: "Open Locations", view: "locations" },
+        { label: "Open Stock Overview", view: "dashboard" },
+      ],
+    };
+  }
+
+  return {
+    text: `StockLedger has ${(context.locations ?? []).length} locations in this session:\n${(context.locations ?? [])
+      .map((location) => `- ${location.name}: ${location.kind}, ${location.status}`)
+      .join("\n")}`,
+    actions: [{ label: "Open Locations", view: "locations" }],
+  };
+}
+
 function retrieveAssistantKnowledge(question, context) {
-  const queryTokens = assistantTokens(question);
+  const queryTokens = expandAssistantTokens(assistantTokens(question));
   if (!queryTokens.length) return [];
 
+  const normalizedQuery = normalizeAssistantText(question);
   return assistantKnowledgeBase(context)
     .map((entry) => {
-      const haystack = assistantTokens(`${entry.title} ${entry.body} ${entry.keywords ?? ""}`);
-      const score = queryTokens.reduce((total, token) => total + (haystack.includes(token) ? 1 : 0), 0);
+      const normalizedEntry = normalizeAssistantText(`${entry.title} ${entry.body} ${entry.keywords ?? ""}`);
+      const haystack = expandAssistantTokens(assistantTokens(normalizedEntry));
+      const tokenScore = queryTokens.reduce((total, token) => total + (haystack.includes(token) ? 2 : 0), 0);
+      const phraseScore = normalizedEntry.includes(normalizedQuery) || normalizedQuery.includes(normalizeAssistantText(entry.title)) ? 5 : 0;
+      const score = tokenScore + phraseScore;
       return { ...entry, score };
     })
     .filter((entry) => entry.score > 0)
@@ -258,6 +350,50 @@ function assistantKnowledgeBase(context) {
       keywords: "menu recipe sale fulfillment stock out",
     };
   });
+  const clientEntries = (context.clients ?? []).map((client) => ({
+    title: client.name,
+    body: `${client.segment} client. Default menu: ${context.menus.find((menu) => menu.id === client.default_menu_id)?.name ?? "None"}. Order pattern: ${client.order_pattern}. Next order: ${client.next_order}.`,
+    view: "clients",
+    keywords: "client customer order recurring seasonal wholesale sale menu relationship",
+  }));
+  const supplierEntries = (context.suppliers ?? []).map((supplier) => ({
+    title: supplier.name,
+    body: `${supplier.cadence} supplier. Reliability: ${supplier.reliability}. Last delivery: ${supplier.last_delivery}. Variance cases: ${supplier.variance_cases ?? 0}.`,
+    view: "suppliers",
+    keywords: "supplier vendor purchase receiving delivery variance relationship",
+  }));
+  const saleEntries = (context.sales ?? []).slice(-12).map((sale) => ({
+    title: `Sale ${context.clientName?.(sale.client_id) ?? sale.client_id}`,
+    body: `${sale.item_label ?? context.productName(sale.product_id)} fulfilled from ${sale.location}. Quantity ${context.formatQuantity(sale.quantity)}. Status ${sale.status}.`,
+    view: "sales",
+    keywords: "sale fulfilled client direct stock menu stock out",
+  }));
+  const purchaseEntries = (context.purchases ?? []).slice(-12).map((purchase) => ({
+    title: `Purchase ${context.supplierName?.(purchase.supplier_id) ?? purchase.supplier_id}`,
+    body: `${purchase.item_label ?? context.productName(purchase.product_id)} received at ${purchase.location}. Quantity ${context.formatQuantity(purchase.quantity)}. Status ${purchase.status}.`,
+    view: "purchases",
+    keywords: "purchase supplier receiving stock in delivery",
+  }));
+  const userEntries = (context.users ?? []).map((user) => ({
+    title: user.display_name,
+    body: `${user.role} user. Status: ${user.status}. Scope: ${user.access_scope}. Last active: ${user.last_active}.`,
+    view: "users",
+    keywords: "user role staff access device trust permission",
+  }));
+  const settingEntries = [
+    ...(context.settingsPolicies ?? []).map((policy) => ({
+      title: policy.label,
+      body: `${policy.value}. ${policy.detail}`,
+      view: "settings",
+      keywords: "setting policy offline sync tenant privacy",
+    })),
+    ...(context.numberingRules ?? []).map((rule) => ({
+      title: `${rule.prefix} numbering`,
+      body: `${rule.example}. ${rule.use}`,
+      view: "settings",
+      keywords: "setting numbering sequence document code",
+    })),
+  ];
 
   return [
     ...pageEntries,
@@ -265,6 +401,12 @@ function assistantKnowledgeBase(context) {
     ...stockEntries,
     ...locationEntries,
     ...menuEntries,
+    ...clientEntries,
+    ...supplierEntries,
+    ...saleEntries,
+    ...purchaseEntries,
+    ...userEntries,
+    ...settingEntries,
     { title: "Event-sourced ledger", body: "Stock is derived from immutable event replay. Use corrections and undo records instead of editing history.", view: "audit", keywords: "ledger immutable audit history event source replay" },
     { title: "Session-only chat", body: "Assistant chat history is held in memory for this browser session and is excluded from localStorage persistence.", view: context.activeView, keywords: "privacy chat session history storage local" },
     { title: "Privacy", body: "Private contact details, supplier terms, and staff notes should stay hidden unless the role and audit path require them.", view: "users", keywords: "privacy pii private sensitive tenant user supplier client" },
@@ -293,6 +435,22 @@ function pageAssistantActions(view, context) {
   return [{ label: "Open Stock Actions", view: "compose" }, { label: "Open Audit Trail", view: "audit" }];
 }
 
+function pagePurposeText(meta) {
+  return `${meta.title} is for ${meta.guide.toLowerCase()}`;
+}
+
+function cleanTipForSentence(tip) {
+  return `${tip ?? ""}`.trim().replace(/\.$/, "").replace(/^use /i, "use ").replace(/^open /i, "open ");
+}
+
+function humanJoin(items) {
+  const cleanItems = items.map((item) => `${item ?? ""}`.trim()).filter(Boolean);
+  if (cleanItems.length === 0) return "ask for the next best step";
+  if (cleanItems.length === 1) return cleanItems[0];
+  if (cleanItems.length === 2) return `${cleanItems[0]} and ${cleanItems[1]}`;
+  return `${cleanItems.slice(0, -1).join(", ")}, and ${cleanItems.at(-1)}`;
+}
+
 function findMentionedProduct(question, products) {
   const normalized = normalizeAssistantText(question);
   return products.find((product) => normalizeAssistantText(product.name).split(" ").every((part) => normalized.includes(part)));
@@ -303,8 +461,34 @@ function normalizeAssistantText(value) {
 }
 
 function assistantTokens(value) {
-  const stop = new Set(["the", "a", "an", "is", "are", "to", "for", "of", "and", "or", "we", "do", "have", "what", "this", "that", "how", "many", "much", "who", "won", "did", "was", "were", "when", "where", "why"]);
+  const stop = new Set(["the", "a", "an", "is", "are", "to", "for", "of", "and", "or", "we", "do", "have", "what", "this", "that", "how", "many", "much", "who", "won", "did", "was", "were", "when", "where", "why", "please", "show", "tell", "about"]);
   return normalizeAssistantText(value).split(" ").filter((token) => token.length > 2 && !stop.has(token));
+}
+
+function expandAssistantTokens(tokens) {
+  const synonyms = new Map([
+    ["buy", ["purchase", "supplier", "receive"]],
+    ["bought", ["purchase", "supplier", "receive"]],
+    ["sell", ["sale", "client", "stockout"]],
+    ["sold", ["sale", "client", "stockout"]],
+    ["customer", ["client", "sale"]],
+    ["vendor", ["supplier", "purchase"]],
+    ["place", ["location"]],
+    ["room", ["location"]],
+    ["count", ["stock", "quantity", "inventory"]],
+    ["counts", ["stock", "quantity", "inventory"]],
+    ["amount", ["quantity", "stock"]],
+    ["waiting", ["queue", "outbox", "pending"]],
+    ["saved", ["queue", "outbox", "pending"]],
+    ["mistake", ["undo", "reverse", "audit"]],
+    ["wrong", ["undo", "reverse", "correction"]],
+  ]);
+  const expanded = new Set(tokens);
+  tokens.forEach((token) => {
+    (synonyms.get(token) ?? []).forEach((synonym) => expanded.add(synonym));
+    if (token.endsWith("s")) expanded.add(token.slice(0, -1));
+  });
+  return [...expanded];
 }
 
 function matchesAny(value, phrases) {

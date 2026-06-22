@@ -62,7 +62,26 @@ import {
   stockTotalRows as selectStockTotalRows,
   withWorkItem,
 } from "./inventory/selectors.mjs";
-import { answerAssistantQuestion as answerAssistantQuestionFromContext } from "./assistant/assistant-engine.mjs";
+import {
+  answerAssistantQuestion as answerAssistantQuestionFromContext,
+  createAssistantGreeting as createAssistantGreetingFromContext,
+} from "./assistant/assistant-engine.mjs";
+import { buildWorkQueueItems } from "./stock-actions/work-queue.mjs";
+import {
+  clientSalesReportRows,
+  filterAuditRows as selectAuditRows,
+  filterClients,
+  filterLocations,
+  filterMenus,
+  filterProductCatalog,
+  filterPurchaseRecords,
+  filterSalesRecords,
+  filterSuppliers,
+  filterUsers,
+  movementReportRows,
+  productCategories as selectProductCategories,
+  supplierPurchaseReportRows,
+} from "./records/selectors.mjs";
 
 import "./styles.css";
 
@@ -119,6 +138,10 @@ function render() {
   `;
 
   restoreFocusSnapshot(app, focusSnapshot);
+  requestAnimationFrame(() => {
+    const assistantFeed = app.querySelector(".assistant-feed");
+    if (assistantFeed) assistantFeed.scrollTop = assistantFeed.scrollHeight;
+  });
 
   if (state.activeView === "compose" && shouldFocusActionOnCompose) {
     requestAnimationFrame(() => {
@@ -257,7 +280,7 @@ function renderTopbar() {
         <span class="guide-anchor">
           <button class="button button-secondary guide-button ${state.guideOpen ? "is-open" : ""}" data-action="toggle-guide" type="button" aria-expanded="${state.guideOpen}">
             ${icon("spark")}
-            Assistant
+            Stocky
             ${guideCue ? `<span class="cue-badge">${guideCue}</span>` : `<span class="cue-dot" aria-hidden="true"></span>`}
           </button>
           ${state.guideOpen ? renderGuideMenu() : ""}
@@ -370,48 +393,27 @@ function guideNotifications() {
 
 function renderGuideMenu() {
   const meta = screenMeta[state.activeView] ?? screenMeta.dashboard;
-  const action = nextAction({
-    lowRows: filteredStockRows(allLocalEvents()).filter((row) => row.quantity >= 0 && row.quantity <= productLow(row.product_id)).length,
-    invalidOutbox: state.outbox.map((event) => validateEvent(event)).filter((result) => !result.valid).length,
-    negativeRows: filteredStockRows(allLocalEvents()).filter((row) => row.quantity < 0).length,
-  });
-  const tips = guideTips();
-  const notifications = guideNotifications();
   const messages = assistantMessagesForRender();
 
   return `
-    <div class="guide-menu assistant-menu" role="dialog" aria-label="StockLedger Assistant">
+    <div class="guide-menu assistant-menu" role="dialog" aria-label="Stocky Assistant">
       <div class="guide-menu-header">
         <div>
-          <span>Assistant</span>
+          <span>Stocky</span>
           <strong>${meta.title}</strong>
         </div>
-        <button class="icon-button" data-action="toggle-guide" type="button" aria-label="Close Assistant">${icon("close")}</button>
+        <button class="icon-button" data-action="toggle-guide" type="button" aria-label="Close Stocky">${icon("close")}</button>
       </div>
       <div class="assistant-feed" aria-live="polite">
         ${messages.map(renderAssistantMessage).join("")}
       </div>
-      <div class="assistant-quick-actions" aria-label="Assistant shortcuts">
-        <button class="table-action" data-assistant-prompt="What is this page for?" type="button">This page</button>
-        <button class="table-action" data-assistant-prompt="What needs attention right now?" type="button">Needs attention</button>
-        <button class="table-action" data-assistant-prompt="How many stocks do we have?" type="button">Stock count</button>
-        <button class="table-action" data-view="${action.view}" type="button">${action.button}</button>
-      </div>
       <form class="assistant-form" data-form="assistant">
         <label class="assistant-input-label">
           <span>Ask about StockLedger</span>
-          <textarea name="assistant-question" rows="2" placeholder="Ask about stock, actions, audit, pages, or what to do next.">${escapeHtml(state.assistantInput ?? "")}</textarea>
+          <textarea name="assistant-question" rows="2" placeholder="Ask Stocky about inventory, actions, saved work, audit, reports, or what to do next.">${escapeHtml(state.assistantInput ?? "")}</textarea>
         </label>
         <button class="button button-primary" type="submit">${icon("send")}Send</button>
       </form>
-      <details class="assistant-context">
-        <summary>What I can use</summary>
-        <p>Current page, live stock replay, saved work, notifications, action templates, products, locations, menus, sales, purchases, reports, audit terms, users, and settings. Chat stays in this browser session only.</p>
-        <ul>
-          ${tips.map((tip) => `<li>${escapeHtml(tip)}</li>`).join("")}
-          ${notifications.slice(0, 3).map((item) => `<li>${escapeHtml(item.title)}: ${escapeHtml(item.text)}</li>`).join("")}
-        </ul>
-      </details>
     </div>
   `;
 }
@@ -425,21 +427,12 @@ function assistantMessagesForRender() {
 }
 
 function createAssistantGreeting() {
-  const meta = screenMeta[state.activeView] ?? screenMeta.dashboard;
-  const notifications = guideNotifications();
-  const action = nextAction({
-    lowRows: filteredStockRows(allLocalEvents()).filter((row) => row.quantity >= 0 && row.quantity <= productLow(row.product_id)).length,
-    invalidOutbox: state.outbox.map((event) => validateEvent(event)).filter((result) => !result.valid).length,
-    negativeRows: filteredStockRows(allLocalEvents()).filter((row) => row.quantity < 0).length,
-  });
-  const notificationLine = notifications.slice(0, 3).map((item) => `${item.title}: ${item.text}`).join("\n");
-  const tips = guideTips().slice(0, 3).join("\n");
+  const greeting = createAssistantGreetingFromContext(assistantContext());
 
   return {
     id: nextId("assistant"),
     role: "assistant",
-    text: `Hi. I can help with StockLedger from the current screen.\n\nYou are on ${meta.title}. ${meta.guide}\n\nNotifications:\n${notificationLine}\n\nUseful here:\n${tips}\n\nSuggested action: ${action.title}. ${action.text}`,
-    actions: [{ label: action.button, view: action.view }],
+    ...greeting,
   };
 }
 
@@ -448,7 +441,7 @@ function renderAssistantMessage(message) {
   const actions = Array.isArray(message.actions) ? message.actions : [];
   return `
     <article class="assistant-message is-${role}">
-      <span>${role === "user" ? "You" : "StockLedger Assistant"}</span>
+      <span>${role === "user" ? "You" : "Stocky"}</span>
       <p>${formatAssistantText(message.text)}</p>
       ${
         actions.length
@@ -490,22 +483,36 @@ function submitAssistantQuestion(rawQuestion) {
 }
 
 function answerAssistantQuestion(question) {
-  return answerAssistantQuestionFromContext(question, {
+  return answerAssistantQuestionFromContext(question, assistantContext());
+}
+
+function assistantContext() {
+  return {
     activeView: state.activeView,
     screenMeta,
     actionTemplates: ACTION_TEMPLATES,
     eventLabels,
     guideTipsForView,
     notifications: guideNotifications,
+    pageActions,
     stockRows: () => filteredStockRows(allLocalEvents()),
     stockTotals: (rows) => stockTotalRows(rows),
     products: getProductCatalog(),
     locations: getLocations(),
+    clients: DEFAULT_CLIENTS,
+    suppliers: DEFAULT_SUPPLIERS,
     menuItems: DEFAULT_MENU_ITEMS,
     menus: DEFAULT_MENUS,
+    sales: Array.isArray(state.sales) ? state.sales : [],
+    purchases: Array.isArray(state.purchases) ? state.purchases : [],
+    users: DEFAULT_USERS,
+    settingsPolicies: SETTINGS_POLICIES,
+    numberingRules: NUMBERING_RULES,
     productUnit,
     productLow,
     productName,
+    clientName,
+    supplierName,
     outbox: state.outbox,
     workItems: () => {
       const validations = state.outbox.map((event) => validateEvent(event));
@@ -513,7 +520,18 @@ function answerAssistantQuestion(question) {
     },
     validations: () => state.outbox.map((event) => validateEvent(event)),
     formatQuantity,
-  });
+  };
+}
+
+function pageActions(view) {
+  if (view === "home") return [{ label: "Open Stock Overview", view: "dashboard" }, { label: "Open Stock Actions", view: "compose" }];
+  if (view === "dashboard") return [{ label: "Open Stock Actions", view: "compose" }, { label: "Open Reports", view: "reports" }];
+  if (view === "compose") return [{ label: "Open Stock Overview", view: "dashboard" }, { label: "Open Audit Trail", view: "audit" }];
+  if (view === "audit") return [{ label: "Open Stock Actions", view: "compose" }, { label: "Open Stock Overview", view: "dashboard" }];
+  if (view === "sales") return [{ label: "Open Stock Actions", view: "compose" }, { label: "Open Clients", view: "clients" }];
+  if (view === "purchases") return [{ label: "Open Stock Actions", view: "compose" }, { label: "Open Suppliers", view: "suppliers" }];
+  if (view === "products") return [{ label: "Open Stock Actions", view: "compose" }, { label: "Open Stock Overview", view: "dashboard" }];
+  return [{ label: "Open Stock Actions", view: "compose" }, { label: "Open Audit Trail", view: "audit" }];
 }
 
 function renderToast() {
@@ -701,7 +719,9 @@ function renderClientsPage() {
   const fulfilledSales = Array.isArray(state.sales) ? state.sales : [];
   const recurringClients = DEFAULT_CLIENTS.filter((client) => client.segment.toLowerCase().includes("recurring")).length;
   const seasonalClients = DEFAULT_CLIENTS.filter((client) => client.segment.toLowerCase().includes("seasonal")).length;
-  const clients = filteredClients({
+  const clients = filterClients({
+    clients: DEFAULT_CLIENTS,
+    menus: DEFAULT_MENUS,
     filter: state.clientViewFilter ?? "all",
     search: state.clientSearch ?? "",
     menuId: state.clientMenuFilter ?? "all",
@@ -725,27 +745,6 @@ function renderClientsPage() {
       </section>
     </section>
   `;
-}
-
-function filteredClients({ filter, search = "", menuId = "all" }) {
-  const query = `${search}`.trim().toLowerCase();
-  return DEFAULT_CLIENTS.filter((client) => {
-    if (filter === "recurring" && !client.segment.toLowerCase().includes("recurring")) return false;
-    if (filter === "seasonal" && !client.segment.toLowerCase().includes("seasonal")) return false;
-    if (filter === "wholesale" && !client.segment.toLowerCase().includes("wholesale")) return false;
-    if (menuId !== "all" && client.default_menu_id !== menuId) return false;
-    if (!query) return true;
-
-    const menu = getMenuById(client.default_menu_id);
-    return [
-      client.name,
-      client.segment,
-      client.order_pattern,
-      client.next_order,
-      client.delivery_window,
-      menu?.name ?? "",
-    ].join(" ").toLowerCase().includes(query);
-  });
 }
 
 function renderClientControls() {
@@ -893,7 +892,9 @@ function renderSuppliersPage(localLedger) {
   const receivingEvents = localLedger.filter((event) => event.type === "STOCK_IN");
   const suppliersWithVariance = DEFAULT_SUPPLIERS.filter((supplier) => supplier.variance_cases > 0).length;
   const suppliedProductCount = new Set(DEFAULT_SUPPLIERS.flatMap((supplier) => supplier.products)).size;
-  const suppliers = filteredSuppliers({
+  const suppliers = filterSuppliers({
+    suppliers: DEFAULT_SUPPLIERS,
+    products: getProductCatalog(),
     filter: state.supplierViewFilter ?? "all",
     search: state.supplierSearch ?? "",
     productId: state.supplierProductFilter ?? "all",
@@ -917,25 +918,6 @@ function renderSuppliersPage(localLedger) {
       </section>
     </section>
   `;
-}
-
-function filteredSuppliers({ filter, search = "", productId = "all" }) {
-  const query = `${search}`.trim().toLowerCase();
-  return DEFAULT_SUPPLIERS.filter((supplier) => {
-    if (filter === "review" && !(supplier.variance_cases > 0 || supplier.reliability.toLowerCase().includes("watch"))) return false;
-    if (filter === "stable" && !(supplier.variance_cases === 0 && !supplier.reliability.toLowerCase().includes("watch"))) return false;
-    if (productId !== "all" && !supplier.products.includes(productId)) return false;
-    if (!query) return true;
-
-    const searchable = [
-      supplier.name,
-      supplier.reliability,
-      supplier.cadence,
-      supplier.last_delivery,
-      ...supplier.products.map((id) => productName(id)),
-    ].join(" ").toLowerCase();
-    return searchable.includes(query);
-  });
 }
 
 function renderSupplierControls() {
@@ -1083,7 +1065,11 @@ function renderMenusPage() {
   const activeMenus = DEFAULT_MENUS.filter((menu) => menu.status === "Active").length;
   const recipeLines = DEFAULT_MENU_ITEMS.reduce((total, item) => total + item.recipe.length, 0);
   const seasonalItems = DEFAULT_MENUS.filter((menu) => menu.cadence.toLowerCase().includes("seasonal")).length;
-  const menus = filteredMenus({
+  const menus = filterMenus({
+    menus: DEFAULT_MENUS,
+    clients: DEFAULT_CLIENTS,
+    menuItems: DEFAULT_MENU_ITEMS,
+    products: getProductCatalog(),
     filter: state.menuViewFilter ?? "all",
     search: state.menuSearch ?? "",
     clientId: state.menuClientFilter ?? "all",
@@ -1113,29 +1099,6 @@ function renderMenusPage() {
       </article>
     </section>
   `;
-}
-
-function filteredMenus({ filter, search = "", clientId = "all" }) {
-  const query = `${search}`.trim().toLowerCase();
-  return DEFAULT_MENUS.filter((menu) => {
-    if (filter === "active" && menu.status !== "Active") return false;
-    if (filter === "draft" && menu.status === "Active") return false;
-    if (filter === "recurring" && !menu.cadence.toLowerCase().includes("recurring")) return false;
-    if (filter === "seasonal" && !menu.cadence.toLowerCase().includes("seasonal")) return false;
-    if (clientId !== "all" && menu.client_id !== clientId) return false;
-    if (!query) return true;
-
-    const client = DEFAULT_CLIENTS.find((candidate) => candidate.id === menu.client_id);
-    const items = menuItemsForMenu(menu.id);
-    return [
-      menu.name,
-      menu.cadence,
-      menu.status,
-      client?.name ?? "",
-      ...items.map((item) => item.name),
-      ...items.flatMap((item) => item.recipe.map((line) => productName(line.product_id))),
-    ].join(" ").toLowerCase().includes(query);
-  });
 }
 
 function renderMenuControls() {
@@ -1302,9 +1265,11 @@ function renderLocationsPage(localLedger, stockRows) {
   const storageLocations = siteLocations.filter((location) => location.kind === "Storage").length;
   const serviceLocations = siteLocations.filter((location) => location.kind !== "Storage").length;
   const negativeRows = stockRows.filter((row) => row.quantity < 0).length;
-  const filteredLocationRows = filteredLocations({
+  const filteredLocationRows = filterLocations({
+    locations: siteLocations,
     filter: state.locationViewFilter ?? "all",
     stockRows,
+    productLow,
     search: state.locationSearch ?? "",
     kind: state.locationKindFilter ?? "all",
   });
@@ -1327,29 +1292,6 @@ function renderLocationsPage(localLedger, stockRows) {
       </section>
     </section>
   `;
-}
-
-function filteredLocations({ filter, stockRows, search = "", kind = "all" }) {
-  const query = `${search}`.trim().toLowerCase();
-  const siteLocations = getLocations();
-
-  return siteLocations.filter((location) => {
-    if (kind !== "all" && location.kind !== kind) return false;
-    if (filter === "storage" && location.kind !== "Storage") return false;
-    if (filter === "service" && location.kind === "Storage") return false;
-    if (filter === "review") {
-      const rows = stockRows.filter((row) => row.location === location.name);
-      if (!rows.some((row) => row.quantity < 0 || (row.quantity > 0 && row.quantity <= productLow(row.product_id)))) return false;
-    }
-    if (!query) return true;
-
-    return [
-      location.name,
-      location.kind,
-      location.owner,
-      location.status,
-    ].join(" ").toLowerCase().includes(query);
-  });
 }
 
 function renderLocationControls() {
@@ -1548,21 +1490,21 @@ function renderReportsPage(localLedger, stockRows) {
           eyebrow: "Sales",
           title: "Sales by Client",
           summary: `${sales.filter((sale) => sale.sale_mode === "menu_item").length} menu sale${sales.filter((sale) => sale.sale_mode === "menu_item").length === 1 ? "" : "s"} fulfilled locally.`,
-          rows: clientSalesReportRows(sales),
+          rows: clientSalesReportRows(sales, { clients: DEFAULT_CLIENTS, clientName }),
           empty: "No fulfilled sales yet.",
         })}
         ${renderReportPanel({
           eyebrow: "Purchases",
           title: "Receiving by Supplier",
           summary: `${stockInEvents.length} stock-in event${stockInEvents.length === 1 ? "" : "s"} in the replayed ledger and queue.`,
-          rows: supplierPurchaseReportRows(purchases),
+          rows: supplierPurchaseReportRows(purchases, { suppliers: DEFAULT_SUPPLIERS, supplierName, formatQuantity }),
           empty: "No purchases received yet.",
         })}
         ${renderReportPanel({
           eyebrow: "Movement",
           title: "Stock Movement Mix",
           summary: `${stockOutEvents.length} stock-out event${stockOutEvents.length === 1 ? "" : "s"} and ${stockInEvents.length} stock-in event${stockInEvents.length === 1 ? "" : "s"}.`,
-          rows: movementReportRows(localLedger),
+          rows: movementReportRows(localLedger, { eventLabels, formatQuantity }),
           empty: "No movement events yet.",
         })}
       </section>
@@ -1582,7 +1524,8 @@ function renderUsersPage() {
   const pendingUsers = DEFAULT_USERS.filter((user) => user.status.includes("pending")).length;
   const trustedDevices = TRUSTED_DEVICES.filter((device) => device.trust === "Trusted").length;
   const sensitiveReviews = DEFAULT_USERS.reduce((total, user) => total + Number(user.sensitive_access), 0);
-  const users = filteredUsers({
+  const users = filterUsers({
+    users: DEFAULT_USERS,
     filter: state.userViewFilter ?? "all",
     search: state.userSearch ?? "",
     role: state.userRoleFilter ?? "all",
@@ -1620,25 +1563,6 @@ function renderUsersPage() {
       </section>
     </section>
   `;
-}
-
-function filteredUsers({ filter, search = "", role = "all" }) {
-  const query = `${search}`.trim().toLowerCase();
-  return DEFAULT_USERS.filter((user) => {
-    if (filter === "active" && user.status !== "Active") return false;
-    if (filter === "pending" && !user.status.toLowerCase().includes("pending")) return false;
-    if (filter === "sensitive" && Number(user.sensitive_access) <= 0) return false;
-    if (role !== "all" && user.role !== role) return false;
-    if (!query) return true;
-
-    return [
-      user.display_name,
-      user.role,
-      user.status,
-      user.access_scope,
-      user.last_active,
-    ].join(" ").toLowerCase().includes(query);
-  });
 }
 
 function renderUserControls() {
@@ -2088,61 +2012,6 @@ function renderReportPanel({ eyebrow, title, summary, rows, empty }) {
   `;
 }
 
-function clientSalesReportRows(sales) {
-  const grouped = new Map(DEFAULT_CLIENTS.map((client) => [client.id, { label: client.name, count: 0, stockLines: 0, menuSales: 0 }]));
-  sales.forEach((sale) => {
-    const row = grouped.get(sale.client_id) ?? { label: clientName(sale.client_id), count: 0, stockLines: 0, menuSales: 0 };
-    row.count += 1;
-    row.stockLines += Number(sale.event_count ?? 1);
-    row.menuSales += sale.sale_mode === "menu_item" ? 1 : 0;
-    grouped.set(sale.client_id, row);
-  });
-
-  return [...grouped.values()]
-    .filter((row) => row.count > 0)
-    .sort((first, second) => second.count - first.count)
-    .map((row) => ({
-      label: row.label,
-      value: `${row.count} sale${row.count === 1 ? "" : "s"}`,
-      meta: `${row.menuSales} menu sale${row.menuSales === 1 ? "" : "s"} / ${row.stockLines} stock line${row.stockLines === 1 ? "" : "s"}`,
-    }));
-}
-
-function supplierPurchaseReportRows(purchases) {
-  const grouped = new Map(DEFAULT_SUPPLIERS.map((supplier) => [supplier.id, { label: supplier.name, count: 0, quantity: 0 }]));
-  purchases.forEach((purchase) => {
-    const row = grouped.get(purchase.supplier_id) ?? { label: supplierName(purchase.supplier_id), count: 0, quantity: 0 };
-    row.count += 1;
-    row.quantity += Number(purchase.quantity);
-    grouped.set(purchase.supplier_id, row);
-  });
-
-  return [...grouped.values()]
-    .filter((row) => row.count > 0)
-    .sort((first, second) => second.count - first.count)
-    .map((row) => ({
-      label: row.label,
-      value: `${row.count} receipt${row.count === 1 ? "" : "s"}`,
-      meta: `${formatQuantity(row.quantity)} total units received`,
-    }));
-}
-
-function movementReportRows(events) {
-  const movementTypes = ["STOCK_IN", "STOCK_OUT", "STOCK_TRANSFER", "STOCK_ADJUSTMENT", "STOCK_REVERT"];
-
-  return movementTypes
-    .map((type) => {
-      const matchingEvents = events.filter((event) => event.type === type);
-      const absoluteQuantity = matchingEvents.reduce((total, event) => total + Math.abs(Number(event.quantity)), 0);
-      return {
-        label: eventLabels[type] ?? type,
-        value: `${matchingEvents.length} event${matchingEvents.length === 1 ? "" : "s"}`,
-        meta: `${formatQuantity(absoluteQuantity)} total movement`,
-      };
-    })
-    .filter((row) => !row.value.startsWith("0 "));
-}
-
 function renderRecipePreview(item) {
   if (!item) {
     return `
@@ -2167,9 +2036,13 @@ function renderRecipePreview(item) {
 function renderSalesPage() {
   const sales = Array.isArray(state.sales) ? state.sales : [];
   const queuedSaleEvents = state.outbox.filter((event) => event.source_type === "sale").length;
-  const filteredSales = filteredSalesRecords({
-    filter: state.saleViewFilter ?? "all",
+  const filteredSales = filterSalesRecords({
     sales,
+    clientName,
+    productName,
+    saleTypeLabels,
+    saleModeLabels,
+    filter: state.saleViewFilter ?? "all",
     search: state.saleSearch ?? "",
     clientId: state.saleClientFilter ?? "all",
   });
@@ -2196,31 +2069,6 @@ function renderSalesPage() {
   `;
 }
 
-function filteredSalesRecords({ filter, sales, search = "", clientId = "all" }) {
-  const query = search.trim().toLowerCase();
-  return sales.filter((sale) => {
-    if (filter === "one_time" && sale.sale_type !== "one_time") return false;
-    if (filter === "recurring" && sale.sale_type !== "recurring") return false;
-    if (filter === "menu_item" && sale.sale_mode !== "menu_item") return false;
-    if (filter === "direct_stock" && sale.sale_mode !== "direct_stock") return false;
-    if (clientId !== "all" && sale.client_id !== clientId) return false;
-    if (!query) return true;
-
-    const searchable = [
-      clientName(sale.client_id),
-      saleTypeLabels[sale.sale_type] ?? "",
-      saleModeLabels[sale.sale_mode] ?? "",
-      sale.item_label ?? "",
-      productName(sale.product_id),
-      sale.location ?? "",
-      sale.notes ?? "",
-    ]
-      .join(" ")
-      .toLowerCase();
-    return searchable.includes(query);
-  });
-}
-
 function renderSaleFilterTab(value, label) {
   const active = (state.saleViewFilter ?? "all") === value;
   return `
@@ -2233,9 +2081,13 @@ function renderSaleFilterTab(value, label) {
 function renderPurchasesPage() {
   const purchases = Array.isArray(state.purchases) ? state.purchases : [];
   const queuedPurchaseEvents = state.outbox.filter((event) => event.source_type === "purchase").length;
-  const filteredPurchases = filteredPurchaseRecords({
-    filter: state.purchaseViewFilter ?? "all",
+  const filteredPurchases = filterPurchaseRecords({
     purchases,
+    suppliers: DEFAULT_SUPPLIERS,
+    products: getProductCatalog(),
+    supplierName,
+    productName,
+    filter: state.purchaseViewFilter ?? "all",
     search: state.purchaseSearch ?? "",
     supplierId: state.purchaseSupplierFilter ?? "all",
   });
@@ -2260,29 +2112,6 @@ function renderPurchasesPage() {
       </section>
     </section>
   `;
-}
-
-function filteredPurchaseRecords({ filter, purchases, search = "", supplierId = "all" }) {
-  const query = `${search}`.trim().toLowerCase();
-  return purchases.filter((purchase) => {
-    if (filter === "review") {
-      const supplier = DEFAULT_SUPPLIERS.find((candidate) => candidate.id === purchase.supplier_id);
-      if (!(supplier?.variance_cases > 0)) return false;
-    }
-    if (filter === "spirits" && getProductById(purchase.product_id)?.category !== "Spirits") return false;
-    if (filter === "produce" && getProductById(purchase.product_id)?.category !== "Kitchen") return false;
-    if (supplierId !== "all" && purchase.supplier_id !== supplierId) return false;
-    if (!query) return true;
-
-    return [
-      supplierName(purchase.supplier_id),
-      productName(purchase.product_id),
-      purchase.item_label ?? "",
-      purchase.location,
-      purchase.notes,
-      purchase.status,
-    ].join(" ").toLowerCase().includes(query);
-  });
 }
 
 function renderPurchaseFilterTab(value, label) {
@@ -2619,16 +2448,23 @@ function renderComposer(localLedger, outboxValidation) {
 }
 
 function renderProducts() {
-  const products = filteredProductCatalog();
+  const products = filterProductCatalog({
+    products: getProductCatalog(),
+    statusFilter: state.productStatusFilter ?? "active",
+    categoryFilter: state.productCategoryFilter ?? "all",
+    search: state.productSearch ?? "",
+    productLastStateLabel,
+  });
   const activeProducts = getActiveProducts().length;
   const inactiveProducts = getInactiveProducts().length;
+  const categories = selectProductCategories(getProductCatalog());
 
   return `
     <section class="content-grid module-page product-workspace">
       <section class="module-metrics" aria-label="Product metrics">
         ${metricCard("Active Products", activeProducts)}
         ${metricCard("Suspended", inactiveProducts)}
-        ${metricCard("Categories", productCategories().length)}
+        ${metricCard("Categories", categories.length)}
         ${metricCard("Low Thresholds", getProductCatalog().filter((product) => Number(product.low) > 0).length)}
       </section>
       <article class="panel panel-wide panel--flush-table record-table-panel">
@@ -2640,21 +2476,6 @@ function renderProducts() {
       </article>
     </section>
   `;
-}
-
-function productCategories() {
-  return [...new Set(getProductCatalog().map((product) => product.category || "Uncategorized"))].sort((first, second) => first.localeCompare(second));
-}
-
-function filteredProductCatalog() {
-  const query = `${state.productSearch ?? ""}`.trim().toLowerCase();
-  return getProductCatalog().filter((product) => {
-    if (state.productStatusFilter === "active" && product.is_active === false) return false;
-    if (state.productStatusFilter === "suspended" && product.is_active !== false) return false;
-    if (state.productCategoryFilter !== "all" && (product.category || "Uncategorized") !== state.productCategoryFilter) return false;
-    if (!query) return true;
-    return [product.name, product.category, product.unit, productLastStateLabel(product)].join(" ").toLowerCase().includes(query);
-  });
 }
 
 function renderProductControls() {
@@ -2687,7 +2508,7 @@ function renderProductControls() {
             attrs: 'data-filter="product-category"',
             options: `
               <option value="all">All categories</option>
-              ${productCategories().map((category) => `<option value="${escapeAttr(category)}" ${state.productCategoryFilter === category ? "selected" : ""}>${escapeHtml(category)}</option>`).join("")}
+              ${selectProductCategories(getProductCatalog()).map((category) => `<option value="${escapeAttr(category)}" ${state.productCategoryFilter === category ? "selected" : ""}>${escapeHtml(category)}</option>`).join("")}
             `,
           })}
         </label>
@@ -3054,10 +2875,6 @@ function renderActionTemplateFields(form, template, revertOptions) {
   `;
 }
 
-function currentSystemCount(form) {
-  return currentSystemCountForProduct(form, form.product_id);
-}
-
 function currentSystemCountForProduct(form, productId) {
   if (!productId || !form.to_location) return null;
   const row = filteredStockRows(allLocalEvents()).find(
@@ -3069,43 +2886,72 @@ function currentSystemCountForProduct(form, productId) {
 function physicalCountVariance(form, productId = form.product_id) {
   const systemCount = currentSystemCountForProduct(form, productId);
   if (systemCount === null) return null;
-  if (form.physical_count === "" || form.physical_count === null || form.physical_count === undefined) return null;
-  const physical = Number(form.physical_count);
+  const productPhysicalCount = physicalCountForProduct(form, productId);
+  if (productPhysicalCount === "" || productPhysicalCount === null || productPhysicalCount === undefined) return null;
+  const physical = Number(productPhysicalCount);
   if (!Number.isFinite(physical)) return null;
   return Number((physical - systemCount).toFixed(4));
 }
 
+function physicalCountForProduct(form, productId) {
+  return form.product_physical_counts?.[productId] ?? form.physical_count ?? "";
+}
+
 function renderPhysicalCountFields(form) {
-  const systemCount = currentSystemCount(form);
-  const variance = physicalCountVariance(form);
-  const hasLocation = systemCount !== null;
-  const varianceTone = variance === null ? "" : variance === 0 ? "" : variance > 0 ? "is-valid" : "is-error";
+  const selectedIds = selectedProductIdsForScope("active", getActiveProducts());
+  const firstCountValue = selectedIds.length ? physicalCountForProduct(form, selectedIds[0]) : form.physical_count;
+  const hasLocation = Boolean(form.to_location);
 
   return `
     <div class="panel form-field-span-2 physical-count-panel">
-      <div class="physical-count-row">
-        <div class="physical-count-stat">
-          <span>System Count</span>
-          <strong>${hasLocation ? formatQuantity(systemCount) : "Choose a location"}</strong>
+      <input type="hidden" name="physical_count" value="${escapeAttr(firstCountValue)}" />
+      <div class="physical-count-heading">
+        <div>
+          <strong>Physical Counts</strong>
+          <span>${selectedIds.length > 1 ? "Each selected product saves its own correction." : "Enter what you counted for the selected product."}</span>
         </div>
-        <label class="physical-count-input">
-          <span>Physical Count</span>
-          <input
-            name="physical_count"
-            type="number"
-            step="0.01"
-            placeholder="What you counted"
-            value="${escapeAttr(form.physical_count)}"
-            ${hasLocation ? "" : "disabled"}
-          />
-        </label>
-        <div class="physical-count-stat">
-          <span>Variance</span>
-          <strong class="${varianceTone ? `badge ${varianceTone}` : ""}">
-            ${variance === null ? "—" : `${variance > 0 ? "+" : ""}${formatQuantity(variance)}`}
-          </strong>
-        </div>
+        <span>${hasLocation ? escapeHtml(form.to_location) : "Choose a count location"}</span>
       </div>
+      ${selectedIds
+        .map((productId) => {
+          const product = getProductById(productId);
+          const systemCount = currentSystemCountForProduct(form, productId);
+          const variance = physicalCountVariance(form, productId);
+          const value = physicalCountForProduct(form, productId);
+          const varianceTone = variance === null ? "" : variance === 0 ? "" : variance > 0 ? "is-valid" : "is-error";
+
+          return `
+            <div class="physical-count-row">
+              <div class="physical-count-product">
+                <strong>${escapeHtml(product?.name ?? productId)}</strong>
+                <span>${escapeHtml(product?.category || "Uncategorized")} · ${escapeHtml(product?.unit || "unit")}</span>
+              </div>
+              <div class="physical-count-stat">
+                <span>System</span>
+                <strong>${systemCount !== null ? formatQuantity(systemCount) : "Choose location"}</strong>
+              </div>
+              <label class="physical-count-input">
+                <span>Physical</span>
+                <input
+                  name="physical_count_${escapeAttr(productId)}"
+                  type="number"
+                  step="0.01"
+                  placeholder="Counted"
+                  value="${escapeAttr(value)}"
+                  aria-label="${escapeAttr(`Physical count for ${product?.name ?? productId}`)}"
+                  ${systemCount !== null ? "" : "disabled"}
+                />
+              </label>
+              <div class="physical-count-stat">
+                <span>Variance</span>
+                <strong class="${varianceTone ? `badge ${varianceTone}` : ""}">
+                  ${variance === null ? "-" : `${variance > 0 ? "+" : ""}${formatQuantity(variance)}`}
+                </strong>
+              </div>
+            </div>
+          `;
+        })
+        .join("")}
       <p class="physical-count-help">Enter what you actually counted. The system count is looked up live and the difference is saved as the correction — nobody hand-calculates the delta.</p>
     </div>
   `;
@@ -3261,44 +3107,11 @@ function findEventForRevert(eventId) {
 }
 
 function workQueueItems(outboxValidation) {
-  const grouped = new Map();
-
-  outboxValidation.forEach(({ event, validation }) => {
-    const workItemId = event.work_item_id || event.event_id;
-    if (!grouped.has(workItemId)) {
-      grouped.set(workItemId, {
-        work_item_id: workItemId,
-        events: [],
-        validations: [],
-      });
-    }
-
-    const item = grouped.get(workItemId);
-    item.events.push(event);
-    item.validations.push(validation);
-  });
-
-  return [...grouped.values()].map((item) => {
-    const primary =
-      item.events.find((event) => event.type === "PRODUCT_DEACTIVATED") ??
-      item.events.find((event) => event.type.startsWith(PRODUCT_EVENT_PREFIX)) ??
-      item.events[0];
-    const invalid = item.validations.find((validation) => !validation.valid);
-    const isGrouped = item.events.length > 1;
-
-    return {
-      ...item,
-      sequence_number: Math.min(...item.events.map((event) => Number(event.sequence_number))),
-      label: eventLabels[primary.type] ?? primary.type,
-      product_name: escapeHtml(isGrouped && primary.source_label ? primary.source_label : productName(primary.product_id)),
-      location: isGrouped ? `Grouped work: ${item.events.length} events` : escapeHtml(eventLocationText(primary)),
-      amount: isGrouped ? `${item.events.length} stock lines` : formatQuantity(primary.quantity),
-      detail: isGrouped ? `${item.events.length} grouped event records` : `<code>${escapeHtml(primary.idempotency_key)}</code>`,
-      source: primary.source_label ? escapeHtml(primary.source_label) : "",
-      event_count: item.events.length,
-      valid: !invalid,
-      status: invalid ? simpleValidationReason(invalid.reason) : "Ready",
-    };
+  return buildWorkQueueItems(outboxValidation, {
+    eventLabels,
+    productName,
+    formatQuantity,
+    simpleValidationReason,
   });
 }
 
@@ -3312,15 +3125,15 @@ function renderWorkQueueCard(item) {
             <span class="type-pill">${item.label}</span>
             ${item.valid ? "" : `<span class="badge is-error">${escapeHtml(item.status)}</span>`}
           </div>
-          <strong>${item.product_name}</strong>
+          <strong>${escapeHtml(item.product_name)}</strong>
           <dl class="work-queue-facts">
             <div>
               <dt>Location</dt>
-              <dd>${item.location}</dd>
+              <dd>${escapeHtml(item.location)}</dd>
             </div>
             <div>
               <dt>Amount</dt>
-              <dd>${item.amount}</dd>
+              <dd>${escapeHtml(item.amount)}</dd>
             </div>
           </dl>
         </div>
@@ -3329,8 +3142,8 @@ function renderWorkQueueCard(item) {
       <details class="work-queue-technical">
         <summary>Technical details</summary>
         <dl>
-          ${item.source ? `<div><dt>Source</dt><dd>${item.source}</dd></div>` : ""}
-          <div><dt>Batch detail</dt><dd>${item.detail}</dd></div>
+          ${item.source ? `<div><dt>Source</dt><dd>${escapeHtml(item.source)}</dd></div>` : ""}
+          <div><dt>Batch detail</dt><dd>${item.detailIsCode ? `<code>${escapeHtml(item.detail)}</code>` : escapeHtml(item.detail)}</dd></div>
           <div><dt>Validation</dt><dd>${escapeHtml(item.status)}</dd></div>
           <div><dt>Events</dt><dd>${item.event_count}</dd></div>
         </dl>
@@ -3369,7 +3182,14 @@ function renderWorkQueue(outboxValidation) {
 }
 
 function renderAudit(localLedger) {
-  const rows = filterAuditRows([...replayAuditTrail(localLedger)].reverse());
+  const rows = selectAuditRows({
+    rows: [...replayAuditTrail(localLedger)].reverse(),
+    eventLabels,
+    auditSourceLabel,
+    search: state.auditSearch ?? "",
+    productId: state.auditProductFilter ?? "all",
+    filter: state.auditViewFilter ?? "all",
+  });
   const selectedEntry = rows.find((entry) => entry.event_id === state.selectedAuditEventId) ?? null;
 
   return `
@@ -3383,35 +3203,6 @@ function renderAudit(localLedger) {
       </section>
     </section>
   `;
-}
-
-function filterAuditRows(rows) {
-  const query = `${state.auditSearch ?? ""}`.trim().toLowerCase();
-  const productId = state.auditProductFilter ?? "all";
-  const filter = state.auditViewFilter ?? "all";
-
-  return rows.filter((entry) => {
-    if (productId !== "all" && entry.product_id !== productId) return false;
-    if (filter === "stock-in" && entry.type !== "STOCK_IN") return false;
-    if (filter === "use-stock" && entry.type !== "STOCK_OUT") return false;
-    if (filter === "movement" && entry.type !== "STOCK_TRANSFER") return false;
-    if (filter === "correction" && entry.type !== "STOCK_ADJUSTMENT") return false;
-    if (filter === "undo" && entry.type !== "STOCK_REVERT") return false;
-    if (filter === "catalog" && !["PRODUCT_CREATED", "PRODUCT_DEACTIVATED", "PRODUCT_REACTIVATED"].includes(entry.type)) return false;
-    if (!query) return true;
-
-    return [
-      eventLabels[entry.type] ?? entry.type,
-      entry.product_name,
-      entry.location,
-      entry.reason,
-      auditSourceLabel(entry),
-      entry.actor_name,
-    ]
-      .join(" ")
-      .toLowerCase()
-      .includes(query);
-  });
 }
 
 function renderAuditControls() {
@@ -3588,18 +3379,6 @@ function renderStockView(stockRows) {
   const pagination = paginateRows(rows, state.stockPage);
   state.stockPage = pagination.page;
   return renderMasterStockTable(pagination.pageRows, pagination);
-}
-
-function stockViewTitle() {
-  if (state.stockView === "location") return `${state.selectedLocation} Stock`;
-  if (state.stockView === "detail") return "Detailed Stock List";
-  return "Total Stock";
-}
-
-function stockViewHelp() {
-  if (state.stockView === "location") return "Shows every product in the selected location.";
-  if (state.stockView === "detail") return "Shows each product and location row for checking exact balances.";
-  return "Shows the master total for each product across all locations.";
 }
 
 function renderMasterStockTable(rows, pagination) {
@@ -4584,6 +4363,7 @@ function bindEvents() {
 
       if (
         event.target?.name === "physical_count" ||
+        event.target?.name?.startsWith("physical_count_") ||
         event.target?.name === "attach_sale" ||
         event.target?.name === "attach_purchase" ||
         event.target?.name === "product_ids"
@@ -4821,9 +4601,19 @@ function readSaleForm(form) {
 function readEventFormState(data, currentForm = state.form) {
   const selectedProductIds = normalizeSelectedProductIds(data.getAll("product_ids"), data.get("product_id") ?? currentForm.product_id);
   const quantities = { ...(currentForm.product_quantities ?? {}) };
+  const physicalCounts = { ...(currentForm.product_physical_counts ?? {}) };
+  const fallbackPhysicalCount = data.has("physical_count") ? data.get("physical_count") : currentForm.physical_count;
   selectedProductIds.forEach((productId) => {
-    const fieldName = `quantity_${productId}`;
-    quantities[productId] = data.has(fieldName) ? data.get(fieldName) : quantities[productId] ?? currentForm.quantity ?? 1;
+    const quantityFieldName = `quantity_${productId}`;
+    const physicalCountFieldName = `physical_count_${productId}`;
+    quantities[productId] = data.has(quantityFieldName) ? data.get(quantityFieldName) : quantities[productId] ?? currentForm.quantity ?? 1;
+    physicalCounts[productId] = data.has(physicalCountFieldName)
+      ? data.get(physicalCountFieldName)
+      : physicalCounts[productId] ?? (productId === selectedProductIds[0] ? fallbackPhysicalCount : "");
+  });
+  const selectedProductSet = new Set(selectedProductIds);
+  Object.keys(physicalCounts).forEach((productId) => {
+    if (!selectedProductSet.has(productId)) delete physicalCounts[productId];
   });
 
   return {
@@ -4832,10 +4622,11 @@ function readEventFormState(data, currentForm = state.form) {
     product_id: selectedProductIds[0] ?? data.get("product_id") ?? currentForm.product_id,
     product_ids: selectedProductIds,
     product_quantities: quantities,
+    product_physical_counts: physicalCounts,
     from_location: data.get("from_location") ?? currentForm.from_location ?? "",
     to_location: data.get("to_location") ?? currentForm.to_location ?? "",
     quantity: data.has("quantity") ? data.get("quantity") : currentForm.quantity,
-    physical_count: data.has("physical_count") ? data.get("physical_count") : currentForm.physical_count,
+    physical_count: selectedProductIds.length ? physicalCounts[selectedProductIds[0]] ?? fallbackPhysicalCount ?? "" : fallbackPhysicalCount ?? "",
     reason: data.get("reason") ?? "",
     original_event_id: data.get("original_event_id") ?? currentForm.original_event_id ?? "",
     attach_sale: data.has("attach_sale"),
@@ -5400,6 +5191,7 @@ function appendFormEvent() {
   );
   state.form.quantity = 1;
   state.form.product_quantities = {};
+  state.form.product_physical_counts = {};
   state.form.physical_count = "";
   state.form.original_event_id = "";
   state.form.reason = "";
@@ -5613,6 +5405,7 @@ function prepareRevert(eventId) {
     to_location: "",
     quantity: 1,
     physical_count: "",
+    product_physical_counts: {},
     reason: "",
     original_event_id: original.event_id,
   };
@@ -5690,8 +5483,9 @@ function buildEventFromForm({ productId = state.form.product_id, workItemId = ne
     ? Math.abs(Number(quantityForProduct(form, productId) || 0))
     : Number(quantityForProduct(form, productId) || 0);
   const systemCount = currentSystemCountForProduct(form, productId);
+  const physicalCount = physicalCountForProduct(form, productId);
   const defaultReason = template.isPhysicalCount && systemCount !== null
-    ? `Physical count ${formatQuantity(Number(form.physical_count || 0))} vs system ${formatQuantity(systemCount)}`
+    ? `Physical count ${formatQuantity(Number(physicalCount || 0))} vs system ${formatQuantity(systemCount)}`
     : "Operational event";
   const source = sourceDetails ?? stockActionSourceDetails(form);
   return withWorkItem(
@@ -5809,7 +5603,20 @@ function normalizeFormForType({ resetTemplateDefaults = false } = {}) {
     state.form.quantity = defaults.quantity ?? 1;
   }
 
-  if (!template.isPhysicalCount) {
+  if (template.isPhysicalCount) {
+    const selectedProductSet = new Set(state.form.product_ids ?? []);
+    const currentPhysicalCounts = state.form.product_physical_counts ?? {};
+    state.form.product_physical_counts = Object.fromEntries(
+      [...selectedProductSet].map((productId) => [
+        productId,
+        resetTemplateDefaults
+          ? defaults.physical_count ?? ""
+          : currentPhysicalCounts[productId] ?? (productId === state.form.product_id ? state.form.physical_count ?? "" : ""),
+      ]),
+    );
+    state.form.physical_count = state.form.product_physical_counts[state.form.product_id] ?? defaults.physical_count ?? "";
+  } else {
+    state.form.product_physical_counts = {};
     state.form.physical_count = "";
   }
 
@@ -6280,18 +6087,6 @@ function productUnit(productId) {
 
 function productLow(productId) {
   return getProductById(productId)?.low ?? 0;
-}
-
-function eventLocationText(event) {
-  if (event.type === "STOCK_IN") return `Arrived at ${event.to_location || "Unknown Place"}`;
-  if (event.type === "STOCK_OUT") return `Left from ${event.from_location || "Unknown Place"}`;
-  if (event.type === "STOCK_TRANSFER") return `${event.from_location || "Unknown Place"} to ${event.to_location || "Unknown Place"}`;
-  if (event.type === "STOCK_ADJUSTMENT") return `Corrected at ${event.to_location || event.from_location || "Unknown Place"}`;
-  if (event.type === "STOCK_REVERT") return "Undoes an earlier movement";
-  if (event.type === "PRODUCT_CREATED") return "Product catalog";
-  if (event.type === "PRODUCT_DEACTIVATED") return "Product catalog";
-  if (event.type === "PRODUCT_REACTIVATED") return "Product catalog";
-  return `${event.from_location || "None"} to ${event.to_location || "None"}`;
 }
 
 function formatAuditBalance(value) {

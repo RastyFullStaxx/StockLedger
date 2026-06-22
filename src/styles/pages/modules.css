@@ -83,14 +83,25 @@
 }
 
 .record-workspace {
+  --record-workspace-height: max(360px, calc(100dvh - 260px));
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: 10px;
+  min-width: 0;
 }
 
 .record-workspace.has-detail {
-  grid-template-columns: minmax(0, 1fr) minmax(310px, 0.42fr);
+  --record-workspace-height: max(560px, calc(100dvh - 180px));
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 0.44fr);
+  align-items: stretch;
+}
+
+.record-workspace.has-detail > .record-table-panel,
+.record-workspace.has-detail > .record-table-shell {
+  height: var(--record-workspace-height);
+  min-height: 0;
+  min-width: 0;
 }
 
 .record-toolbar {
@@ -150,10 +161,20 @@
 
 .record-table-shell {
   overflow: auto;
-  height: clamp(320px, calc(100dvh - 260px), 680px);
+  height: var(--record-workspace-height);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.68);
+}
+
+.record-workspace.has-detail > .record-table-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.record-workspace.has-detail > .record-table-panel .record-table-shell {
+  height: auto;
+  min-height: 0;
 }
 
 .report-table-shell {
@@ -169,13 +190,22 @@
 }
 
 .sales-record-panel .record-table-shell {
-  height: clamp(300px, calc(100dvh - 330px), 620px);
+  height: max(300px, calc(100dvh - 330px));
 }
 
 .record-table {
   width: 100%;
   min-width: 720px;
   border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.record-workspace.has-detail .record-table {
+  min-width: 100%;
+}
+
+.record-workspace.has-detail .record-table-shell {
+  overflow-x: hidden;
 }
 
 .record-table th,
@@ -184,6 +214,8 @@
   border-bottom: 1px solid var(--color-border);
   text-align: left;
   vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .record-table th {
@@ -236,6 +268,8 @@
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   gap: 0;
+  min-width: 0;
+  height: auto;
   max-height: calc(100dvh - 140px);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
@@ -243,6 +277,13 @@
   box-shadow: var(--glass-inset), var(--shadow-soft);
   padding: 0;
   overflow: hidden;
+}
+
+.record-workspace.has-detail > .record-detail-panel {
+  align-self: stretch;
+  height: 100%;
+  min-height: var(--record-workspace-height);
+  max-height: none;
 }
 
 .record-detail-scroll {
@@ -850,6 +891,21 @@
   .record-detail-panel {
     position: static;
     max-height: none;
+  }
+
+  .record-workspace.has-detail > .record-table-panel,
+  .record-workspace.has-detail > .record-table-shell,
+  .record-workspace.has-detail .record-detail-panel {
+    height: auto;
+    min-height: 0;
+  }
+
+  .record-workspace.has-detail .record-table {
+    min-width: 720px;
+  }
+
+  .record-workspace.has-detail .record-table-shell {
+    overflow: auto;
   }
 
   .record-detail-actions {

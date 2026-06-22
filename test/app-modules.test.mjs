@@ -3,9 +3,16 @@ import test from "node:test";
 
 import { validateEvent } from "../src/domain/ledger.mjs";
 import {
+  DEFAULT_CLIENTS,
+  DEFAULT_MENUS,
+  DEFAULT_MENU_ITEMS,
   DEFAULT_PRODUCTS,
+  DEFAULT_SUPPLIERS,
+  DEFAULT_USERS,
   defaultProducts,
   defaultState,
+  saleModeLabels,
+  saleTypeLabels,
   seedEvents,
   seedPurchases,
   seedSales,
@@ -24,8 +31,23 @@ import {
   stockTotalRows,
   withWorkItem,
 } from "../src/inventory/selectors.mjs";
-import { answerAssistantQuestion } from "../src/assistant/assistant-engine.mjs";
+import { answerAssistantQuestion, createAssistantGreeting } from "../src/assistant/assistant-engine.mjs";
 import { buildWorkQueueItems } from "../src/stock-actions/work-queue.mjs";
+import {
+  clientSalesReportRows,
+  filterAuditRows,
+  filterClients,
+  filterLocations,
+  filterMenus,
+  filterProductCatalog,
+  filterPurchaseRecords,
+  filterSalesRecords,
+  filterSuppliers,
+  filterUsers,
+  movementReportRows,
+  productCategories,
+  supplierPurchaseReportRows,
+} from "../src/records/selectors.mjs";
 import { escapeAttr, escapeHtml, formatQuantity } from "../src/utils/format.mjs";
 
 test("demo data module creates isolated default state with valid seed events", () => {
@@ -142,6 +164,134 @@ test("inventory work helpers are deterministic from explicit state", () => {
   assert.deepEqual(withWorkItem({ event_id: "event-1" }, "work-1"), { event_id: "event-1", work_item_id: "work-1" });
 });
 
+test("record selectors filter relationship and business views without app rendering", () => {
+  const state = defaultState();
+
+  assert.deepEqual(
+    filterClients({ clients: DEFAULT_CLIENTS, menus: DEFAULT_MENUS, filter: "wholesale" }).map((client) => client.name),
+    ["North Pier Cafe"],
+  );
+  assert.deepEqual(
+    filterSuppliers({ suppliers: DEFAULT_SUPPLIERS, products: state.products, filter: "review" })
+      .map((supplier) => supplier.name)
+      .sort(),
+    ["Cellar & Case Distribution", "Marketline Produce"],
+  );
+  assert.equal(
+    filterSuppliers({ suppliers: DEFAULT_SUPPLIERS, products: state.products, productId: "prod-tonic" })[0].name,
+    "Cellar & Case Distribution",
+  );
+  assert.deepEqual(
+    filterMenus({
+      menus: DEFAULT_MENUS,
+      clients: DEFAULT_CLIENTS,
+      menuItems: DEFAULT_MENU_ITEMS,
+      products: state.products,
+      search: "rum",
+    }).map((menu) => menu.name),
+    ["Event Service Menu"],
+  );
+  assert.deepEqual(
+    filterLocations({
+      locations: [
+        { id: "loc-main-bar", name: "Main Bar", kind: "Service", owner: "Bar team", status: "Active" },
+        { id: "loc-dry-store", name: "Dry Store", kind: "Storage", owner: "Receiving team", status: "Active" },
+      ],
+      stockRows: [
+        { location: "Main Bar", product_id: "prod-lime", quantity: 2 },
+        { location: "Dry Store", product_id: "prod-gin", quantity: 100 },
+      ],
+      productLow: (productId) => (productId === "prod-lime" ? 5 : 1),
+      filter: "review",
+    }).map((location) => location.name),
+    ["Main Bar"],
+  );
+  assert.equal(
+    filterUsers({ users: DEFAULT_USERS, filter: "sensitive" }).every((user) => Number(user.sensitive_access) > 0),
+    true,
+  );
+  assert.equal(
+    filterSalesRecords({
+      sales: state.sales,
+      clientName: (clientId) => DEFAULT_CLIENTS.find((client) => client.id === clientId)?.name ?? clientId,
+      productName: (productId) => state.products.find((product) => product.id === productId)?.name ?? productId,
+      saleTypeLabels,
+      saleModeLabels,
+      filter: "direct_stock",
+    }).every((sale) => sale.sale_mode === "direct_stock"),
+    true,
+  );
+  assert.deepEqual(
+    filterPurchaseRecords({
+      purchases: state.purchases,
+      suppliers: DEFAULT_SUPPLIERS,
+      products: state.products,
+      supplierName: (supplierId) => DEFAULT_SUPPLIERS.find((supplier) => supplier.id === supplierId)?.name ?? supplierId,
+      productName: (productId) => state.products.find((product) => product.id === productId)?.name ?? productId,
+      filter: "produce",
+    }).map((purchase) => purchase.supplier_id),
+    ["supplier-marketline"],
+  );
+  assert.equal(productCategories(state.products).includes("Spirits"), true);
+  assert.deepEqual(
+    filterProductCatalog({
+      products: [{ id: "prod-paused", name: "Paused Product", category: "Bar", unit: "bottle", is_active: false }],
+      statusFilter: "suspended",
+    }).map((product) => product.name),
+    ["Paused Product"],
+  );
+});
+
+test("record selectors build report and audit rows from explicit inputs", () => {
+  const state = defaultState();
+  const clientName = (clientId) => DEFAULT_CLIENTS.find((client) => client.id === clientId)?.name ?? clientId;
+  const supplierName = (supplierId) => DEFAULT_SUPPLIERS.find((supplier) => supplier.id === supplierId)?.name ?? supplierId;
+
+  assert.equal(
+    clientSalesReportRows(state.sales, { clients: DEFAULT_CLIENTS, clientName }).some((row) => row.label === "Harbor Room"),
+    true,
+  );
+  assert.equal(
+    supplierPurchaseReportRows(state.purchases, { suppliers: DEFAULT_SUPPLIERS, supplierName, formatQuantity }).some(
+      (row) => row.label === "Coastal Spirits Supply",
+    ),
+    true,
+  );
+  assert.equal(
+    movementReportRows(state.serverLedger, { eventLabels, formatQuantity }).some((row) => row.label === "Use Stock"),
+    true,
+  );
+  assert.deepEqual(
+    filterAuditRows({
+      rows: [
+        {
+          type: "STOCK_IN",
+          product_id: "prod-gin",
+          product_name: "Juniper Gin",
+          location: "Dry Store",
+          reason: "Delivery received",
+          actor_name: "Mara V.",
+          source_label: "Purchase",
+        },
+        {
+          type: "STOCK_OUT",
+          product_id: "prod-lime",
+          product_name: "Fresh Lime",
+          location: "Kitchen",
+          reason: "Prep use",
+          actor_name: "Eli R.",
+          source_label: "Sale",
+        },
+      ],
+      eventLabels,
+      auditSourceLabel: (entry) => entry.source_label ?? "",
+      search: "delivery",
+      filter: "stock-in",
+    }).map((row) => row.product_name),
+    ["Juniper Gin"],
+  );
+});
+
 test("assistant engine answers StockLedger questions and redirects out-of-scope prompts", () => {
   const state = defaultState();
   const events = allLocalEvents(state);
@@ -175,8 +325,10 @@ test("assistant engine answers StockLedger questions and redirects out-of-scope 
     formatQuantity,
   };
 
+  assert.match(createAssistantGreeting(context).text, /Hi, I.m Stocky/);
   assert.match(answerAssistantQuestion("How many stocks do we have?", context).text, /products with replayed stock/);
-  assert.match(answerAssistantQuestion("Who won the basketball game?", context).text, /I.m built for StockLedger/);
+  assert.match(answerAssistantQuestion("What actions can I use?", context).text, /Stock Actions can queue/);
+  assert.match(answerAssistantQuestion("Who won the basketball game?", context).text, /I.m Stocky/);
 });
 
 test("stock action work queue groups related events into operator-facing items", () => {

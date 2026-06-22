@@ -723,9 +723,9 @@ button.account-popover-toggle > .mini-toggle-track.is-on {
   z-index: 80;
   display: grid;
   gap: 10px;
-  width: min(520px, calc(100vw - 32px));
-  max-height: min(760px, calc(100dvh - 96px));
-  overflow: auto;
+  width: min(780px, calc(100vw - 32px));
+  height: min(780px, calc(100dvh - 96px));
+  overflow: hidden;
   padding: 16px;
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-lg);
@@ -736,7 +736,7 @@ button.account-popover-toggle > .mini-toggle-track.is-on {
 }
 
 .assistant-menu {
-  grid-template-rows: auto minmax(220px, 1fr) auto auto auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
 @keyframes guide-wiggle {
@@ -761,6 +761,8 @@ button.account-popover-toggle > .mini-toggle-track.is-on {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .guide-menu-header div,
@@ -840,19 +842,18 @@ button.account-popover-toggle > .mini-toggle-track.is-on {
 .assistant-feed {
   display: grid;
   align-content: start;
-  gap: 10px;
-  min-height: 220px;
-  max-height: min(420px, calc(100dvh - 360px));
+  gap: 12px;
+  min-height: 0;
   overflow-y: auto;
-  padding: 4px;
+  padding: 6px 4px 10px;
   scrollbar-width: thin;
 }
 
 .assistant-message {
   display: grid;
-  gap: 6px;
-  max-width: 92%;
-  padding: 11px 12px;
+  gap: 8px;
+  max-width: min(86%, 620px);
+  padding: 13px 14px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: rgba(248, 252, 250, 0.92);
@@ -878,11 +879,10 @@ button.account-popover-toggle > .mini-toggle-track.is-on {
 .assistant-message p {
   margin: 0;
   color: var(--color-text);
-  line-height: 1.45;
+  line-height: 1.5;
 }
 
-.assistant-message-actions,
-.assistant-quick-actions {
+.assistant-message-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 7px;
@@ -891,9 +891,9 @@ button.account-popover-toggle > .mini-toggle-track.is-on {
 .assistant-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
+  gap: 10px;
   align-items: end;
-  padding-top: 8px;
+  padding-top: 12px;
   border-top: 1px solid var(--color-border);
 }
 
@@ -909,24 +909,9 @@ button.account-popover-toggle > .mini-toggle-track.is-on {
 }
 
 .assistant-input-label textarea {
-  min-height: 48px;
-  max-height: 120px;
+  min-height: 58px;
+  max-height: 150px;
   resize: vertical;
-}
-
-.assistant-context {
-  border-top: 1px solid var(--color-border);
-  padding-top: 8px;
-}
-
-.assistant-context summary {
-  cursor: pointer;
-  color: var(--color-primary);
-  font-weight: 850;
-}
-
-.assistant-context p {
-  margin: 8px 0;
 }
 
 @keyframes guide-pop {
@@ -944,12 +929,8 @@ button.account-popover-toggle > .mini-toggle-track.is-on {
     right: 8px;
     left: 8px;
     width: auto;
-    max-height: calc(100dvh - 88px);
+    height: calc(100dvh - 88px);
     padding: 12px;
-  }
-
-  .assistant-feed {
-    max-height: calc(100dvh - 380px);
   }
 
   .assistant-message {
@@ -960,7 +941,6 @@ button.account-popover-toggle > .mini-toggle-track.is-on {
     grid-template-columns: 1fr;
   }
 
-  .assistant-quick-actions .table-action,
   .assistant-message-actions .table-action {
     width: auto;
   }

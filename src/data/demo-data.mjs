@@ -493,6 +493,7 @@ export function defaultState() {
       product_id: "prod-gin",
       product_ids: ["prod-gin"],
       product_quantities: {},
+      product_physical_counts: {},
       from_location: "Main Bar",
       to_location: "",
       quantity: 1,
