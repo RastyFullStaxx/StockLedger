@@ -142,9 +142,12 @@ The page includes:
 - menu-item or direct-stock mode
 - fulfillment location
 - quantity and notes
-- recent sales records
+- a filtered sales table
+- a retractable detail panel for the selected sale
 
 Use `Fulfill Sale` when the sale is ready to affect stock. The created stock work waits in `Work to Send` until sent.
+
+Click a sale row to open its full details on the right side of the table. The table keeps only the useful columns visible while the detail panel is open. Sale actions such as opening work or audit history are at the bottom of the detail panel.
 
 ## 8. Purchases
 
@@ -157,6 +160,8 @@ Purchases separate ordering from receiving:
 - Supplier, product, quantity, location, and notes stay linked to the stock event.
 
 Use `Receive Purchase` after checking what actually arrived. The stock-in work waits in `Work to Send` until sent.
+
+Receipt history uses a filtered table. Click a purchase row to open the receiving details on the right side of the table. The detail panel shows notes, supplier reliability, technical source IDs, and bottom actions for closing, opening the supplier, or opening the queued work.
 
 ## 9. Stock Actions
 
@@ -316,52 +321,55 @@ When online:
 
 Use `Clients` for customers or buyers, not StockLedger tenant administration.
 
-Client cards show:
+The Clients page uses a table-first layout. Click a client row to open full details on the right side of the table.
+
+The table shows:
 
 - segment
 - default menu
 - order pattern
 - next order
 - fulfilled local sales count
-- menu items
 
-Private contact details are hidden in a `Private contact` details block. Reveal them only for roles that need customer contact information.
+The detail panel shows the selected client's menu items, delivery window, sales count, and private contact block. Private contact details are hidden in `Private contact`; reveal them only for roles that need customer contact information.
 
-Use `Fulfill Sale` from a client card when you want to start a sale using that client's default menu.
+Use `Fulfill Sale` from the detail panel when you want to start a sale using that client's default menu.
 
 ## 15. Suppliers
 
 Use `Suppliers` for purchasing relationships and receiving follow-up.
 
-Supplier cards show:
+The Suppliers page uses a table-first layout. Click a supplier row to open full details on the right side of the table.
+
+The table shows:
 
 - reliability
 - delivery cadence
 - last delivery
 - received count
-- stock-in event count
-- supplied products
+- variance count
 
-Commercial terms are hidden under `Sensitive terms`.
+The detail panel shows supplied products, stock-in event count, variance cases, and sensitive terms. Commercial terms are hidden under `Sensitive terms`.
 
-Use `Receive Purchase` from a supplier card when a delivery should become stock-in work.
+Use `Receive Purchase` from the detail panel when a delivery should become stock-in work.
 
 ## 16. Menus
 
 Use `Menus` to connect sellable items to stock products.
 
-Menus show:
+The Menus page uses a filtered table. Click a menu row to open its full details on the right side of the table.
+
+The table shows:
 
 - client menu name
+- client
 - menu status
 - recurring or seasonal cadence
-- menu items
 - recipe lines
-- fulfillment location
 
-Menu setup does not move stock. A fulfilled menu sale creates grouped `STOCK_OUT` events from the recipe lines.
+The detail panel shows menu items, recipe lines, fulfillment locations, and technical IDs. Menu setup does not move stock. A fulfilled menu sale creates grouped `STOCK_OUT` events from the recipe lines.
 
-Use `Fulfill in Sales` from a menu item to open a sale already prepared with that item.
+Use `Fulfill Sale` from the detail panel to open a sale already prepared with the selected menu.
 
 ## 17. Products
 
@@ -382,15 +390,17 @@ Create, suspend, and reactivate products from `Stock Actions`. Product changes u
 
 Use `Locations` to review storage, service, and prep areas.
 
-Location cards show:
+The Locations page uses a filtered table. Click a location row to open replayed balances and recent activity on the right side of the table.
+
+The table shows:
 
 - location kind
 - owner
 - status
 - stocked rows
-- balances by product
 - review signals
-- recent activity in a details block
+
+The detail panel shows balances by product, recent activity, technical location details, and bottom actions for stock view or stock action.
 
 Location stock is still replayed from events. Locations do not store final stock totals directly.
 
@@ -438,12 +448,12 @@ Use `Users & Roles` to review access, not to edit historical records.
 
 The page shows:
 
-- staff access
+- staff access table
 - role matrix
 - device trust
 - access review signals
 
-Private staff details are hidden by default. Role changes, invite changes, and device trust changes should create audit records in production.
+Click a staff row to open access scope, role permissions, sensitive-view count, and private staff details on the right side of the table. Private staff details are hidden by default. Role changes, invite changes, and device trust changes should create audit records in production.
 
 ## 22. Settings
 

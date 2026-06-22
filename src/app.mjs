@@ -517,6 +517,20 @@ function defaultState() {
     inactiveProductsPage: 1,
     sales: [],
     purchases: [],
+    selectedClientId: null,
+    selectedSaleId: null,
+    selectedPurchaseId: null,
+    selectedSupplierId: null,
+    selectedMenuId: null,
+    selectedLocationId: null,
+    selectedUserId: null,
+    clientViewFilter: "all",
+    saleViewFilter: "all",
+    purchaseViewFilter: "all",
+    supplierViewFilter: "all",
+    menuViewFilter: "all",
+    locationViewFilter: "all",
+    userViewFilter: "all",
     message: "",
     toast: null,
     accountOpen: false,
@@ -1063,6 +1077,20 @@ function loadState() {
       purchaseForm: { ...defaultState().purchaseForm, ...(parsed.purchaseForm ?? {}) },
       sales: Array.isArray(parsed.sales) ? parsed.sales : [],
       purchases: Array.isArray(parsed.purchases) ? parsed.purchases : [],
+      selectedClientId: parsed.selectedClientId ?? null,
+      selectedSaleId: parsed.selectedSaleId ?? null,
+      selectedPurchaseId: parsed.selectedPurchaseId ?? null,
+      selectedSupplierId: parsed.selectedSupplierId ?? null,
+      selectedMenuId: parsed.selectedMenuId ?? null,
+      selectedLocationId: parsed.selectedLocationId ?? null,
+      selectedUserId: parsed.selectedUserId ?? null,
+      clientViewFilter: parsed.clientViewFilter ?? "all",
+      saleViewFilter: parsed.saleViewFilter ?? "all",
+      purchaseViewFilter: parsed.purchaseViewFilter ?? "all",
+      supplierViewFilter: parsed.supplierViewFilter ?? "all",
+      menuViewFilter: parsed.menuViewFilter ?? "all",
+      locationViewFilter: parsed.locationViewFilter ?? "all",
+      userViewFilter: parsed.userViewFilter ?? "all",
       products: sanitizeProducts(parsed.products),
     };
     delete next.physicalCounts;
@@ -1518,17 +1546,6 @@ function renderModulePage(key) {
 
   return `
     <section class="content-grid module-page" aria-label="${escapeAttr(content.title)}">
-      <article class="panel panel-wide module-hero">
-        <div>
-          <span>${screenMeta[key]?.kicker ?? "Module"}</span>
-          <h2>${content.title}</h2>
-          <p>${content.summary}</p>
-        </div>
-        <div class="module-hero-actions">
-          <button class="button button-primary" type="button">${icon(navIcon(key))}${content.primaryAction}</button>
-          <button class="button button-secondary" type="button">${content.secondaryAction}</button>
-        </div>
-      </article>
       <section class="module-metrics" aria-label="${escapeAttr(content.title)} metrics">
         ${content.metrics.map(([label, value]) => metricCard(label, value)).join("")}
       </section>
@@ -1566,21 +1583,134 @@ function renderClientsPage() {
   const fulfilledSales = Array.isArray(state.sales) ? state.sales : [];
   const recurringClients = DEFAULT_CLIENTS.filter((client) => client.segment.toLowerCase().includes("recurring")).length;
   const seasonalClients = DEFAULT_CLIENTS.filter((client) => client.segment.toLowerCase().includes("seasonal")).length;
+  const filter = state.clientViewFilter ?? "all";
+  const clients = filteredClients(filter);
+  const selectedClient = clients.find((client) => client.id === state.selectedClientId) ?? null;
 
   return `
     <section class="content-grid module-page relationship-workspace" aria-label="Clients">
-      ${renderBusinessHero("clients", content)}
       <section class="module-metrics" aria-label="Client metrics">
         ${metricCard("Clients", DEFAULT_CLIENTS.length)}
         ${metricCard("Recurring", recurringClients)}
         ${metricCard("Seasonal", seasonalClients)}
         ${metricCard("Fulfilled Sales", fulfilledSales.length)}
       </section>
-      <section class="relationship-grid" aria-label="Client list">
-        ${DEFAULT_CLIENTS.map((client) => renderClientCard(client)).join("")}
+      <section class="record-workspace ${selectedClient ? "has-detail" : ""}" data-record-workspace="clients" aria-label="Client records">
+        <article class="panel record-table-panel">
+          <div class="record-toolbar">
+            <div class="record-filter-tabs" role="group" aria-label="Filter clients">
+              ${renderClientFilterTab("all", "All")}
+              ${renderClientFilterTab("recurring", "Recurring")}
+              ${renderClientFilterTab("seasonal", "Seasonal")}
+              ${renderClientFilterTab("wholesale", "Wholesale")}
+            </div>
+          </div>
+          ${renderClientTable(clients, selectedClient)}
+        </article>
+        ${selectedClient ? renderClientDetailPanel(selectedClient) : ""}
       </section>
       ${renderModuleSections(content)}
     </section>
+  `;
+}
+
+function filteredClients(filter) {
+  if (filter === "recurring") return DEFAULT_CLIENTS.filter((client) => client.segment.toLowerCase().includes("recurring"));
+  if (filter === "seasonal") return DEFAULT_CLIENTS.filter((client) => client.segment.toLowerCase().includes("seasonal"));
+  if (filter === "wholesale") return DEFAULT_CLIENTS.filter((client) => client.segment.toLowerCase().includes("wholesale"));
+  return DEFAULT_CLIENTS;
+}
+
+function renderClientFilterTab(value, label) {
+  const active = (state.clientViewFilter ?? "all") === value;
+  return `
+    <button class="record-filter-tab ${active ? "is-active" : ""}" data-client-filter="${escapeAttr(value)}" type="button" aria-pressed="${active}">
+      ${escapeHtml(label)}
+    </button>
+  `;
+}
+
+function renderClientTable(clients, selectedClient) {
+  return `
+    <div class="record-table-shell">
+      <table class="record-table client-record-table">
+        <thead>
+          <tr>
+            <th>Client</th>
+            <th>Segment</th>
+            <th>Default Menu</th>
+            <th class="detail-optional">Next Order</th>
+            <th>Sales</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${
+            clients.length === 0
+              ? `<tr><td colspan="5"><div class="empty-state"><strong>No clients match this filter.</strong></div></td></tr>`
+              : clients.map((client) => renderClientTableRow(client, selectedClient)).join("")
+          }
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderClientTableRow(client, selectedClient) {
+  const menu = getMenuById(client.default_menu_id);
+  const fulfilled = (Array.isArray(state.sales) ? state.sales : []).filter((sale) => sale.client_id === client.id).length;
+  const active = selectedClient?.id === client.id;
+
+  return `
+    <tr class="record-row ${active ? "is-active" : ""}" data-client-row data-client-id="${escapeAttr(client.id)}" tabindex="0" aria-selected="${active}">
+      <td>
+        <strong>${escapeHtml(client.name)}</strong>
+        <span>${escapeHtml(client.order_pattern)}</span>
+      </td>
+      <td>${escapeHtml(client.segment)}</td>
+      <td>${escapeHtml(menu?.name ?? "No menu assigned")}</td>
+      <td class="detail-optional">${escapeHtml(client.next_order)}</td>
+      <td>${fulfilled}</td>
+    </tr>
+  `;
+}
+
+function renderClientDetailPanel(client) {
+  const menu = getMenuById(client.default_menu_id);
+  const menuItems = menu ? menuItemsForMenu(menu.id) : [];
+  const fulfilled = (Array.isArray(state.sales) ? state.sales : []).filter((sale) => sale.client_id === client.id);
+
+  return `
+    <aside class="record-detail-panel" data-record-detail-panel aria-label="Client details">
+      <div class="record-detail-scroll">
+        <div class="record-detail-heading">
+          <span>${escapeHtml(client.segment)}</span>
+          <h2>${escapeHtml(client.name)}</h2>
+        </div>
+        <dl class="record-detail-list">
+          <div><dt>Default Menu</dt><dd>${escapeHtml(menu?.name ?? "No menu assigned")}</dd></div>
+          <div><dt>Order Pattern</dt><dd>${escapeHtml(client.order_pattern)}</dd></div>
+          <div><dt>Next Order</dt><dd>${escapeHtml(client.next_order)}</dd></div>
+          <div><dt>Delivery Window</dt><dd>${escapeHtml(client.delivery_window)}</dd></div>
+          <div><dt>Fulfilled Locally</dt><dd>${fulfilled.length}</dd></div>
+        </dl>
+        <section class="record-detail-section">
+          <h3>Menu Items</h3>
+          <div class="relationship-menu-strip">
+            ${menuItems.map((item) => `<span>${escapeHtml(item.name)}</span>`).join("") || `<span>No menu items</span>`}
+          </div>
+        </section>
+        <details class="privacy-details">
+          <summary>Private contact</summary>
+          <p>${escapeHtml(client.private_contact)}. Reveal this only for roles that need customer contact details.</p>
+        </details>
+      </div>
+      <div class="record-detail-actions">
+        <button class="button button-secondary" data-action="close-record-detail" type="button">Close</button>
+        <button class="button button-primary" data-action="start-client-sale" data-client-id="${escapeAttr(client.id)}" type="button">
+          ${icon("send")}Fulfill Sale
+        </button>
+      </div>
+    </aside>
   `;
 }
 
@@ -1624,18 +1754,29 @@ function renderSuppliersPage(localLedger) {
   const receivingEvents = localLedger.filter((event) => event.type === "STOCK_IN");
   const suppliersWithVariance = DEFAULT_SUPPLIERS.filter((supplier) => supplier.variance_cases > 0).length;
   const suppliedProductCount = new Set(DEFAULT_SUPPLIERS.flatMap((supplier) => supplier.products)).size;
+  const suppliers = filteredSuppliers(state.supplierViewFilter ?? "all");
+  const selectedSupplier = suppliers.find((supplier) => supplier.id === state.selectedSupplierId) ?? null;
 
   return `
     <section class="content-grid module-page relationship-workspace" aria-label="Suppliers">
-      ${renderBusinessHero("suppliers", content)}
       <section class="module-metrics" aria-label="Supplier metrics">
         ${metricCard("Suppliers", DEFAULT_SUPPLIERS.length)}
         ${metricCard("Products Supplied", suppliedProductCount)}
         ${metricCard("Receipts", purchases.length)}
         ${metricCard("Needs Review", suppliersWithVariance)}
       </section>
-      <section class="relationship-grid" aria-label="Supplier list">
-        ${DEFAULT_SUPPLIERS.map((supplier) => renderSupplierCard(supplier, purchases, receivingEvents)).join("")}
+      <section class="record-workspace ${selectedSupplier ? "has-detail" : ""}" data-record-workspace="suppliers" aria-label="Supplier records">
+        <article class="panel record-table-panel">
+          <div class="record-toolbar">
+            <div class="record-filter-tabs" role="group" aria-label="Filter suppliers">
+              ${renderSupplierFilterTab("all", "All")}
+              ${renderSupplierFilterTab("review", "Needs Review")}
+              ${renderSupplierFilterTab("stable", "Stable")}
+            </div>
+          </div>
+          ${renderSupplierTable(suppliers, selectedSupplier, purchases, receivingEvents)}
+        </article>
+        ${selectedSupplier ? renderSupplierDetailPanel(selectedSupplier, purchases, receivingEvents) : ""}
       </section>
       <section class="report-detail-grid" aria-label="Supplier detail reports">
         <article class="panel report-detail-panel">
@@ -1669,6 +1810,106 @@ function renderSuppliersPage(localLedger) {
       </section>
       ${renderModuleSections(content)}
     </section>
+  `;
+}
+
+function filteredSuppliers(filter) {
+  if (filter === "review") return DEFAULT_SUPPLIERS.filter((supplier) => supplier.variance_cases > 0 || supplier.reliability.toLowerCase().includes("watch"));
+  if (filter === "stable") return DEFAULT_SUPPLIERS.filter((supplier) => supplier.variance_cases === 0 && !supplier.reliability.toLowerCase().includes("watch"));
+  return DEFAULT_SUPPLIERS;
+}
+
+function renderSupplierFilterTab(value, label) {
+  const active = (state.supplierViewFilter ?? "all") === value;
+  return `
+    <button class="record-filter-tab ${active ? "is-active" : ""}" data-supplier-filter="${escapeAttr(value)}" type="button" aria-pressed="${active}">
+      ${escapeHtml(label)}
+    </button>
+  `;
+}
+
+function renderSupplierTable(suppliers, selectedSupplier, purchases, receivingEvents) {
+  return `
+    <div class="record-table-shell">
+      <table class="record-table supplier-record-table">
+        <thead>
+          <tr>
+            <th>Supplier</th>
+            <th>Reliability</th>
+            <th>Cadence</th>
+            <th class="detail-optional">Last Delivery</th>
+            <th>Receipts</th>
+            <th>Variance</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${
+            suppliers.length === 0
+              ? `<tr><td colspan="6"><div class="empty-state"><strong>No suppliers match this filter.</strong></div></td></tr>`
+              : suppliers.map((supplier) => renderSupplierTableRow(supplier, selectedSupplier, purchases, receivingEvents)).join("")
+          }
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderSupplierTableRow(supplier, selectedSupplier, purchases, receivingEvents) {
+  const active = selectedSupplier?.id === supplier.id;
+  const purchaseCount = purchases.filter((purchase) => purchase.supplier_id === supplier.id).length;
+
+  return `
+    <tr class="record-row ${active ? "is-active" : ""}" data-supplier-row data-supplier-id="${escapeAttr(supplier.id)}" tabindex="0" aria-selected="${active}">
+      <td>
+        <strong>${escapeHtml(supplier.name)}</strong>
+        <span>${supplier.products.map((productId) => productName(productId)).join(", ")}</span>
+      </td>
+      <td>${escapeHtml(supplier.reliability)}</td>
+      <td>${escapeHtml(supplier.cadence)}</td>
+      <td class="detail-optional">${escapeHtml(supplier.last_delivery)}</td>
+      <td>${purchaseCount}</td>
+      <td><span class="badge ${supplier.variance_cases > 0 ? "is-warning" : "is-valid"}">${supplier.variance_cases}</span></td>
+    </tr>
+  `;
+}
+
+function renderSupplierDetailPanel(supplier, purchases, receivingEvents) {
+  const supplierPurchases = purchases.filter((purchase) => purchase.supplier_id === supplier.id);
+  const eventCount = receivingEvents.filter((event) => event.source_id && supplierPurchases.some((purchase) => purchase.id === event.source_id)).length;
+
+  return `
+    <aside class="record-detail-panel" data-record-detail-panel aria-label="Supplier details">
+      <div class="record-detail-scroll">
+        <div class="record-detail-heading">
+          <span>${escapeHtml(supplier.reliability)}</span>
+          <h2>${escapeHtml(supplier.name)}</h2>
+        </div>
+        <dl class="record-detail-list">
+          <div><dt>Cadence</dt><dd>${escapeHtml(supplier.cadence)}</dd></div>
+          <div><dt>Last Delivery</dt><dd>${escapeHtml(supplier.last_delivery)}</dd></div>
+          <div><dt>Receipts</dt><dd>${supplierPurchases.length}</dd></div>
+          <div><dt>Stock-In Events</dt><dd>${eventCount}</dd></div>
+          <div><dt>Variance Cases</dt><dd>${supplier.variance_cases}</dd></div>
+        </dl>
+        <section class="record-detail-section">
+          <h3>Products Supplied</h3>
+          <div class="relationship-menu-strip">
+            ${supplier.products.map((productId) => `<span>${escapeHtml(productName(productId))}</span>`).join("")}
+          </div>
+        </section>
+        <details class="privacy-details">
+          <summary>Sensitive terms</summary>
+          <p>${escapeHtml(supplier.private_terms)}</p>
+          <p>Record ID: <code>${escapeHtml(supplier.id)}</code></p>
+        </details>
+      </div>
+      <div class="record-detail-actions">
+        <button class="button button-secondary" data-action="close-record-detail" type="button">Close</button>
+        <button class="button button-primary" data-action="start-supplier-purchase" data-supplier-id="${escapeAttr(supplier.id)}" type="button">
+          ${icon("plus")}Receive Purchase
+        </button>
+      </div>
+    </aside>
   `;
 }
 
@@ -1708,18 +1949,31 @@ function renderMenusPage() {
   const activeMenus = DEFAULT_MENUS.filter((menu) => menu.status === "Active").length;
   const recipeLines = DEFAULT_MENU_ITEMS.reduce((total, item) => total + item.recipe.length, 0);
   const seasonalItems = DEFAULT_MENU_ITEMS.filter((item) => item.sale_type === "seasonal").length;
+  const menus = filteredMenus(state.menuViewFilter ?? "all");
+  const selectedMenu = menus.find((menu) => menu.id === state.selectedMenuId) ?? null;
 
   return `
     <section class="content-grid module-page relationship-workspace" aria-label="Menus">
-      ${renderBusinessHero("menus", content)}
       <section class="module-metrics" aria-label="Menu metrics">
         ${metricCard("Menus", DEFAULT_MENUS.length)}
         ${metricCard("Menu Items", DEFAULT_MENU_ITEMS.length)}
         ${metricCard("Recipe Lines", recipeLines)}
         ${metricCard("Seasonal", seasonalItems)}
       </section>
-      <section class="menu-board" aria-label="Client menus">
-        ${DEFAULT_MENUS.map((menu) => renderMenuPanel(menu)).join("")}
+      <section class="record-workspace ${selectedMenu ? "has-detail" : ""}" data-record-workspace="menus" aria-label="Menu records">
+        <article class="panel record-table-panel">
+          <div class="record-toolbar">
+            <div class="record-filter-tabs" role="group" aria-label="Filter menus">
+              ${renderMenuFilterTab("all", "All")}
+              ${renderMenuFilterTab("active", "Active")}
+              ${renderMenuFilterTab("draft", "Draft Review")}
+              ${renderMenuFilterTab("recurring", "Recurring")}
+              ${renderMenuFilterTab("seasonal", "Seasonal")}
+            </div>
+          </div>
+          ${renderMenuTable(menus, selectedMenu)}
+        </article>
+        ${selectedMenu ? renderMenuDetailPanel(selectedMenu) : ""}
       </section>
       <article class="panel panel-wide menu-rule-panel">
         <div class="panel-header panel-header--compact">
@@ -1732,24 +1986,154 @@ function renderMenusPage() {
   `;
 }
 
+function filteredMenus(filter) {
+  if (filter === "active") return DEFAULT_MENUS.filter((menu) => menu.status === "Active");
+  if (filter === "draft") return DEFAULT_MENUS.filter((menu) => menu.status !== "Active");
+  if (filter === "recurring") return DEFAULT_MENUS.filter((menu) => menu.cadence.toLowerCase().includes("recurring"));
+  if (filter === "seasonal") return DEFAULT_MENUS.filter((menu) => menu.cadence.toLowerCase().includes("seasonal"));
+  return DEFAULT_MENUS;
+}
+
+function renderMenuFilterTab(value, label) {
+  const active = (state.menuViewFilter ?? "all") === value;
+  return `
+    <button class="record-filter-tab ${active ? "is-active" : ""}" data-menu-filter="${escapeAttr(value)}" type="button" aria-pressed="${active}">
+      ${escapeHtml(label)}
+    </button>
+  `;
+}
+
+function renderMenuTable(menus, selectedMenu) {
+  return `
+    <div class="record-table-shell">
+      <table class="record-table menu-record-table">
+        <thead>
+          <tr>
+            <th>Menu</th>
+            <th>Client</th>
+            <th>Cadence</th>
+            <th>Status</th>
+            <th class="detail-optional">Items</th>
+            <th>Recipe Lines</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${
+            menus.length === 0
+              ? `<tr><td colspan="6"><div class="empty-state"><strong>No menus match this filter.</strong></div></td></tr>`
+              : menus.map((menu) => renderMenuTableRow(menu, selectedMenu)).join("")
+          }
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderMenuTableRow(menu, selectedMenu) {
+  const client = DEFAULT_CLIENTS.find((candidate) => candidate.id === menu.client_id);
+  const items = menuItemsForMenu(menu.id);
+  const recipeLines = items.reduce((total, item) => total + item.recipe.length, 0);
+  const active = selectedMenu?.id === menu.id;
+
+  return `
+    <tr class="record-row ${active ? "is-active" : ""}" data-menu-row data-menu-id="${escapeAttr(menu.id)}" tabindex="0" aria-selected="${active}">
+      <td>
+        <strong>${escapeHtml(menu.name)}</strong>
+        <span>${escapeHtml(items.map((item) => item.name).join(", ") || "No menu items")}</span>
+      </td>
+      <td>${escapeHtml(client?.name ?? "Unassigned client")}</td>
+      <td>${escapeHtml(menu.cadence)}</td>
+      <td><span class="badge ${menu.status === "Active" ? "is-valid" : "is-warning"}">${escapeHtml(menu.status)}</span></td>
+      <td class="detail-optional">${items.length}</td>
+      <td>${recipeLines}</td>
+    </tr>
+  `;
+}
+
+function renderMenuDetailPanel(menu) {
+  const client = DEFAULT_CLIENTS.find((candidate) => candidate.id === menu.client_id);
+  const items = menuItemsForMenu(menu.id);
+  const firstItem = items[0] ?? null;
+
+  return `
+    <aside class="record-detail-panel" data-record-detail-panel aria-label="Menu details">
+      <div class="record-detail-scroll">
+        <div class="record-detail-heading">
+          <span>${escapeHtml(menu.cadence)} menu</span>
+          <h2>${escapeHtml(menu.name)}</h2>
+        </div>
+        <dl class="record-detail-list">
+          <div><dt>Client</dt><dd>${escapeHtml(client?.name ?? "Unassigned client")}</dd></div>
+          <div><dt>Status</dt><dd>${escapeHtml(menu.status)}</dd></div>
+          <div><dt>Items</dt><dd>${items.length}</dd></div>
+          <div><dt>Recipe Lines</dt><dd>${items.reduce((total, item) => total + item.recipe.length, 0)}</dd></div>
+        </dl>
+        ${
+          items.length === 0
+            ? `<section class="record-detail-section"><h3>Menu Items</h3><p>No menu items are attached to this menu.</p></section>`
+            : items
+                .map(
+                  (item) => `
+                    <section class="record-detail-section">
+                      <h3>${escapeHtml(item.name)}</h3>
+                      <p>${escapeHtml(saleTypeLabels[item.sale_type] ?? "Sale")} from ${escapeHtml(item.default_location)}</p>
+                      <ul class="record-detail-list-plain">
+                        ${item.recipe.map((line) => `<li>${formatQuantity(line.quantity)} ${productUnit(line.product_id)} ${escapeHtml(productName(line.product_id))}</li>`).join("")}
+                      </ul>
+                    </section>
+                  `,
+                )
+                .join("")
+        }
+        <details class="privacy-details">
+          <summary>Technical details</summary>
+          <p>Menu ID: <code>${escapeHtml(menu.id)}</code></p>
+          <p>Client ID: <code>${escapeHtml(menu.client_id)}</code></p>
+        </details>
+      </div>
+      <div class="record-detail-actions">
+        <button class="button button-secondary" data-action="close-record-detail" type="button">Close</button>
+        <button class="button button-secondary" data-view="clients" type="button">${icon("home")}Client</button>
+        ${
+          firstItem
+            ? `<button class="button button-primary" data-action="start-menu-sale" data-menu-item-id="${escapeAttr(firstItem.id)}" type="button">${icon("send")}Fulfill Sale</button>`
+            : ""
+        }
+      </div>
+    </aside>
+  `;
+}
+
 function renderLocationsPage(localLedger, stockRows) {
   const content = modulePageContent.locations;
   const storageLocations = locations.filter((location) => location.kind === "Storage").length;
   const serviceLocations = locations.filter((location) => location.kind !== "Storage").length;
   const negativeRows = stockRows.filter((row) => row.quantity < 0).length;
   const lowStockedRows = stockRows.filter((row) => row.quantity > 0 && row.quantity <= productLow(row.product_id)).length;
+  const filteredLocationRows = filteredLocations(state.locationViewFilter ?? "all", stockRows);
+  const selectedLocation = filteredLocationRows.find((location) => location.id === state.selectedLocationId) ?? null;
 
   return `
     <section class="content-grid module-page relationship-workspace" aria-label="Locations">
-      ${renderBusinessHero("locations", content)}
       <section class="module-metrics" aria-label="Location metrics">
         ${metricCard("Locations", locations.length)}
         ${metricCard("Storage", storageLocations)}
         ${metricCard("Service/Prep", serviceLocations)}
         ${metricCard("Needs Review", negativeRows)}
       </section>
-      <section class="location-board" aria-label="Location balance cards">
-        ${locations.map((location) => renderLocationCard(location, stockRows, localLedger)).join("")}
+      <section class="record-workspace ${selectedLocation ? "has-detail" : ""}" data-record-workspace="locations" aria-label="Location records">
+        <article class="panel record-table-panel">
+          <div class="record-toolbar">
+            <div class="record-filter-tabs" role="group" aria-label="Filter locations">
+              ${renderLocationFilterTab("all", "All")}
+              ${renderLocationFilterTab("storage", "Storage")}
+              ${renderLocationFilterTab("service", "Service/Prep")}
+              ${renderLocationFilterTab("review", "Needs Review")}
+            </div>
+          </div>
+          ${renderLocationTable(filteredLocationRows, selectedLocation, stockRows)}
+        </article>
+        ${selectedLocation ? renderLocationDetailPanel(selectedLocation, stockRows, localLedger) : ""}
       </section>
       <section class="report-detail-grid" aria-label="Location detail reports">
         <article class="panel report-detail-panel">
@@ -1777,6 +2161,134 @@ function renderLocationsPage(localLedger, stockRows) {
       </section>
       ${renderModuleSections(content)}
     </section>
+  `;
+}
+
+function filteredLocations(filter, stockRows) {
+  if (filter === "storage") return locations.filter((location) => location.kind === "Storage");
+  if (filter === "service") return locations.filter((location) => location.kind !== "Storage");
+  if (filter === "review") {
+    return locations.filter((location) => {
+      const rows = stockRows.filter((row) => row.location === location.name);
+      return rows.some((row) => row.quantity < 0 || (row.quantity > 0 && row.quantity <= productLow(row.product_id)));
+    });
+  }
+  return locations;
+}
+
+function renderLocationFilterTab(value, label) {
+  const active = (state.locationViewFilter ?? "all") === value;
+  return `
+    <button class="record-filter-tab ${active ? "is-active" : ""}" data-location-record-filter="${escapeAttr(value)}" type="button" aria-pressed="${active}">
+      ${escapeHtml(label)}
+    </button>
+  `;
+}
+
+function renderLocationTable(locationRows, selectedLocation, stockRows) {
+  return `
+    <div class="record-table-shell">
+      <table class="record-table location-record-table">
+        <thead>
+          <tr>
+            <th>Location</th>
+            <th>Kind</th>
+            <th>Owner</th>
+            <th>Status</th>
+            <th class="detail-optional">Stocked Rows</th>
+            <th>Needs Review</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${
+            locationRows.length === 0
+              ? `<tr><td colspan="6"><div class="empty-state"><strong>No locations match this filter.</strong></div></td></tr>`
+              : locationRows.map((location) => renderLocationTableRow(location, selectedLocation, stockRows)).join("")
+          }
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderLocationTableRow(location, selectedLocation, stockRows) {
+  const rows = stockRows.filter((row) => row.location === location.name);
+  const stockedRows = rows.filter((row) => Number(row.quantity) !== 0);
+  const reviewRows = rows.filter((row) => row.quantity < 0 || (row.quantity > 0 && row.quantity <= productLow(row.product_id)));
+  const active = selectedLocation?.id === location.id;
+
+  return `
+    <tr class="record-row ${active ? "is-active" : ""}" data-location-row data-location-id="${escapeAttr(location.id)}" tabindex="0" aria-selected="${active}">
+      <td>
+        <strong>${escapeHtml(location.name)}</strong>
+        <span>${stockedRows.slice(0, 3).map((row) => row.product_name).join(", ") || "No replayed stock"}</span>
+      </td>
+      <td>${escapeHtml(location.kind)}</td>
+      <td>${escapeHtml(location.owner)}</td>
+      <td>${escapeHtml(location.status)}</td>
+      <td class="detail-optional">${stockedRows.length}</td>
+      <td><span class="badge ${reviewRows.length > 0 ? "is-warning" : "is-valid"}">${reviewRows.length}</span></td>
+    </tr>
+  `;
+}
+
+function renderLocationDetailPanel(location, stockRows, localLedger) {
+  const rows = stockRows.filter((row) => row.location === location.name && Number(row.quantity) !== 0);
+  const recentEvents = replayAuditTrail(localLedger).filter((entry) => entry.location === location.name).slice(-8).reverse();
+  const reviewRows = rows.filter((row) => row.quantity < 0 || (row.quantity > 0 && row.quantity <= productLow(row.product_id)));
+
+  return `
+    <aside class="record-detail-panel" data-record-detail-panel aria-label="Location details">
+      <div class="record-detail-scroll">
+        <div class="record-detail-heading">
+          <span>${escapeHtml(location.kind)}</span>
+          <h2>${escapeHtml(location.name)}</h2>
+        </div>
+        <dl class="record-detail-list">
+          <div><dt>Owner</dt><dd>${escapeHtml(location.owner)}</dd></div>
+          <div><dt>Status</dt><dd>${escapeHtml(location.status)}</dd></div>
+          <div><dt>Stocked Rows</dt><dd>${rows.length}</dd></div>
+          <div><dt>Needs Review</dt><dd>${reviewRows.length}</dd></div>
+        </dl>
+        <section class="record-detail-section">
+          <h3>Replayed Balances</h3>
+          <div class="location-balance-list">
+            ${
+              rows.length === 0
+                ? `<div class="empty-state"><strong>No stock currently replayed here.</strong></div>`
+                : rows
+                    .map(
+                      (row) => `
+                        <div class="location-balance-row">
+                          <strong>${escapeHtml(row.product_name)}</strong>
+                          <span class="${row.quantity < 0 ? "danger-text" : ""}">${formatQuantity(row.quantity)} ${productUnit(row.product_id)}</span>
+                        </div>
+                      `,
+                    )
+                    .join("")
+            }
+          </div>
+        </section>
+        <details class="privacy-details">
+          <summary>Recent activity</summary>
+          ${
+            recentEvents.length === 0
+              ? `<p>No recent replayed activity.</p>`
+              : recentEvents.map((entry) => `<p>${eventLabels[entry.type] ?? entry.type}: ${escapeHtml(entry.product_name)} ${entry.delta > 0 ? "+" : ""}${formatQuantity(entry.delta)}</p>`).join("")
+          }
+        </details>
+        <details class="privacy-details">
+          <summary>Technical details</summary>
+          <p>Location ID: <code>${escapeHtml(location.id)}</code></p>
+          <p>All balances are derived from replayed events.</p>
+        </details>
+      </div>
+      <div class="record-detail-actions">
+        <button class="button button-secondary" data-action="close-record-detail" type="button">Close</button>
+        <button class="button button-secondary" data-view="dashboard" type="button">${icon("layers")}Stock View</button>
+        <button class="button button-primary" data-view="compose" type="button">${icon("plus")}Stock Action</button>
+      </div>
+    </aside>
   `;
 }
 
@@ -1845,7 +2357,6 @@ function renderReportsPage(localLedger, stockRows) {
 
   return `
     <section class="content-grid module-page reports-workspace" aria-label="Reports">
-      ${renderBusinessHero("reports", content)}
       <section class="module-metrics" aria-label="Report metrics">
         ${metricCard("Stock Lines", stockRows.length)}
         ${metricCard("Sales Posted", sales.length)}
@@ -1932,25 +2443,32 @@ function renderUsersPage() {
   const pendingUsers = DEFAULT_USERS.filter((user) => user.status.includes("pending")).length;
   const trustedDevices = TRUSTED_DEVICES.filter((device) => device.trust === "Trusted").length;
   const sensitiveReviews = DEFAULT_USERS.reduce((total, user) => total + Number(user.sensitive_access), 0);
+  const users = filteredUsers(state.userViewFilter ?? "all");
+  const selectedUser = users.find((user) => user.id === state.selectedUserId) ?? null;
 
   return `
     <section class="content-grid module-page access-workspace" aria-label="Users and Roles">
-      ${renderBusinessHero("users", content)}
       <section class="module-metrics" aria-label="User and role metrics">
         ${metricCard("Active Users", activeUsers)}
         ${metricCard("Pending Invites", pendingUsers)}
         ${metricCard("Trusted Devices", trustedDevices)}
         ${metricCard("Sensitive Reviews", sensitiveReviews)}
       </section>
-      <section class="access-grid" aria-label="Users and access">
-        <article class="panel access-panel">
-          <div class="panel-header panel-header--compact">
-            <h2>Staff Access</h2>
+      <section class="record-workspace ${selectedUser ? "has-detail" : ""}" data-record-workspace="users" aria-label="Staff access records">
+        <article class="panel record-table-panel">
+          <div class="record-toolbar">
+            <div class="record-filter-tabs" role="group" aria-label="Filter users">
+              ${renderUserFilterTab("all", "All")}
+              ${renderUserFilterTab("active", "Active")}
+              ${renderUserFilterTab("pending", "Pending")}
+              ${renderUserFilterTab("sensitive", "Sensitive Views")}
+            </div>
           </div>
-          <div class="access-user-list">
-            ${DEFAULT_USERS.map(renderAccessUserCard).join("")}
-          </div>
+          ${renderUserTable(users, selectedUser)}
         </article>
+        ${selectedUser ? renderUserDetailPanel(selectedUser) : ""}
+      </section>
+      <section class="access-grid" aria-label="Role and device access">
         <article class="panel access-panel">
           <div class="panel-header panel-header--compact">
             <h2>Role Matrix</h2>
@@ -1981,6 +2499,107 @@ function renderUsersPage() {
         </article>
       </section>
     </section>
+  `;
+}
+
+function filteredUsers(filter) {
+  if (filter === "active") return DEFAULT_USERS.filter((user) => user.status === "Active");
+  if (filter === "pending") return DEFAULT_USERS.filter((user) => user.status.toLowerCase().includes("pending"));
+  if (filter === "sensitive") return DEFAULT_USERS.filter((user) => Number(user.sensitive_access) > 0);
+  return DEFAULT_USERS;
+}
+
+function renderUserFilterTab(value, label) {
+  const active = (state.userViewFilter ?? "all") === value;
+  return `
+    <button class="record-filter-tab ${active ? "is-active" : ""}" data-user-filter="${escapeAttr(value)}" type="button" aria-pressed="${active}">
+      ${escapeHtml(label)}
+    </button>
+  `;
+}
+
+function renderUserTable(users, selectedUser) {
+  return `
+    <div class="record-table-shell">
+      <table class="record-table user-record-table">
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Role</th>
+            <th>Status</th>
+            <th class="detail-optional">Scope</th>
+            <th>Sensitive Views</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${
+            users.length === 0
+              ? `<tr><td colspan="5"><div class="empty-state"><strong>No users match this filter.</strong></div></td></tr>`
+              : users.map((user) => renderUserTableRow(user, selectedUser)).join("")
+          }
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderUserTableRow(user, selectedUser) {
+  const active = selectedUser?.id === user.id;
+  return `
+    <tr class="record-row ${active ? "is-active" : ""}" data-user-row data-user-id="${escapeAttr(user.id)}" tabindex="0" aria-selected="${active}">
+      <td>
+        <strong>${escapeHtml(user.display_name)}</strong>
+        <span>${escapeHtml(user.last_active)}</span>
+      </td>
+      <td>${escapeHtml(user.role)}</td>
+      <td>${escapeHtml(user.status)}</td>
+      <td class="detail-optional">${escapeHtml(user.access_scope)}</td>
+      <td><span class="badge ${Number(user.sensitive_access) > 0 ? "is-warning" : "is-valid"}">${escapeHtml(user.sensitive_access)}</span></td>
+    </tr>
+  `;
+}
+
+function renderUserDetailPanel(user) {
+  const role = ROLE_MATRIX.find((row) => row.role === user.role);
+
+  return `
+    <aside class="record-detail-panel" data-record-detail-panel aria-label="Staff access details">
+      <div class="record-detail-scroll">
+        <div class="record-detail-heading">
+          <span>${escapeHtml(user.role)}</span>
+          <h2>${escapeHtml(user.display_name)}</h2>
+        </div>
+        <dl class="record-detail-list">
+          <div><dt>Status</dt><dd>${escapeHtml(user.status)}</dd></div>
+          <div><dt>Last Active</dt><dd>${escapeHtml(user.last_active)}</dd></div>
+          <div><dt>Access Scope</dt><dd>${escapeHtml(user.access_scope)}</dd></div>
+          <div><dt>Sensitive Views</dt><dd>${escapeHtml(user.sensitive_access)}</dd></div>
+        </dl>
+        ${
+          role
+            ? `<section class="record-detail-section">
+                <h3>Role Matrix</h3>
+                <dl class="record-detail-list">
+                  <div><dt>Stock</dt><dd>${escapeHtml(role.stock)}</dd></div>
+                  <div><dt>Sales</dt><dd>${escapeHtml(role.sales)}</dd></div>
+                  <div><dt>Reports</dt><dd>${escapeHtml(role.reports)}</dd></div>
+                  <div><dt>Users</dt><dd>${escapeHtml(role.users)}</dd></div>
+                </dl>
+              </section>`
+            : ""
+        }
+        <details class="privacy-details">
+          <summary>Private staff details</summary>
+          <p>${escapeHtml(user.private_note)}</p>
+          <p>Record ID: <code>${escapeHtml(user.id)}</code></p>
+        </details>
+      </div>
+      <div class="record-detail-actions">
+        <button class="button button-secondary" data-action="close-record-detail" type="button">Close</button>
+        <button class="button button-secondary" data-view="audit" type="button">${icon("history")}Audit Trail</button>
+        <button class="button button-primary" data-view="settings" type="button">${icon("settings")}Settings</button>
+      </div>
+    </aside>
   `;
 }
 
@@ -2043,7 +2662,6 @@ function renderSettingsPage() {
 
   return `
     <section class="content-grid module-page settings-workspace" aria-label="Settings">
-      ${renderBusinessHero("settings", content)}
       <section class="module-metrics" aria-label="Settings metrics">
         ${metricCard("Policy Cards", SETTINGS_POLICIES.length)}
         ${metricCard("Numbering Rules", NUMBERING_RULES.length)}
@@ -2310,17 +2928,18 @@ function renderSalesPage() {
   const queuedSaleEvents = state.outbox.filter((event) => event.source_type === "sale").length;
   const saleMode = form.sale_mode ?? "menu_item";
   const selectedMenuItem = getMenuItemById(form.menu_item_id) ?? DEFAULT_MENU_ITEMS[0];
+  const filteredSales = filteredSalesRecords(state.saleViewFilter ?? "all", sales);
+  const selectedSale = filteredSales.find((sale) => sale.id === state.selectedSaleId) ?? null;
 
   return `
     <section class="content-grid module-page business-workspace" aria-label="Sales">
-      ${renderBusinessHero("sales", content)}
       <section class="module-metrics" aria-label="Sales metrics">
         ${metricCard("Fulfilled Locally", sales.length)}
         ${metricCard("Queued Stock Outs", queuedSaleEvents)}
         ${metricCard("Recurring", "4")}
         ${metricCard("Seasonal", "2")}
       </section>
-      <section class="business-work-grid">
+      <section class="business-work-grid sales-work-grid">
         <article class="panel business-form-panel">
           <div class="panel-header panel-header--compact">
             <h2>Fulfill Sale</h2>
@@ -2412,12 +3031,31 @@ function renderSalesPage() {
         ${renderBusinessRecordPanel({
           title: "Recent Sales",
           empty: "No fulfilled sales yet.",
-          records: sales,
+          records: filteredSales,
           type: "sale",
+          selectedRecord: selectedSale,
         })}
       </section>
       ${renderModuleSections(content)}
     </section>
+  `;
+}
+
+function filteredSalesRecords(filter, sales) {
+  if (filter === "one_time") return sales.filter((sale) => sale.sale_type === "one_time");
+  if (filter === "recurring") return sales.filter((sale) => sale.sale_type === "recurring");
+  if (filter === "seasonal") return sales.filter((sale) => sale.sale_type === "seasonal");
+  if (filter === "menu_item") return sales.filter((sale) => sale.sale_mode === "menu_item");
+  if (filter === "direct_stock") return sales.filter((sale) => sale.sale_mode === "direct_stock");
+  return sales;
+}
+
+function renderSaleFilterTab(value, label) {
+  const active = (state.saleViewFilter ?? "all") === value;
+  return `
+    <button class="record-filter-tab ${active ? "is-active" : ""}" data-sale-filter="${escapeAttr(value)}" type="button" aria-pressed="${active}">
+      ${escapeHtml(label)}
+    </button>
   `;
 }
 
@@ -2426,17 +3064,18 @@ function renderPurchasesPage() {
   const form = state.purchaseForm ?? defaultState().purchaseForm;
   const purchases = Array.isArray(state.purchases) ? state.purchases : [];
   const queuedPurchaseEvents = state.outbox.filter((event) => event.source_type === "purchase").length;
+  const filteredPurchases = filteredPurchaseRecords(state.purchaseViewFilter ?? "all", purchases);
+  const selectedPurchase = filteredPurchases.find((purchase) => purchase.id === state.selectedPurchaseId) ?? null;
 
   return `
     <section class="content-grid module-page business-workspace" aria-label="Purchases">
-      ${renderBusinessHero("purchases", content)}
       <section class="module-metrics" aria-label="Purchase metrics">
         ${metricCard("Received Locally", purchases.length)}
         ${metricCard("Queued Stock Ins", queuedPurchaseEvents)}
         ${metricCard("Incoming", "3")}
         ${metricCard("Variance", "2")}
       </section>
-      <section class="business-work-grid">
+      <section class="business-work-grid sales-work-grid">
         <article class="panel business-form-panel">
           <div class="panel-header panel-header--compact">
             <h2>Receive Purchase</h2>
@@ -2489,8 +3128,9 @@ function renderPurchasesPage() {
         ${renderBusinessRecordPanel({
           title: "Recent Receipts",
           empty: "No purchases received yet.",
-          records: purchases,
+          records: filteredPurchases,
           type: "purchase",
+          selectedRecord: selectedPurchase,
         })}
       </section>
       ${renderModuleSections(content)}
@@ -2498,15 +3138,22 @@ function renderPurchasesPage() {
   `;
 }
 
-function renderBusinessHero(key, content) {
+function filteredPurchaseRecords(filter, purchases) {
+  if (filter === "review") {
+    const reviewSupplierIds = new Set(DEFAULT_SUPPLIERS.filter((supplier) => supplier.variance_cases > 0).map((supplier) => supplier.id));
+    return purchases.filter((purchase) => reviewSupplierIds.has(purchase.supplier_id));
+  }
+  if (filter === "spirits") return purchases.filter((purchase) => getProductById(purchase.product_id)?.category === "Spirits");
+  if (filter === "produce") return purchases.filter((purchase) => getProductById(purchase.product_id)?.category === "Kitchen");
+  return purchases;
+}
+
+function renderPurchaseFilterTab(value, label) {
+  const active = (state.purchaseViewFilter ?? "all") === value;
   return `
-    <article class="panel panel-wide module-hero">
-      <div>
-        <span>${screenMeta[key]?.kicker ?? "Module"}</span>
-        <h2>${content.title}</h2>
-        <p>${content.summary}</p>
-      </div>
-    </article>
+    <button class="record-filter-tab ${active ? "is-active" : ""}" data-purchase-filter="${escapeAttr(value)}" type="button" aria-pressed="${active}">
+      ${escapeHtml(label)}
+    </button>
   `;
 }
 
@@ -2540,7 +3187,14 @@ function renderModuleSections(content) {
   `;
 }
 
-function renderBusinessRecordPanel({ title, empty, records, type }) {
+function renderBusinessRecordPanel({ title, empty, records, type, selectedRecord = null }) {
+  if (type === "sale") {
+    return renderSalesRecordWorkspace({ title, empty, records, selectedRecord });
+  }
+  if (type === "purchase") {
+    return renderPurchaseRecordWorkspace({ title, empty, records, selectedRecord });
+  }
+
   const safeRecords = records.slice(-6).reverse();
 
   return `
@@ -2556,6 +3210,216 @@ function renderBusinessRecordPanel({ title, empty, records, type }) {
             </div>`
       }
     </article>
+  `;
+}
+
+function renderPurchaseRecordWorkspace({ title, empty, records, selectedRecord }) {
+  const safeRecords = [...records].slice().reverse();
+
+  return `
+    <article class="panel business-record-panel record-table-panel sales-record-panel">
+      <div class="panel-header panel-header--compact">
+        <h2>${title}</h2>
+      </div>
+      <div class="record-filter-tabs" role="group" aria-label="Filter purchases">
+        ${renderPurchaseFilterTab("all", "All")}
+        ${renderPurchaseFilterTab("spirits", "Spirits")}
+        ${renderPurchaseFilterTab("produce", "Produce")}
+        ${renderPurchaseFilterTab("review", "Needs Review")}
+      </div>
+      <section class="record-workspace purchase-record-workspace ${selectedRecord ? "has-detail" : ""}" data-record-workspace="purchases" aria-label="Purchase records">
+        <div class="record-table-shell">
+          <table class="record-table purchase-record-table">
+            <thead>
+              <tr>
+                <th>Supplier</th>
+                <th>Product</th>
+                <th>Amount</th>
+                <th class="detail-optional">Location</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${
+                safeRecords.length === 0
+                  ? `<tr><td colspan="5"><div class="empty-state"><strong>${escapeHtml(empty)}</strong></div></td></tr>`
+                  : safeRecords.map((record) => renderPurchaseTableRow(record, selectedRecord)).join("")
+              }
+            </tbody>
+          </table>
+        </div>
+        ${selectedRecord ? renderPurchaseDetailPanel(selectedRecord) : ""}
+      </section>
+    </article>
+  `;
+}
+
+function renderPurchaseTableRow(record, selectedRecord) {
+  const active = selectedRecord?.id === record.id;
+
+  return `
+    <tr class="record-row ${active ? "is-active" : ""}" data-purchase-row data-purchase-id="${escapeAttr(record.id)}" tabindex="0" aria-selected="${active}">
+      <td>
+        <strong>${escapeHtml(supplierName(record.supplier_id))}</strong>
+        <span>${escapeHtml(record.notes || "Received stock")}</span>
+      </td>
+      <td>${escapeHtml(productName(record.product_id))}</td>
+      <td>${formatQuantity(record.quantity)} ${productUnit(record.product_id)}</td>
+      <td class="detail-optional">${escapeHtml(record.location)}</td>
+      <td><span class="badge ${record.status === "queued" ? "is-warning" : "is-valid"}">${escapeHtml(record.status ?? "queued")}</span></td>
+    </tr>
+  `;
+}
+
+function renderPurchaseDetailPanel(record) {
+  const supplier = DEFAULT_SUPPLIERS.find((candidate) => candidate.id === record.supplier_id);
+  const created = record.created_at ? displayDateTime(record.created_at) : "Local session";
+
+  return `
+    <aside class="record-detail-panel" data-record-detail-panel aria-label="Purchase details">
+      <div class="record-detail-scroll">
+        <div class="record-detail-heading">
+          <span>Received stock</span>
+          <h2>${escapeHtml(supplierName(record.supplier_id))}</h2>
+        </div>
+        <dl class="record-detail-list">
+          <div><dt>Product</dt><dd>${escapeHtml(productName(record.product_id))}</dd></div>
+          <div><dt>Amount</dt><dd>${formatQuantity(record.quantity)} ${productUnit(record.product_id)}</dd></div>
+          <div><dt>Location</dt><dd>${escapeHtml(record.location)}</dd></div>
+          <div><dt>Status</dt><dd>${escapeHtml(record.status ?? "queued")}</dd></div>
+          <div><dt>Created</dt><dd>${escapeHtml(created)}</dd></div>
+          ${supplier ? `<div><dt>Supplier Reliability</dt><dd>${escapeHtml(supplier.reliability)}</dd></div>` : ""}
+        </dl>
+        <section class="record-detail-section">
+          <h3>Receiving Notes</h3>
+          <p>${record.notes ? escapeHtml(record.notes) : "No notes recorded."}</p>
+        </section>
+        <details class="privacy-details">
+          <summary>Technical source</summary>
+          <p>Work item: <code>${escapeHtml(record.work_item_id)}</code></p>
+          <p>Event: <code>${escapeHtml(record.event_id ?? "waiting")}</code></p>
+        </details>
+      </div>
+      <div class="record-detail-actions">
+        <button class="button button-secondary" data-action="close-record-detail" type="button">Close</button>
+        <button class="button button-secondary" data-view="suppliers" type="button">${icon("layers")}Supplier</button>
+        <button class="button button-primary" data-view="compose" type="button">${icon("send")}Open Work</button>
+      </div>
+    </aside>
+  `;
+}
+
+function renderSalesRecordWorkspace({ title, empty, records, selectedRecord }) {
+  const safeRecords = [...records].slice().reverse();
+
+  return `
+    <article class="panel business-record-panel record-table-panel sales-record-panel">
+      <div class="panel-header panel-header--compact">
+        <h2>${title}</h2>
+      </div>
+      <div class="record-filter-tabs" role="group" aria-label="Filter sales">
+        ${renderSaleFilterTab("all", "All")}
+        ${renderSaleFilterTab("one_time", "One-time")}
+        ${renderSaleFilterTab("recurring", "Recurring")}
+        ${renderSaleFilterTab("seasonal", "Seasonal")}
+        ${renderSaleFilterTab("menu_item", "Menu")}
+        ${renderSaleFilterTab("direct_stock", "Direct")}
+      </div>
+      <section class="record-workspace sales-record-workspace ${selectedRecord ? "has-detail" : ""}" data-record-workspace="sales" aria-label="Sales records">
+        <div class="record-table-shell">
+          <table class="record-table sales-record-table">
+            <thead>
+              <tr>
+                <th>Client</th>
+                <th>Sale</th>
+                <th>Item</th>
+                <th>Amount</th>
+                <th class="detail-optional">Location</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${
+                safeRecords.length === 0
+                  ? `<tr><td colspan="6"><div class="empty-state"><strong>${escapeHtml(empty)}</strong></div></td></tr>`
+                  : safeRecords.map((record) => renderSaleTableRow(record, selectedRecord)).join("")
+              }
+            </tbody>
+          </table>
+        </div>
+        ${selectedRecord ? renderSaleDetailPanel(selectedRecord) : ""}
+      </section>
+    </article>
+  `;
+}
+
+function renderSaleTableRow(record, selectedRecord) {
+  const active = selectedRecord?.id === record.id;
+  const itemName =
+    record.sale_mode === "menu_item"
+      ? record.item_label ?? getMenuItemById(record.menu_item_id)?.name ?? "Menu item"
+      : productName(record.product_id);
+  const amount =
+    record.sale_mode === "menu_item"
+      ? `${formatQuantity(record.quantity)} unit${Number(record.quantity) === 1 ? "" : "s"}`
+      : `${formatQuantity(record.quantity)} ${productUnit(record.product_id)}`;
+
+  return `
+    <tr class="record-row ${active ? "is-active" : ""}" data-sale-row data-sale-id="${escapeAttr(record.id)}" tabindex="0" aria-selected="${active}">
+      <td>
+        <strong>${escapeHtml(clientName(record.client_id))}</strong>
+        <span>${escapeHtml(saleTypeLabels[record.sale_type] ?? "Sale")}</span>
+      </td>
+      <td>${escapeHtml(saleModeLabels[record.sale_mode] ?? "Sale")}</td>
+      <td>${escapeHtml(itemName)}</td>
+      <td>${amount}</td>
+      <td class="detail-optional">${escapeHtml(record.location)}</td>
+      <td><span class="badge ${record.status === "queued" ? "is-warning" : "is-valid"}">${escapeHtml(record.status ?? "queued")}</span></td>
+    </tr>
+  `;
+}
+
+function renderSaleDetailPanel(record) {
+  const itemName =
+    record.sale_mode === "menu_item"
+      ? record.item_label ?? getMenuItemById(record.menu_item_id)?.name ?? "Menu item"
+      : productName(record.product_id);
+  const menu = record.menu_item_id ? getMenuById(getMenuItemById(record.menu_item_id)?.menu_id) : null;
+  const created = record.created_at ? displayDateTime(record.created_at) : "Local session";
+
+  return `
+    <aside class="record-detail-panel" data-record-detail-panel aria-label="Sale details">
+      <div class="record-detail-scroll">
+        <div class="record-detail-heading">
+          <span>${escapeHtml(saleTypeLabels[record.sale_type] ?? "Sale")}</span>
+          <h2>${escapeHtml(clientName(record.client_id))}</h2>
+        </div>
+        <dl class="record-detail-list">
+          <div><dt>Sale Source</dt><dd>${escapeHtml(saleModeLabels[record.sale_mode] ?? "Sale")}</dd></div>
+          <div><dt>${record.sale_mode === "menu_item" ? "Menu Item" : "Product"}</dt><dd>${escapeHtml(itemName)}</dd></div>
+          ${menu ? `<div><dt>Menu</dt><dd>${escapeHtml(menu.name)}</dd></div>` : ""}
+          <div><dt>Location</dt><dd>${escapeHtml(record.location)}</dd></div>
+          <div><dt>Amount</dt><dd>${formatQuantity(record.quantity)}</dd></div>
+          <div><dt>Stock Lines</dt><dd>${record.event_count}</dd></div>
+          <div><dt>Status</dt><dd>${escapeHtml(record.status ?? "queued")}</dd></div>
+          <div><dt>Created</dt><dd>${escapeHtml(created)}</dd></div>
+        </dl>
+        <section class="record-detail-section">
+          <h3>Notes</h3>
+          <p>${record.notes ? escapeHtml(record.notes) : "No notes recorded."}</p>
+        </section>
+        <details class="privacy-details">
+          <summary>Technical source</summary>
+          <p>Work item: <code>${escapeHtml(record.work_item_id)}</code></p>
+          <p>First event: <code>${escapeHtml(record.event_id ?? "waiting")}</code></p>
+        </details>
+      </div>
+      <div class="record-detail-actions">
+        <button class="button button-secondary" data-action="close-record-detail" type="button">Close</button>
+        <button class="button button-secondary" data-view="audit" type="button">${icon("history")}Audit Trail</button>
+        <button class="button button-primary" data-view="compose" type="button">${icon("send")}Open Work</button>
+      </div>
+    </aside>
   `;
 }
 
@@ -3920,12 +4784,200 @@ function bindEvents() {
     button.addEventListener("click", () => undoWorkItem(button.dataset.workItemId));
   });
 
+  document.querySelectorAll("[data-client-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.clientViewFilter = button.dataset.clientFilter ?? "all";
+      state.selectedClientId = null;
+      commit();
+    });
+  });
+
+  document.querySelectorAll("[data-sale-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.saleViewFilter = button.dataset.saleFilter ?? "all";
+      state.selectedSaleId = null;
+      commit();
+    });
+  });
+
+  document.querySelectorAll("[data-purchase-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.purchaseViewFilter = button.dataset.purchaseFilter ?? "all";
+      state.selectedPurchaseId = null;
+      commit();
+    });
+  });
+
+  document.querySelectorAll("[data-supplier-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.supplierViewFilter = button.dataset.supplierFilter ?? "all";
+      state.selectedSupplierId = null;
+      commit();
+    });
+  });
+
+  document.querySelectorAll("[data-menu-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.menuViewFilter = button.dataset.menuFilter ?? "all";
+      state.selectedMenuId = null;
+      commit();
+    });
+  });
+
+  document.querySelectorAll("[data-location-record-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.locationViewFilter = button.dataset.locationRecordFilter ?? "all";
+      state.selectedLocationId = null;
+      commit();
+    });
+  });
+
+  document.querySelectorAll("[data-user-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.userViewFilter = button.dataset.userFilter ?? "all";
+      state.selectedUserId = null;
+      commit();
+    });
+  });
+
+  document.querySelectorAll("[data-client-row]").forEach((row) => {
+    const openClient = () => {
+      state.selectedClientId = row.dataset.clientId ?? null;
+      commit();
+    };
+    row.addEventListener("click", openClient);
+    row.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      openClient();
+    });
+  });
+
+  document.querySelectorAll("[data-sale-row]").forEach((row) => {
+    const openSale = () => {
+      state.selectedSaleId = row.dataset.saleId ?? null;
+      commit();
+    };
+    row.addEventListener("click", openSale);
+    row.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      openSale();
+    });
+  });
+
+  document.querySelectorAll("[data-purchase-row]").forEach((row) => {
+    const openPurchase = () => {
+      state.selectedPurchaseId = row.dataset.purchaseId ?? null;
+      commit();
+    };
+    row.addEventListener("click", openPurchase);
+    row.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      openPurchase();
+    });
+  });
+
+  document.querySelectorAll("[data-supplier-row]").forEach((row) => {
+    const openSupplier = () => {
+      state.selectedSupplierId = row.dataset.supplierId ?? null;
+      commit();
+    };
+    row.addEventListener("click", openSupplier);
+    row.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      openSupplier();
+    });
+  });
+
+  document.querySelectorAll("[data-menu-row]").forEach((row) => {
+    const openMenu = () => {
+      state.selectedMenuId = row.dataset.menuId ?? null;
+      commit();
+    };
+    row.addEventListener("click", openMenu);
+    row.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      openMenu();
+    });
+  });
+
+  document.querySelectorAll("[data-location-row]").forEach((row) => {
+    const openLocation = () => {
+      state.selectedLocationId = row.dataset.locationId ?? null;
+      commit();
+    };
+    row.addEventListener("click", openLocation);
+    row.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      openLocation();
+    });
+  });
+
+  document.querySelectorAll("[data-user-row]").forEach((row) => {
+    const openUser = () => {
+      state.selectedUserId = row.dataset.userId ?? null;
+      commit();
+    };
+    row.addEventListener("click", openUser);
+    row.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      openUser();
+    });
+  });
+
+  document.querySelectorAll("[data-action='close-record-detail']").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedClientId = null;
+      state.selectedSaleId = null;
+      state.selectedPurchaseId = null;
+      state.selectedSupplierId = null;
+      state.selectedMenuId = null;
+      state.selectedLocationId = null;
+      state.selectedUserId = null;
+      commit();
+    });
+  });
+
+  const workspace = document.querySelector(".workspace");
+  workspace?.addEventListener("click", (event) => {
+    if (state.activeView === "clients" && !state.selectedClientId) return;
+    if (state.activeView === "sales" && !state.selectedSaleId) return;
+    if (state.activeView === "purchases" && !state.selectedPurchaseId) return;
+    if (state.activeView === "suppliers" && !state.selectedSupplierId) return;
+    if (state.activeView === "menus" && !state.selectedMenuId) return;
+    if (state.activeView === "locations" && !state.selectedLocationId) return;
+    if (state.activeView === "users" && !state.selectedUserId) return;
+    if (!["clients", "sales", "purchases", "suppliers", "menus", "locations", "users"].includes(state.activeView)) return;
+    if (event.target.closest("[data-record-detail-panel]")) return;
+    if (event.target.closest("[data-client-row], [data-sale-row], [data-purchase-row], [data-supplier-row], [data-menu-row], [data-location-row], [data-user-row]")) return;
+    if (event.target.closest("[data-client-filter], [data-sale-filter], [data-purchase-filter], [data-supplier-filter], [data-menu-filter], [data-location-record-filter], [data-user-filter]")) return;
+    if (event.target.closest("[data-action='start-client-sale'], [data-action='start-supplier-purchase'], [data-view], [data-action='close-record-detail']")) return;
+    state.selectedClientId = null;
+    state.selectedSaleId = null;
+    state.selectedPurchaseId = null;
+    state.selectedSupplierId = null;
+    state.selectedMenuId = null;
+    state.selectedLocationId = null;
+    state.selectedUserId = null;
+    commit();
+  });
+
   document.querySelectorAll("[data-action='start-client-sale']").forEach((button) => {
     button.addEventListener("click", () => startClientSale(button.dataset.clientId));
   });
 
   document.querySelectorAll("[data-action='start-menu-sale']").forEach((button) => {
     button.addEventListener("click", () => startMenuSale(button.dataset.menuItemId));
+  });
+
+  document.querySelectorAll("[data-action='start-supplier-purchase']").forEach((button) => {
+    button.addEventListener("click", () => startSupplierPurchase(button.dataset.supplierId));
   });
 
   const form = document.querySelector("[data-form='event']");
@@ -4160,6 +5212,28 @@ function updatePurchaseFormState(form) {
   };
 }
 
+function startSupplierPurchase(supplierId) {
+  const supplier = DEFAULT_SUPPLIERS.find((candidate) => candidate.id === supplierId);
+  if (!supplier) return;
+  const currentForm = state.purchaseForm ?? defaultState().purchaseForm;
+  const firstProduct = supplier.products.find((productId) => getProductById(productId)?.is_active !== false) ?? currentForm.product_id;
+
+  state.purchaseForm = {
+    ...currentForm,
+    supplier_id: supplier.id,
+    product_id: firstProduct,
+    location: currentForm.location || "Cellar",
+    quantity: 1,
+    notes: "",
+  };
+  state.activeView = "purchases";
+  state.selectedPurchaseId = null;
+  state.selectedSupplierId = null;
+  state.guideOpen = false;
+  state.accountOpen = false;
+  commit();
+}
+
 function validBusinessQuantity(rawQuantity) {
   const quantity = Number(rawQuantity);
   return Number.isFinite(quantity) && quantity > 0 ? quantity : null;
@@ -4210,6 +5284,8 @@ function startClientSale(clientId) {
     notes: "",
   };
   state.activeView = "sales";
+  state.selectedClientId = null;
+  state.selectedSaleId = null;
   state.guideOpen = false;
   state.accountOpen = false;
   commit();
@@ -4232,6 +5308,8 @@ function startMenuSale(menuItemId) {
     notes: "",
   };
   state.activeView = "sales";
+  state.selectedClientId = null;
+  state.selectedSaleId = null;
   state.guideOpen = false;
   state.accountOpen = false;
   commit();
@@ -4502,6 +5580,7 @@ function receivePurchaseFromForm(form) {
     quantity: 1,
     notes: "",
   };
+  state.selectedPurchaseId = null;
 
   showToast("Purchase received locally. STOCK_IN is waiting to send.");
   commit();

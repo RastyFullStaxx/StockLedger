@@ -2,37 +2,6 @@
   gap: 10px;
 }
 
-.module-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 16px;
-}
-
-.module-hero span {
-  color: var(--color-primary);
-  font-size: 0.82rem;
-  font-weight: 820;
-}
-
-.module-hero h2 {
-  margin: 4px 0 0;
-  font-size: clamp(1.55rem, 2.2vw, 2.2rem);
-}
-
-.module-hero p {
-  max-width: 760px;
-  margin: 7px 0 0;
-  color: var(--color-text-muted);
-}
-
-.module-hero-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
 .module-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -79,6 +48,10 @@
   grid-template-columns: minmax(0, 1.12fr) minmax(360px, 0.88fr);
   gap: 10px;
   align-items: start;
+}
+
+.sales-work-grid {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .business-form {
@@ -172,6 +145,217 @@
   margin: 0;
   color: var(--color-text);
   font-weight: 720;
+}
+
+.record-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+}
+
+.record-workspace.has-detail {
+  grid-template-columns: minmax(0, 1fr) minmax(310px, 0.42fr);
+}
+
+.record-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.record-filter-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.record-filter-tab {
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: var(--glass-inset);
+  color: var(--color-text-muted);
+  font-weight: 780;
+}
+
+.record-filter-tab.is-active {
+  border-color: var(--color-primary-strong);
+  background: var(--color-primary);
+  color: #ffffff;
+}
+
+.record-table-shell {
+  overflow: auto;
+  max-height: calc(100dvh - 240px);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.sales-record-panel .record-table-shell {
+  max-height: calc(100dvh - 300px);
+}
+
+.record-table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+}
+
+.record-table th,
+.record-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.record-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: rgba(237, 246, 243, 0.96);
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  font-weight: 840;
+}
+
+.record-table td {
+  color: var(--color-text);
+  font-weight: 680;
+}
+
+.record-table td strong,
+.record-table td span {
+  display: block;
+}
+
+.record-table td span {
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+  font-weight: 680;
+}
+
+.record-row {
+  cursor: pointer;
+}
+
+.record-row:hover,
+.record-row.is-active {
+  background: rgba(220, 239, 235, 0.7);
+}
+
+.record-row:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: -3px;
+}
+
+.record-workspace.has-detail .detail-optional {
+  display: none;
+}
+
+.record-detail-panel {
+  position: sticky;
+  top: 18px;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 0;
+  max-height: calc(100dvh - 140px);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-card);
+  box-shadow: var(--glass-inset), var(--shadow-soft);
+  padding: 0;
+  overflow: hidden;
+}
+
+.record-detail-scroll {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  overflow: auto;
+  padding: 16px;
+}
+
+.record-detail-heading {
+  display: grid;
+  gap: 4px;
+}
+
+.record-detail-heading span {
+  color: var(--color-primary);
+  font-size: 0.78rem;
+  font-weight: 840;
+  text-transform: uppercase;
+}
+
+.record-detail-heading h2 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.record-detail-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.record-detail-list dt {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.record-detail-list dd {
+  margin: 0;
+  color: var(--color-text);
+  font-weight: 740;
+}
+
+.record-detail-section {
+  display: grid;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
+}
+
+.record-detail-section h3,
+.record-detail-section p {
+  margin: 0;
+}
+
+.record-detail-section h3 {
+  color: var(--color-primary-strong);
+  font-size: 1rem;
+}
+
+.record-detail-section p {
+  color: var(--color-text-muted);
+}
+
+.record-detail-list-plain {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+  font-weight: 680;
+}
+
+.record-detail-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.88);
 }
 
 .relationship-grid,
@@ -620,7 +804,6 @@
 }
 
 @media (max-width: 900px) {
-  .module-hero,
   .module-metrics,
   .module-section-grid,
   .business-work-grid,
@@ -636,16 +819,23 @@
   .settings-grid,
   .access-user-card dl,
   .role-matrix-row dl,
-  .device-trust-row dl {
+  .device-trust-row dl,
+  .record-workspace.has-detail,
+  .record-detail-list {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .module-hero-actions {
-    justify-content: flex-start;
   }
 
   .business-record-panel {
     position: static;
+  }
+
+  .record-detail-panel {
+    position: static;
+    max-height: none;
+  }
+
+  .record-detail-actions {
+    flex-direction: column;
   }
 
   .business-form-footer,
