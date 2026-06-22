@@ -390,6 +390,17 @@ const eventLabels = {
   PRODUCT_REACTIVATED: "Reactivate Product",
 };
 
+const actionTabLabels = {
+  STOCK_IN: "Stock In",
+  STOCK_OUT: "Use Stock",
+  STOCK_TRANSFER: "Move Stock",
+  STOCK_ADJUSTMENT: "Correct Count",
+  STOCK_REVERT: "Reverse",
+  PRODUCT_CREATED: "Enroll",
+  PRODUCT_DEACTIVATED: "Suspend",
+  PRODUCT_REACTIVATED: "Reactivate",
+};
+
 const REVERTIBLE_EVENT_TYPES = new Set(["STOCK_IN", "STOCK_OUT", "STOCK_TRANSFER", "STOCK_ADJUSTMENT"]);
 
 const ACTION_TEMPLATES = {
@@ -619,7 +630,9 @@ function render() {
 
   if (state.activeView === "compose" && shouldFocusActionOnCompose) {
     requestAnimationFrame(() => {
-      const typeField = app.querySelector("[data-select-trigger='type']");
+      const typeField =
+        app.querySelector(`.action-type-tab[data-action-type="${CSS.escape(state.form.type)}"]`) ??
+        app.querySelector(".action-type-tab");
       if (typeField) {
         typeField.focus();
       }
@@ -980,19 +993,13 @@ function renderComposer(localLedger, outboxValidation) {
   return `
     <section class="content-grid stock-actions-grid">
       <article class="panel panel-wide">
-        ${renderActionTemplate(form.type)}
         <form class="event-form" data-form="event">
-          <label class="field-select-wrap field-select-wrap--emphasized">
-            <span>Action Type</span>
-            ${renderFieldSelect({
-              name: "type",
-              options: ACTION_EVENT_TYPES.map((type) => `<option value="${type}" ${form.type === type ? "selected" : ""}>${eventLabels[type]}</option>`).join(""),
-              className: "field-select--emphasized",
-              menuClassName: "field-select-menu--event-form",
-              menuMode: "event-form",
-              autofocus: true,
-            })}
-          </label>
+          <div class="action-type-field form-field-span-2">
+            <span class="action-type-label">Action Type</span>
+            ${renderActionTypeTabs(form.type)}
+            <input type="hidden" name="type" value="${escapeAttr(form.type)}" />
+          </div>
+          ${renderActionTemplate(form.type)}
           ${renderActionFields(form, template, revertOptions)}
           <div class="form-footer form-field-span-2">
             <div class="validation ${canPreviewValidation ? (validation.valid ? "is-valid" : "is-error") : "is-valid"}">
@@ -1438,7 +1445,7 @@ function renderActionTemplate(type) {
   const copy = actionTemplate(type);
 
   return `
-    <div class="compose-template-strip" aria-label="Action Template">
+    <div class="compose-template-strip form-field-span-2" aria-label="Action Template">
       <span>${copy.template}</span>
       <strong>${copy.summary}</strong>
     </div>
@@ -1482,13 +1489,50 @@ function workQueueItems(outboxValidation) {
       sequence_number: Math.min(...item.events.map((event) => Number(event.sequence_number))),
       label: eventLabels[primary.type] ?? primary.type,
       product_name: escapeHtml(productName(primary.product_id)),
-      location: isGrouped ? "Grouped work" : escapeHtml(eventLocationText(primary)),
+      location: isGrouped ? `Grouped work: ${item.events.length} events` : escapeHtml(eventLocationText(primary)),
       amount: isGrouped ? "Grouped work" : formatQuantity(primary.quantity),
-      detail: isGrouped ? `Grouped work: ${item.events.length} events` : `<code>${escapeHtml(primary.idempotency_key)}</code>`,
+      detail: isGrouped ? `${item.events.length} grouped event records` : `<code>${escapeHtml(primary.idempotency_key)}</code>`,
+      event_count: item.events.length,
       valid: !invalid,
       status: invalid ? simpleValidationReason(invalid.reason) : "Ready",
     };
   });
+}
+
+function renderWorkQueueCard(item) {
+  return `
+    <article class="work-queue-card" data-work-queue-card data-work-item-id="${escapeAttr(item.work_item_id)}">
+      <div class="work-queue-card-main">
+        <div class="work-queue-sequence" aria-label="Sequence number">${item.sequence_number}</div>
+        <div class="work-queue-card-body">
+          <div class="work-queue-card-topline">
+            <span class="type-pill">${item.label}</span>
+            ${item.valid ? "" : `<span class="badge is-error">${escapeHtml(item.status)}</span>`}
+          </div>
+          <strong>${item.product_name}</strong>
+          <dl class="work-queue-facts">
+            <div>
+              <dt>Location</dt>
+              <dd>${item.location}</dd>
+            </div>
+            <div>
+              <dt>Amount</dt>
+              <dd>${item.amount}</dd>
+            </div>
+          </dl>
+        </div>
+        <button class="table-action" data-action="undo-work-item" data-work-item-id="${escapeAttr(item.work_item_id)}" type="button">Undo</button>
+      </div>
+      <details class="work-queue-technical">
+        <summary>Technical details</summary>
+        <dl>
+          <div><dt>Batch detail</dt><dd>${item.detail}</dd></div>
+          <div><dt>Validation</dt><dd>${escapeHtml(item.status)}</dd></div>
+          <div><dt>Events</dt><dd>${item.event_count}</dd></div>
+        </dl>
+      </details>
+    </article>
+  `;
 }
 
 function renderWorkQueue(outboxValidation) {
@@ -1498,7 +1542,7 @@ function renderWorkQueue(outboxValidation) {
   const pageItems = pagination.pageRows;
 
   return `
-      <aside class="panel panel-wide panel--flush-table work-queue-panel" aria-label="Work to Send">
+      <aside class="panel panel-wide work-queue-panel" aria-label="Work to Send">
         <div class="panel-header work-queue-header">
           <div>
             <h2>Work to Send</h2>
@@ -1511,65 +1555,8 @@ function renderWorkQueue(outboxValidation) {
         ${
           state.outbox.length === 0
             ? `<div class="empty-state"><strong>No Work Waiting</strong></div>`
-            : `<div class="table-wrap outbox-table work-queue-table">
-                <table>
-                  <thead>
-                  <tr>
-                    <th class="table-cell--numeric">No.</th>
-                    <th>Action</th>
-                    <th>Product</th>
-                    <th>Location</th>
-                    <th class="table-cell--numeric">Amount</th>
-                    <th>Batch Detail</th>
-                    <th>Status</th>
-                    <th>Action</th>
-                  </tr>
-                  </thead>
-                  <tbody>
-                    ${pageItems
-                      .map(
-                        (item) => `
-                          <tr>
-                            <td class="table-cell--numeric">${item.sequence_number}</td>
-                            <td><span class="type-pill">${item.label}</span></td>
-                            <td>${item.product_name}</td>
-                            <td>${item.location}</td>
-                            <td class="table-cell--numeric">${item.amount}</td>
-                            <td>${item.detail}</td>
-                            <td><span class="badge ${item.valid ? "is-valid" : "is-error"}">${item.valid ? "Ready" : item.status}</span></td>
-                            <td>
-                              <button class="table-action" data-action="undo-work-item" data-work-item-id="${item.work_item_id}" type="button">Undo</button>
-                            </td>
-                          </tr>
-                        `,
-                      )
-                      .join("")}
-                  </tbody>
-                </table>
-                <div class="outbox-cards" aria-label="Saved work list">
-                  ${pageItems
-                    .map(
-                      (item) => `
-                        <article class="panel-list-card">
-                          <div class="kv-row">
-                            <div>
-                              <span>No. ${item.sequence_number}</span>
-                              <strong>${item.label}</strong>
-                            </div>
-                            <span class="badge ${item.valid ? "is-valid" : "is-error"}">${item.valid ? "Ready" : item.status}</span>
-                          </div>
-                          <dl>
-                            <div><dt>Product</dt><dd>${item.product_name}</dd></div>
-                            <div><dt>Location</dt><dd>${item.location}</dd></div>
-                            <div><dt>Amount</dt><dd>${item.amount}</dd></div>
-                            <div><dt>Batch Detail</dt><dd>${item.detail}</dd></div>
-                            <div><dt>Action</dt><dd><button class="table-action" data-action="undo-work-item" data-work-item-id="${item.work_item_id}" type="button">Undo</button></dd></div>
-                          </dl>
-                        </article>
-                      `,
-                    )
-                    .join("")}
-                </div>
+            : `<div class="work-queue-list" aria-label="Saved work list">
+                ${pageItems.map(renderWorkQueueCard).join("")}
                 ${renderTablePagination("outbox", pagination, pageItems.length)}
               </div>`
         }
@@ -1671,6 +1658,25 @@ function stockViewButton(view, label, iconName) {
       ${icon(iconName)}
       ${label}
     </button>
+  `;
+}
+
+function renderActionTypeTabs(activeType) {
+  return `
+    <div class="action-type-tabs" role="group" aria-label="Choose action type">
+      ${ACTION_EVENT_TYPES.map(
+        (type) => `
+          <button
+            class="action-type-tab ${activeType === type ? "is-active" : ""}"
+            data-action-type="${type}"
+            type="button"
+            aria-pressed="${activeType === type}"
+          >
+            ${actionTabLabels[type] ?? eventLabels[type] ?? type}
+          </button>
+        `,
+      ).join("")}
+    </div>
   `;
 }
 
@@ -2231,6 +2237,20 @@ function bindEvents() {
       tabMotionQueue.stockView = button.dataset.stockView;
       state.stockView = button.dataset.stockView;
       state.stockPage = 1;
+      commit();
+    });
+  });
+
+  document.querySelectorAll("[data-action-type]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const nextType = button.dataset.actionType;
+      if (!nextType || nextType === state.form.type) return;
+
+      state.form = {
+        ...state.form,
+        type: nextType,
+      };
+      normalizeFormForType();
       commit();
     });
   });

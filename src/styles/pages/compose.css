@@ -3,18 +3,19 @@
 }
 
 .stock-actions-grid {
-  grid-template-columns: minmax(0, 1.08fr) minmax(360px, 0.92fr);
+  grid-template-columns: minmax(520px, 1.38fr) minmax(390px, 1fr);
   align-items: start;
 }
 
 .work-queue-panel {
   position: sticky;
   top: 18px;
+  padding: 16px;
 }
 
 .work-queue-header {
-  align-items: start;
-  gap: 14px;
+  align-items: center;
+  gap: 12px;
 }
 
 .work-queue-header h2,
@@ -29,12 +30,61 @@
   font-size: 0.9rem;
 }
 
+.action-type-field {
+  display: grid;
+  gap: 8px;
+}
+
+.action-type-label {
+  color: var(--color-primary-strong);
+  font-size: 0.96rem;
+  font-weight: 760;
+}
+
+.action-type-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.action-type-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: var(--glass-inset);
+  color: var(--color-text-muted);
+  font-weight: 820;
+  line-height: 1.15;
+  text-align: center;
+  transition:
+    transform var(--motion-speed-fast) ease,
+    background-color var(--motion-speed-fast) ease,
+    border-color var(--motion-speed-fast) ease,
+    color var(--motion-speed-fast) ease;
+}
+
+.action-type-tab:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary-strong);
+  transform: translateY(-1px);
+}
+
+.action-type-tab.is-active {
+  border-color: var(--color-primary-strong);
+  background: var(--color-primary);
+  color: #ffffff;
+}
+
 .compose-template-strip {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 14px;
-  padding: 10px 12px;
+  padding: 9px 11px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--surface-panel-soft);
@@ -53,6 +103,113 @@
 .compose-template-strip strong {
   color: var(--color-text-muted);
   font-size: 0.94rem;
+}
+
+.work-queue-list {
+  display: grid;
+  gap: 8px;
+}
+
+.work-queue-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: var(--glass-inset);
+}
+
+.work-queue-card-main {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+}
+
+.work-queue-sequence {
+  display: grid;
+  place-items: center;
+  min-width: 34px;
+  min-height: 34px;
+  border: 1px solid rgba(11, 95, 86, 0.24);
+  border-radius: var(--radius-md);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-strong);
+  font-weight: 900;
+}
+
+.work-queue-card-body {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+}
+
+.work-queue-card-body > strong {
+  overflow-wrap: anywhere;
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+.work-queue-card-topline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.work-queue-facts,
+.work-queue-technical dl {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.work-queue-facts {
+  grid-template-columns: minmax(0, 1.4fr) minmax(86px, 0.6fr);
+}
+
+.work-queue-facts div,
+.work-queue-technical dl div {
+  display: grid;
+  gap: 2px;
+}
+
+.work-queue-facts dt,
+.work-queue-technical dt {
+  color: var(--color-text-muted);
+  font-size: 0.76rem;
+  font-weight: 780;
+}
+
+.work-queue-facts dd,
+.work-queue-technical dd {
+  margin: 0;
+  color: var(--color-text);
+  font-weight: 720;
+  overflow-wrap: anywhere;
+}
+
+.work-queue-technical {
+  padding-top: 2px;
+  border-top: 1px solid var(--color-border);
+}
+
+.work-queue-technical summary {
+  width: fit-content;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 780;
+}
+
+.work-queue-technical[open] {
+  display: grid;
+  gap: 8px;
+}
+
+.work-queue-technical code {
+  white-space: normal;
 }
 
 .physical-count-panel {
@@ -146,6 +303,33 @@
   .catalog-callout {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .action-type-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .compose-template-strip {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .compose-template-strip strong {
+    width: 100%;
+  }
+
+  .work-queue-card-main {
+    grid-template-columns: 34px minmax(0, 1fr);
+  }
+
+  .work-queue-card-main .table-action {
+    grid-column: 2;
+    width: fit-content;
+  }
+
+  .work-queue-facts {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .physical-count-row {

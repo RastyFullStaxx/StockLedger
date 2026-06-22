@@ -255,6 +255,12 @@
   font-size: 0.78rem;
 }
 
+.nav-item.is-active > strong {
+  border-color: #ffffff;
+  background: #ffffff;
+  color: var(--color-primary);
+}
+
 .sidebar-divider {
   margin-top: auto;
   margin-left: calc(var(--sidebar-padding) * -1);

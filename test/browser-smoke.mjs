@@ -15,8 +15,7 @@ const browser = await chromium.launch({ env: browserEnv });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
 
 async function chooseAction(label) {
-  await page.locator("[data-select-trigger='type']").click();
-  await page.getByRole("option", { name: label, exact: true }).click();
+  await page.getByRole("button", { name: label, exact: true }).click();
 }
 
 async function chooseProduct(label) {
@@ -45,10 +44,10 @@ try {
   await page.locator(".nav-item[data-view='compose']").click();
   await page.getByRole("heading", { name: "Stock Actions" }).waitFor();
   await page.getByText("Work to Send", { exact: true }).waitFor();
-  const actionLabels = await page.locator("[data-select-menu][data-select-name='type'] [data-select-option]").evaluateAll((options) =>
-    options.map((option) => option.textContent?.trim()),
+  const actionLabels = await page.locator(".action-type-tab").evaluateAll((tabs) =>
+    tabs.map((tab) => tab.textContent?.trim()),
   );
-  for (const label of ["Stock In", "Use Stock", "Correct Stock Count", "Reverse a Record", "Enroll Product", "Suspend Product"]) {
+  for (const label of ["Stock In", "Use Stock", "Correct Count", "Reverse", "Enroll", "Suspend"]) {
     if (!actionLabels.includes(label)) {
       throw new Error(`Expected action label "${label}" in Stock Actions selector.`);
     }
@@ -56,12 +55,12 @@ try {
   await page.getByLabel("Reason").fill("Browser smoke service usage");
   await page.getByRole("button", { name: "Save Action" }).click();
   await page.getByRole("heading", { name: "Stock Actions" }).waitFor();
-  const queuedCount = await page.locator(".work-queue-table tbody tr").count();
+  const queuedCount = await page.locator("[data-work-queue-card]").count();
   if (queuedCount !== 1) {
     throw new Error(`Expected one queued event after one append click, saw ${queuedCount}.`);
   }
-  await page.locator(".work-queue-table table").getByText("Use Stock", { exact: true }).waitFor();
-  await page.locator(".work-queue-table table").getByText("Juniper Gin").waitFor();
+  await page.locator(".work-queue-list").getByText("Use Stock", { exact: true }).waitFor();
+  await page.locator(".work-queue-list").getByText("Juniper Gin").waitFor();
   const sendWorkNavCount = await page.getByRole("button", { name: /Send Work/ }).count();
   if (sendWorkNavCount !== 0) {
     throw new Error(`Expected no Send Work navigation button, saw ${sendWorkNavCount}.`);
@@ -71,9 +70,9 @@ try {
   await page.getByRole("heading", { name: "History" }).waitFor();
   await page.getByRole("button", { name: "Prepare reverse record" }).first().click();
   await page.getByRole("heading", { name: "Stock Actions" }).waitFor();
-  await page.locator("[data-select-trigger='type']").getByText("Reverse a Record", { exact: true }).waitFor();
+  await page.locator(".action-type-tab.is-active").getByText("Reverse", { exact: true }).waitFor();
   await page.getByText("Reversal Amount", { exact: true }).waitFor();
-  const queuedAfterPrepare = await page.locator(".work-queue-table tbody tr").count();
+  const queuedAfterPrepare = await page.locator("[data-work-queue-card]").count();
   if (queuedAfterPrepare !== 1) {
     throw new Error(`Preparing a reverse record should not queue work immediately; saw ${queuedAfterPrepare} rows.`);
   }
@@ -87,19 +86,19 @@ try {
 
   await page.locator(".nav-item[data-view='compose']").click();
   await page.getByRole("heading", { name: "Stock Actions" }).waitFor();
-  await chooseAction("Enroll Product");
+  await chooseAction("Enroll");
   await page.getByLabel("Product Name").fill("Smoke Bitters");
   await page.getByLabel("Category").fill("Bar");
   await page.getByLabel("Unit").fill("bottle");
   await saveActionByDomClick();
-  await page.locator(".work-queue-table table").getByText("Enroll Product", { exact: true }).waitFor();
+  await page.locator(".work-queue-list").getByText("Enroll Product", { exact: true }).waitFor();
 
-  await chooseAction("Suspend Product");
+  await chooseAction("Suspend");
   await chooseProduct("Tonic Water");
   page.once("dialog", async (dialog) => dialog.accept());
   await saveActionByDomClick();
-  await page.locator(".work-queue-table table").getByText("Suspend Product", { exact: true }).waitFor();
-  await page.locator(".work-queue-table table").getByText("Grouped work: 3 events", { exact: true }).waitFor();
+  await page.locator(".work-queue-list").getByText("Suspend Product", { exact: true }).waitFor();
+  await page.locator(".work-queue-list").getByText("Grouped work: 3 events", { exact: true }).waitFor();
 
   await page.locator("[data-action='toggle-account']").click();
   await page.getByRole("button", { name: "Offline" }).click();
