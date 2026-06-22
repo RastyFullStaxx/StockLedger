@@ -4,7 +4,6 @@ import {
   createInventoryEvent,
   replayAuditTrail,
   sortEvents,
-  summarizeStock,
   validateEvent,
 } from "./domain/ledger.mjs";
 import {
@@ -50,6 +49,20 @@ import {
   normalizeSelectedProductIds,
   saveState as persistState,
 } from "./state/local-state.mjs";
+import {
+  allLocalEvents as selectAllLocalEvents,
+  currentBatchId as selectCurrentBatchId,
+  filteredStockRows as selectFilteredStockRows,
+  locationStockRows as selectLocationStockRows,
+  nextId,
+  nextSequence as selectNextSequence,
+  paginateRows,
+  simpleValidationReason,
+  stockStatus,
+  stockTotalRows as selectStockTotalRows,
+  withWorkItem,
+} from "./inventory/selectors.mjs";
+import { answerAssistantQuestion as answerAssistantQuestionFromContext } from "./assistant/assistant-engine.mjs";
 
 import "./styles.css";
 
@@ -477,372 +490,30 @@ function submitAssistantQuestion(rawQuestion) {
 }
 
 function answerAssistantQuestion(question) {
-  const normalized = normalizeAssistantText(question);
-  const meta = screenMeta[state.activeView] ?? screenMeta.dashboard;
-  const smallTalk = assistantSmallTalkAnswer(normalized, meta);
-
-  if (smallTalk) return smallTalk;
-
-  if (matchesAny(normalized, ["what should i do", "what next", "next step", "help me", "guide me", "where should i start"])) {
-    return {
-      text: `On ${meta.title}, I would start with the highest-signal work: ${guideTips().slice(0, 3).join(" ")} If you are unsure, check notifications first, then use the action button that matches the work you are actually doing.`,
-      actions: [
-        ...pageAssistantActions(state.activeView).slice(0, 2),
-        { label: "Notifications", view: state.activeView },
-      ],
-    };
-  }
-
-  if (matchesAny(normalized, ["what is this page", "current page", "this page for", "where am i", "about this page"])) {
-    const tips = guideTips().slice(0, 4).map((tip) => `- ${tip}`).join("\n");
-    return {
-      text: `${meta.title} is for ${meta.guide.toLowerCase()}\n\nWhat to do here:\n${tips}`,
-      actions: pageAssistantActions(state.activeView),
-    };
-  }
-
-  if (matchesAny(normalized, ["notification", "attention", "urgent", "need review", "needs attention", "problem", "warning"])) {
-    return assistantNotificationAnswer();
-  }
-
-  if (matchesAny(normalized, ["how many stock", "how much stock", "stock count", "total stock", "inventory count", "on hand", "available"])) {
-    return assistantStockAnswer(question);
-  }
-
-  if (matchesAny(normalized, ["low stock", "restock", "below", "zero", "negative"])) {
-    return assistantLowStockAnswer();
-  }
-
-  if (matchesAny(normalized, ["work to send", "saved work", "outbox", "send work", "pending", "queue", "sync"])) {
-    return assistantOutboxAnswer();
-  }
-
-  if (matchesAny(normalized, ["undo", "reverse", "mistake", "revert"])) {
-    return {
-      text: "Use Undo Record when a previous stock movement needs a compensating event. StockLedger does not delete or rewrite history; it creates a STOCK_REVERT that references the original event. Open Audit Trail, pick an eligible movement, then prepare the undo record.",
-      actions: [
-        { label: "Open Audit Trail", view: "audit" },
-        { label: "Open Stock Actions", view: "compose" },
-      ],
-    };
-  }
-
-  if (matchesAny(normalized, ["event sourced", "event-sourced", "ledger", "history", "audit", "immutable"])) {
-    return {
-      text: "StockLedger is an event-sourced inventory ledger. Stock is not edited directly. Each action creates an immutable event, and stock numbers come from replaying STOCK_IN, STOCK_OUT, STOCK_TRANSFER, STOCK_ADJUSTMENT, STOCK_REVERT, and product lifecycle events. If something is wrong, record a correction or undo record instead of changing history.",
-      actions: [{ label: "Open Audit Trail", view: "audit" }],
-    };
-  }
-
-  if (matchesAny(normalized, ["sale", "sell", "customer", "client"])) {
-    return {
-      text: "Sales can create stock usage when fulfilled. Draft sale records do not move stock. A fulfilled direct stock sale queues STOCK_OUT work, while a menu sale creates grouped STOCK_OUT events from the recipe lines.",
-      actions: [
-        { label: "Open Sales", view: "sales" },
-        { label: "Open Stock Actions", view: "compose" },
-      ],
-    };
-  }
-
-  if (matchesAny(normalized, ["purchase", "supplier", "receive", "stock in", "delivery"])) {
-    return {
-      text: "Purchases are optional receiving records linked to Stock In. Use Purchases when supplier context matters. Use Stock Actions > Stock In when stock arrived without a formal purchase record.",
-      actions: [
-        { label: "Open Purchases", view: "purchases" },
-        { label: "Open Stock Actions", view: "compose" },
-      ],
-    };
-  }
-
-  if (isLikelyOutOfScopeQuestion(normalized)) {
-    return assistantOutOfScopeAnswer();
-  }
-
-  const matches = retrieveAssistantKnowledge(question).slice(0, 3);
-  if (matches.length > 0) {
-    return {
-      text: `Here is what I found:\n\n${matches.map((entry) => `- ${entry.title}: ${entry.body}`).join("\n")}`,
-      actions: assistantActionsFromKnowledge(matches),
-    };
-  }
-
-  return {
-    ...assistantOutOfScopeAnswer(),
-  };
-}
-
-function assistantOutOfScopeAnswer() {
-  return {
-    text: "I’m built for StockLedger, so I will not guess at general-world questions from inside this local system. I can still help right here with stock on hand, low stock, saved work, page purpose, actions, audit behavior, products, locations, sales, purchases, users, reports, and settings. Try asking “What needs attention?”, “How many stocks do we have?”, or “What should I do next?”",
-    actions: [
-      { label: "Open Stock Overview", view: "dashboard" },
-      { label: "Open Stock Actions", view: "compose" },
-    ],
-  };
-}
-
-function assistantSmallTalkAnswer(normalized, meta) {
-  if (!normalized) {
-    return {
-      text: `I’m here. Ask me about ${meta.title}, saved work, stock counts, audit history, sales, purchases, or what needs attention.`,
-      actions: pageAssistantActions(state.activeView),
-    };
-  }
-
-  if (matchesAny(normalized, ["hello", "hi", "hey", "good morning", "good afternoon", "good evening"])) {
-    return {
-      text: `Hi. I’m your StockLedger assistant for this session. On ${meta.title}, I can explain what the page is for, point out what needs attention, and help you choose the right stock action without exposing private details unnecessarily.`,
-      actions: pageAssistantActions(state.activeView),
-    };
-  }
-
-  if (matchesAny(normalized, ["thank", "thanks", "appreciate"])) {
-    return {
-      text: "You’re welcome. I’ll stay focused on the ledger and keep the answers practical.",
-      actions: pageAssistantActions(state.activeView).slice(0, 2),
-    };
-  }
-
-  if (matchesAny(normalized, ["who are you", "what can you do", "what can i ask"])) {
-    return {
-      text: "I’m a local StockLedger support bot. I answer from this session’s screens, seeded demo data, saved work, and the event-sourced rules: stock is replayed from immutable events, corrections create new events, and private operational details stay tucked away unless they are useful.",
-      actions: [
-        { label: "Current Page", view: state.activeView },
-        { label: "Stock Overview", view: "dashboard" },
-        { label: "Stock Actions", view: "compose" },
-      ],
-    };
-  }
-
-  return null;
-}
-
-function assistantNotificationAnswer() {
-  const notifications = guideNotifications();
-  return {
-    text: notifications.map((item) => `- ${item.title}: ${item.text}`).join("\n"),
-    actions: notifications.some((item) => item.tone === "error" || item.tone === "warning")
-      ? [{ label: "Open Stock Overview", view: "dashboard" }]
-      : [{ label: "Open Stock Actions", view: "compose" }],
-  };
-}
-
-function assistantStockAnswer(question) {
-  const rows = filteredStockRows(allLocalEvents());
-  const totals = stockTotalRows(rows).filter((row) => Number(row.quantity) !== 0);
-  const product = findMentionedProduct(question);
-
-  if (product) {
-    const productRows = rows.filter((row) => row.product_id === product.id);
-    const total = productRows.reduce((sum, row) => sum + Number(row.quantity), 0);
-    const places = productRows.length
-      ? productRows.map((row) => `${row.location}: ${formatQuantity(row.quantity)} ${product.unit}`).join("\n")
-      : "No replayed stock at any location.";
-    return {
-      text: `${product.name} has ${formatQuantity(total)} ${product.unit} on hand.\n${places}`,
-      actions: [{ label: "Open Stock Overview", view: "dashboard" }],
-    };
-  }
-
-  const totalLines = totals
-    .sort((first, second) => first.product_name.localeCompare(second.product_name))
-    .map((row) => `- ${row.product_name}: ${formatQuantity(row.quantity)} ${productUnit(row.product_id)} across ${row.location_count} location${row.location_count === 1 ? "" : "s"}`)
-    .join("\n");
-  const totalUnits = totals.reduce((sum, row) => sum + Number(row.quantity), 0);
-
-  return {
-    text: `There are ${totals.length} products with replayed stock and ${formatQuantity(totalUnits)} total counted units across products.\n${totalLines}`,
-    actions: [{ label: "Open Stock Overview", view: "dashboard" }],
-  };
-}
-
-function assistantLowStockAnswer() {
-  const rows = filteredStockRows(allLocalEvents());
-  const lowRows = rows.filter((row) => row.quantity >= 0 && row.quantity <= productLow(row.product_id));
-  const negativeRows = rows.filter((row) => row.quantity < 0);
-  const lines = [...negativeRows, ...lowRows]
-    .slice(0, 8)
-    .map((row) => `- ${row.product_name} at ${row.location}: ${formatQuantity(row.quantity)} ${productUnit(row.product_id)} (${row.quantity < 0 ? "below zero" : "low stock"})`)
-    .join("\n");
-
-  return {
-    text: lines || "No low-stock or below-zero rows are showing in the current replay.",
-    actions: [
-      { label: "Open Stock Overview", view: "dashboard" },
-      { label: "Stock In", view: "compose" },
-    ],
-  };
-}
-
-function assistantOutboxAnswer() {
-  const validations = state.outbox.map((event) => validateEvent(event));
-  const invalid = validations.filter((result) => !result.valid);
-  const workItems = workQueueItems(state.outbox.map((event, index) => ({ event, validation: validations[index] })));
-  const lines = workItems.slice(0, 6).map((item) => `- ${item.label}: ${item.product_name}, ${item.location}, ${item.amount}`).join("\n");
-
-  return {
-    text: `${state.outbox.length} event${state.outbox.length === 1 ? "" : "s"} are saved locally in ${workItems.length} work item${workItems.length === 1 ? "" : "s"}. ${invalid.length ? `${invalid.length} item${invalid.length === 1 ? "" : "s"} need validation.` : "Everything queued is ready."}\n${lines || "No work is waiting to send."}`,
-    actions: [{ label: "Open Stock Actions", view: "compose" }],
-  };
-}
-
-function retrieveAssistantKnowledge(question) {
-  const queryTokens = assistantTokens(question);
-  if (!queryTokens.length) return [];
-
-  return assistantKnowledgeBase()
-    .map((entry) => {
-      const haystack = assistantTokens(`${entry.title} ${entry.body} ${entry.keywords ?? ""}`);
-      const score = queryTokens.reduce((total, token) => total + (haystack.includes(token) ? 1 : 0), 0);
-      return { ...entry, score };
-    })
-    .filter((entry) => entry.score > 0)
-    .sort((first, second) => second.score - first.score || first.title.localeCompare(second.title));
-}
-
-function assistantKnowledgeBase() {
-  const rows = filteredStockRows(allLocalEvents());
-  const stockEntries = stockTotalRows(rows).map((row) => ({
-    title: `${row.product_name} stock`,
-    body: `${formatQuantity(row.quantity)} ${productUnit(row.product_id)} on hand across ${row.location_count} location${row.location_count === 1 ? "" : "s"}. Low threshold is ${formatQuantity(productLow(row.product_id))}.`,
-    view: "dashboard",
-    keywords: "stock inventory count quantity on hand product",
-  }));
-  const pageEntries = Object.entries(screenMeta).map(([view, meta]) => ({
-    title: meta.title,
-    body: meta.guide,
-    view,
-    keywords: `${meta.label} page screen tab ${guideTipsForView(view).join(" ")}`,
-  }));
-  const actionEntries = Object.entries(ACTION_TEMPLATES).map(([type, template]) => ({
-    title: eventLabels[type] ?? type,
-    body: `${template.summary} ${template.help ?? ""}`,
-    view: "compose",
-    keywords: `${type} action stock work queue`,
-  }));
-  const locationEntries = getLocations().map((location) => ({
-    title: `${location.name} location`,
-    body: `${location.kind} location owned by ${location.owner}. Status: ${location.status}.`,
-    view: "locations",
-    keywords: "location place storage service prep cellar bar kitchen",
-  }));
-  const menuEntries = DEFAULT_MENU_ITEMS.map((item) => ({
-    title: item.name,
-    body: `Menu item for ${getMenuById(item.menu_id)?.name ?? "menu"} deducts ${item.recipe.map((line) => `${formatQuantity(line.quantity)} ${productUnit(line.product_id)} ${productName(line.product_id)}`).join(", ")} when fulfilled.`,
-    view: "menus",
-    keywords: "menu recipe sale fulfillment stock out",
-  }));
-
-  return [
-    ...pageEntries,
-    ...actionEntries,
-    ...stockEntries,
-    ...locationEntries,
-    ...menuEntries,
-    { title: "Event-sourced ledger", body: "Stock is derived from immutable event replay. Use corrections and undo records instead of editing history.", view: "audit", keywords: "ledger immutable audit history event source replay" },
-    { title: "Session-only chat", body: "Assistant chat history is held in memory for this browser session and is excluded from localStorage persistence.", view: state.activeView, keywords: "privacy chat session history storage local" },
-    { title: "Privacy", body: "Private contact details, supplier terms, and staff notes should stay hidden unless the role and audit path require them.", view: "users", keywords: "privacy pii private sensitive tenant user supplier client" },
-  ];
-}
-
-function guideTipsForView(view) {
-  const currentView = state.activeView;
-  state.activeView = view;
-  const tips = guideTips();
-  state.activeView = currentView;
-  return tips;
-}
-
-function assistantActionsFromKnowledge(matches) {
-  const seen = new Set();
-  return matches
-    .map((entry) => entry.view)
-    .filter(Boolean)
-    .filter((view) => {
-      if (seen.has(view)) return false;
-      seen.add(view);
-      return true;
-    })
-    .slice(0, 3)
-    .map((view) => ({ label: `Open ${(screenMeta[view] ?? screenMeta.dashboard).title}`, view }));
-}
-
-function pageAssistantActions(view) {
-  if (view === "compose") return [{ label: "Open Stock Overview", view: "dashboard" }];
-  if (view === "dashboard") return [{ label: "Open Stock Actions", view: "compose" }];
-  if (view === "audit") return [{ label: "Open Stock Actions", view: "compose" }];
-  return [{ label: "Open Stock Actions", view: "compose" }, { label: "Open Audit Trail", view: "audit" }];
-}
-
-function findMentionedProduct(question) {
-  const normalized = normalizeAssistantText(question);
-  return getProductCatalog().find((product) => normalizeAssistantText(product.name).split(" ").every((part) => normalized.includes(part)));
-}
-
-function normalizeAssistantText(value) {
-  return `${value ?? ""}`.toLowerCase().replace(/[^a-z0-9\s-]/g, " ").replace(/\s+/g, " ").trim();
-}
-
-function assistantTokens(value) {
-  const stop = new Set(["the", "a", "an", "is", "are", "to", "for", "of", "and", "or", "we", "do", "have", "what", "this", "that", "how", "many", "much", "who", "won", "did", "was", "were", "when", "where", "why"]);
-  return normalizeAssistantText(value).split(" ").filter((token) => token.length > 2 && !stop.has(token));
-}
-
-function matchesAny(value, phrases) {
-  return phrases.some((phrase) => value.includes(phrase));
-}
-
-function isLikelyOutOfScopeQuestion(normalized) {
-  if (!normalized) return false;
-  const stockledgerWords = [
-    "stock",
-    "inventory",
-    "ledger",
-    "audit",
-    "product",
-    "location",
-    "sale",
-    "purchase",
-    "supplier",
-    "client",
-    "menu",
-    "report",
-    "user",
-    "role",
-    "sync",
-    "outbox",
-    "queue",
-    "undo",
-    "reverse",
-    "event",
-    "batch",
-    "low",
-    "restock",
-    "count",
-    "settings",
-    "page",
-    "screen",
-  ];
-  if (stockledgerWords.some((word) => normalized.includes(word))) return false;
-
-  return matchesAny(normalized, [
-    "basketball",
-    "football",
-    "baseball",
-    "nba",
-    "nfl",
-    "weather",
-    "news",
-    "recipe",
-    "movie",
-    "song",
-    "politics",
-    "president",
-    "stock market",
-    "crypto",
-    "who won",
-    "tell me a joke",
-  ]);
+  return answerAssistantQuestionFromContext(question, {
+    activeView: state.activeView,
+    screenMeta,
+    actionTemplates: ACTION_TEMPLATES,
+    eventLabels,
+    guideTipsForView,
+    notifications: guideNotifications,
+    stockRows: () => filteredStockRows(allLocalEvents()),
+    stockTotals: (rows) => stockTotalRows(rows),
+    products: getProductCatalog(),
+    locations: getLocations(),
+    menuItems: DEFAULT_MENU_ITEMS,
+    menus: DEFAULT_MENUS,
+    productUnit,
+    productLow,
+    productName,
+    outbox: state.outbox,
+    workItems: () => {
+      const validations = state.outbox.map((event) => validateEvent(event));
+      return workQueueItems(state.outbox.map((event, index) => ({ event, validation: validations[index] })));
+    },
+    validations: () => state.outbox.map((event) => validateEvent(event)),
+    formatQuantity,
+  });
 }
 
 function renderToast() {
@@ -874,6 +545,14 @@ function guideTips() {
   };
 
   return tips[state.activeView] ?? tips.dashboard;
+}
+
+function guideTipsForView(view) {
+  const currentView = state.activeView;
+  state.activeView = view;
+  const tips = guideTips();
+  state.activeView = currentView;
+  return tips;
 }
 
 function renderStatusRail(localLedger, stockRows, outboxValidation) {
@@ -6143,55 +5822,30 @@ function normalizeFormForType({ resetTemplateDefaults = false } = {}) {
 }
 
 function allLocalEvents() {
-  return sortEvents([...state.serverLedger, ...state.outbox]);
+  return selectAllLocalEvents(state);
 }
 
 function filteredStockRows(events) {
-  const searchTerm = String(state.stockSearch || "").trim().toLowerCase();
-
-  return summarizeStock(events, getProductCatalog(), getLocations()).filter((row) => {
-    const productMatch = state.productFilter === "all" || row.product_id === state.productFilter;
-    const locationMatch = state.locationFilter === "all" || row.location === state.locationFilter;
-    const productName = String(row.product_name || "").toLowerCase();
-    const productId = String(row.product_id || "").toLowerCase();
-    const locationName = String(row.location || "").toLowerCase();
-    const searchMatch = !searchTerm || productName.includes(searchTerm) || productId.includes(searchTerm) || locationName.includes(searchTerm);
-
-    return productMatch && locationMatch && searchMatch;
+  return selectFilteredStockRows(events, {
+    products: getProductCatalog(),
+    locations: getLocations(),
+    productFilter: state.productFilter,
+    locationFilter: state.locationFilter,
+    stockSearch: state.stockSearch,
   });
 }
 
 function stockTotalRows(rows) {
-  return getProductCatalog().map((product) => {
-    const productRows = rows.filter((row) => row.product_id === product.id);
-    return {
-      product_id: product.id,
-      product_name: product.name,
-      quantity: productRows.reduce((total, row) => total + Number(row.quantity), 0),
-      location_count: productRows.filter((row) => Number(row.quantity) > 0).length,
-    };
-  });
+  return selectStockTotalRows(rows, getProductCatalog());
 }
 
 function locationStockRows(rows) {
-  return rows.filter((row) => row.location === state.selectedLocation);
+  return selectLocationStockRows(rows, state.selectedLocation);
 }
 
 function stockState(row) {
-  if (row.quantity < 0) return `<span class="badge is-error">Check Now</span>`;
-  if (row.quantity <= productLow(row.product_id)) return `<span class="badge is-warning">Low Stock</span>`;
-  return `<span class="badge is-valid">Enough</span>`;
-}
-
-const TABLE_PAGE_SIZE = 10;
-
-function paginateRows(rows, page) {
-  const total = rows.length;
-  const totalPages = Math.max(1, Math.ceil(total / TABLE_PAGE_SIZE));
-  const safePage = Math.min(Math.max(1, Number(page) || 1), totalPages);
-  const start = (safePage - 1) * TABLE_PAGE_SIZE;
-  const pageRows = rows.slice(start, start + TABLE_PAGE_SIZE);
-  return { pageRows, page: safePage, totalPages, total };
+  const status = stockStatus(row, productLow(row.product_id));
+  return `<span class="badge is-${status.tone}">${status.label}</span>`;
 }
 
 function renderTablePagination(scope, pagination, shownCount) {
@@ -6208,37 +5862,12 @@ function renderTablePagination(scope, pagination, shownCount) {
   `;
 }
 
-function simpleValidationReason(reason) {
-  const messages = [
-    ["STOCK_IN requires to_location", "Choose where the stock arrived."],
-    ["STOCK_OUT requires from_location", "Choose where the stock left from."],
-    ["STOCK_TRANSFER requires both", "Choose the starting place and ending place."],
-    ["different source and destination", "Choose two different locations."],
-    ["STOCK_REVERT requires original_event_id", "Choose the original movement to undo."],
-    ["quantity must be a non-zero number", "Enter an amount greater than zero."],
-    ["quantity must be positive", "Use a positive amount for this action."],
-  ];
-
-  return messages.find(([match]) => reason.includes(match))?.[1] ?? reason;
-}
-
 function currentBatchId() {
-  return state.outbox[0]?.sync_batch_id ?? `batch-${new Date().toISOString().slice(0, 10)}-${nextSequence()}`;
+  return selectCurrentBatchId(state, allLocalEvents());
 }
 
 function nextSequence() {
-  return allLocalEvents().reduce((max, event) => Math.max(max, Number(event.sequence_number)), 0) + 1;
-}
-
-function nextId(prefix) {
-  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function withWorkItem(event, workItemId) {
-  return {
-    ...event,
-    work_item_id: workItemId,
-  };
+  return selectNextSequence(allLocalEvents());
 }
 
 function showToast(message, type = "success") {
