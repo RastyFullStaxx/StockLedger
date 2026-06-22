@@ -41,6 +41,15 @@ async function saveActionByDomClick() {
   await page.locator("[data-action='append-event']").evaluate((button) => button.click());
 }
 
+async function setProductAmount(productId, amount) {
+  await page.locator(`input[name="quantity_${productId}"]`).evaluate((input, nextValue) => {
+    input.value = nextValue;
+    input.setAttribute("value", nextValue);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  }, String(amount));
+}
+
 try {
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -53,6 +62,33 @@ try {
   await page.reload({ waitUntil: "networkidle" });
 
   await page.getByRole("heading", { name: "StockLedger" }).waitFor();
+  await page.getByRole("button", { name: /Assistant/ }).click();
+  await page.getByRole("dialog", { name: "StockLedger Assistant" }).waitFor();
+  const assistantBounds = await page.locator(".guide-menu").boundingBox();
+  const viewport = page.viewportSize();
+  if (!assistantBounds || !viewport) {
+    throw new Error("Expected assistant menu to have visible bounds.");
+  }
+  if (
+    assistantBounds.x < 0 ||
+    assistantBounds.y < 0 ||
+    assistantBounds.x + assistantBounds.width > viewport.width ||
+    assistantBounds.y + assistantBounds.height > viewport.height
+  ) {
+    throw new Error(`Assistant menu is clipped: ${JSON.stringify(assistantBounds)} in ${JSON.stringify(viewport)}.`);
+  }
+  await page.getByText("Hi. I can help with StockLedger from the current screen.").waitFor();
+  await page.getByLabel("Ask about StockLedger").fill("How many stocks do we have?");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await page.locator(".assistant-message").filter({ hasText: "products with replayed stock" }).waitFor();
+  const persistedAssistantChat = await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem("stockledger-local-prototype-state-v1") || "{}");
+    return Boolean(saved.assistantMessages || saved.assistantInput || saved.guideOpen);
+  });
+  if (persistedAssistantChat) {
+    throw new Error("Assistant chat state should stay session-only and out of localStorage.");
+  }
+  await page.getByRole("button", { name: "Close Assistant" }).click();
   for (const [view, heading] of [
     ["sales", "Sales"],
     ["purchases", "Purchases"],
@@ -88,6 +124,9 @@ try {
   await page.getByText("Fulfillment Rule", { exact: true }).waitFor();
   await page.locator(".nav-item[data-view='locations']").click();
   await page.getByRole("button", { name: "Add Location", exact: true }).waitFor();
+  await page.getByLabel("Search locations").fill("Cellar");
+  await page.locator("[data-location-row]").filter({ hasText: "Cellar" }).waitFor();
+  await page.getByLabel("Search locations").fill("");
   await page.getByRole("button", { name: "Add Location", exact: true }).click();
   await page.getByRole("dialog", { name: "Add Location" }).waitFor();
   await page.getByLabel("Location Name").fill("Smoke Patio");
@@ -105,6 +144,8 @@ try {
   await page.locator("[data-user-row]").filter({ hasText: "Mara V." }).click();
   await page.getByText("Private staff details", { exact: true }).first().waitFor();
   await page.locator(".nav-item[data-view='settings']").click();
+  await page.getByText("Default Location", { exact: true }).waitFor();
+  await page.getByText("SALE-2026-00042", { exact: true }).waitFor();
   await page.getByRole("heading", { name: "CI Lanes", exact: true }).waitFor();
   await page.getByText("npm run verify:ui", { exact: true }).waitFor();
   await page.getByText("Pipeline Strategy", { exact: true }).waitFor();
@@ -206,28 +247,74 @@ try {
   await page.locator(".work-queue-list").getByText("Suspend Product", { exact: true }).waitFor();
   await page.locator(".work-queue-list").getByText("Grouped work: 3 events", { exact: true }).waitFor();
 
-  await page.locator(".nav-item[data-view='menus']").click();
-  await page.locator("[data-menu-row]").filter({ hasText: "Event Service Menu" }).click();
-  await page.getByRole("button", { name: "Fulfill Sale", exact: true }).click();
+  await page.locator(".nav-item[data-view='sales']").click();
   await page.getByRole("heading", { name: "Sales", exact: true }).waitFor();
-  await page.getByRole("button", { name: "Fulfill Sale", exact: true }).click();
-  await page.getByText("Sale fulfilled locally. 2 STOCK_OUT events are waiting to send.", { exact: true }).waitFor();
-  await page.locator("[data-sale-row]").filter({ hasText: "Sunfold Events" }).waitFor();
-  await page.locator("[data-sale-row]").filter({ hasText: "Harbor Rum Lime Service" }).waitFor();
-  await page.locator("[data-sale-row]").filter({ hasText: "Sunfold Events" }).click();
+  if (await page.getByRole("button", { name: "Fulfill Sale", exact: true }).count()) {
+    throw new Error("Sales tab should not fulfill stock directly; use Stock Actions with optional sale details.");
+  }
+
+  await page.locator(".nav-item[data-view='purchases']").click();
+  await page.getByRole("heading", { name: "Purchases", exact: true }).waitFor();
+  if (await page.getByRole("button", { name: "Receive Purchase", exact: true }).count()) {
+    throw new Error("Purchases tab should not receive stock directly; use Stock Actions with optional purchase details.");
+  }
+
+  await page.locator(".nav-item[data-view='compose']").click();
+  await page.getByRole("heading", { name: "Stock Actions" }).waitFor();
+  await chooseAction("Use Stock");
+  await chooseProduct("Juniper Gin");
+  await addProduct("Harbor Rum");
+  await setProductAmount("prod-gin", 2);
+  await setProductAmount("prod-rum", 3);
+  await page.getByLabel("Attach sale details").check();
+  await page.getByLabel("Sale Notes").fill("Event service use");
+  await saveActionByDomClick();
+  await page.getByText("Sale recorded locally. 2 STOCK_OUT events are waiting to send.", { exact: true }).waitFor();
+  await page.locator("[data-work-queue-card]").filter({ hasText: "Sale - Harbor Room - 2 products" }).first().waitFor();
+  const queuedSaleQuantities = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem("stockledger-local-prototype-state-v1") || "{}")
+      .outbox
+      .filter((event) => event.source_label === "Sale - Harbor Room - 2 products")
+      .map((event) => [event.product_name, Number(event.quantity)])
+      .sort(),
+  );
+  if (JSON.stringify(queuedSaleQuantities) !== JSON.stringify([["Harbor Rum", 3], ["Juniper Gin", 2]])) {
+    throw new Error(`Expected separate sale quantities per product, saw ${JSON.stringify(queuedSaleQuantities)}.`);
+  }
+
+  await chooseAction("Stock In");
+  await chooseProduct("Harbor Rum");
+  await addProduct("Fresh Lime");
+  await setProductAmount("prod-rum", 4);
+  await setProductAmount("prod-lime", 5);
+  await page.getByLabel("Attach purchase details").check();
+  await page.getByLabel("Receiving Notes").fill("Matched supplier delivery");
+  await saveActionByDomClick();
+  await page.getByText("Purchase recorded locally. 2 STOCK_IN events are waiting to send.", { exact: true }).waitFor();
+  await page.locator("[data-work-queue-card]").filter({ hasText: "Purchase - Coastal Spirits Supply - 2 products" }).first().waitFor();
+  const queuedPurchaseQuantities = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem("stockledger-local-prototype-state-v1") || "{}")
+      .outbox
+      .filter((event) => event.source_label === "Purchase - Coastal Spirits Supply - 2 products")
+      .map((event) => [event.product_name, Number(event.quantity)])
+      .sort(),
+  );
+  if (JSON.stringify(queuedPurchaseQuantities) !== JSON.stringify([["Fresh Lime", 5], ["Harbor Rum", 4]])) {
+    throw new Error(`Expected separate purchase quantities per product, saw ${JSON.stringify(queuedPurchaseQuantities)}.`);
+  }
+
+  await page.locator(".nav-item[data-view='sales']").click();
+  await page.getByRole("heading", { name: "Sales", exact: true }).waitFor();
+  await page.locator("[data-sale-row]").filter({ hasText: "Harbor Room" }).waitFor();
+  await page.locator("[data-sale-row]").filter({ hasText: "2 products" }).waitFor();
+  await page.locator("[data-sale-row]").filter({ hasText: "Harbor Room" }).click();
   await page.locator("[data-record-detail-panel]").getByText("Technical source", { exact: true }).waitFor();
 
   await page.locator(".nav-item[data-view='purchases']").click();
   await page.getByRole("heading", { name: "Purchases", exact: true }).waitFor();
-  await page.getByRole("button", { name: "Stock In Without Purchase", exact: true }).click();
-  await page.getByRole("heading", { name: "Stock Actions" }).waitFor();
-  await page.locator(".action-type-tab.is-active").getByText("Stock In", { exact: true }).waitFor();
-  await page.locator(".nav-item[data-view='purchases']").click();
-  await page.getByRole("heading", { name: "Purchases", exact: true }).waitFor();
-  await page.getByRole("button", { name: "Receive Purchase", exact: true }).click();
-  await page.getByText("Purchase received locally. STOCK_IN is waiting to send.", { exact: true }).waitFor();
   await page.getByLabel("Search purchases").fill("Coastal");
   await page.locator("[data-purchase-row]").filter({ hasText: "Coastal Spirits Supply" }).waitFor();
+  await page.locator("[data-purchase-row]").filter({ hasText: "2 products" }).waitFor();
   await page.getByLabel("Search purchases").fill("");
   await page.locator("[data-purchase-row]").filter({ hasText: "Coastal Spirits Supply" }).click();
   await page.locator("[data-record-detail-panel]").getByText("Technical source", { exact: true }).waitFor();
@@ -235,7 +322,7 @@ try {
   await page.locator(".nav-item[data-view='reports']").click();
   await page.getByRole("heading", { name: "Reports", exact: true }).waitFor();
   await page.getByText("Sales by Client", { exact: true }).waitFor();
-  await page.getByText("Sunfold Events", { exact: true }).waitFor();
+  await page.getByText("Harbor Room", { exact: true }).waitFor();
   await page.getByText("Receiving by Supplier", { exact: true }).waitFor();
   await page.getByText("Coastal Spirits Supply", { exact: true }).waitFor();
   await page.getByText("Export Boundary", { exact: true }).waitFor();
@@ -244,11 +331,16 @@ try {
   await page.getByRole("heading", { name: "Stock Actions" }).waitFor();
   const saleWorkCard = page
     .locator("[data-work-queue-card]")
-    .filter({ hasText: "Sale - Sunfold Events - Harbor Rum Lime Service" })
+    .filter({ hasText: "Sale - Harbor Room - 2 products" })
     .first();
   await saleWorkCard.waitFor();
   await saleWorkCard.getByText("Grouped work: 2 events", { exact: true }).waitFor();
-  await page.locator(".work-queue-list").getByText("Stock In", { exact: true }).waitFor();
+  const purchaseWorkCard = page
+    .locator("[data-work-queue-card]")
+    .filter({ hasText: "Purchase - Coastal Spirits Supply - 2 products" })
+    .first();
+  await purchaseWorkCard.waitFor();
+  await purchaseWorkCard.getByText("Grouped work: 2 events", { exact: true }).waitFor();
   const queuedAfterBusinessWork = await page.locator("[data-work-queue-card]").count();
   if (queuedAfterBusinessWork < 5) {
     throw new Error(`Expected stock, lifecycle, sale, and purchase work cards; saw ${queuedAfterBusinessWork}.`);
@@ -261,7 +353,7 @@ try {
   await page.getByText("No Work Waiting", { exact: true }).waitFor();
   await page.locator(".nav-item[data-view='audit']").click();
   await page.getByRole("heading", { name: "Audit Trail" }).waitFor();
-  await page.getByText("Sale - Sunfold Events - Harbor Rum Lime Service").first().waitFor();
+  await page.getByText("Sale - Harbor Room - 2 products").first().waitFor();
 
   if (errors.length > 0) {
     throw new Error(`Browser console errors:\n${errors.join("\n")}`);

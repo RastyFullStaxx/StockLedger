@@ -717,14 +717,14 @@ button.account-popover-toggle > .mini-toggle-track.is-on {
 }
 
 .guide-menu {
-  position: absolute;
-  top: calc(100% + 12px);
-  left: 0;
-  z-index: 20;
+  position: fixed;
+  top: 76px;
+  right: max(16px, env(safe-area-inset-right));
+  z-index: 80;
   display: grid;
   gap: 10px;
-  width: min(390px, calc(100vw - 32px));
-  max-height: min(76vh, 680px);
+  width: min(520px, calc(100vw - 32px));
+  max-height: min(760px, calc(100dvh - 96px));
   overflow: auto;
   padding: 16px;
   border: 1px solid var(--color-border-strong);
@@ -733,6 +733,10 @@ button.account-popover-toggle > .mini-toggle-track.is-on {
   box-shadow: var(--shadow-layered-popover);
   backdrop-filter: saturate(160%) blur(24px);
   animation: guide-pop var(--motion-speed-medium) ease-out;
+}
+
+.assistant-menu {
+  grid-template-rows: auto minmax(220px, 1fr) auto auto auto;
 }
 
 @keyframes guide-wiggle {
@@ -833,12 +837,132 @@ button.account-popover-toggle > .mini-toggle-track.is-on {
   background: rgba(244, 249, 247, 0.82);
 }
 
+.assistant-feed {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-height: 220px;
+  max-height: min(420px, calc(100dvh - 360px));
+  overflow-y: auto;
+  padding: 4px;
+  scrollbar-width: thin;
+}
+
+.assistant-message {
+  display: grid;
+  gap: 6px;
+  max-width: 92%;
+  padding: 11px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: rgba(248, 252, 250, 0.92);
+}
+
+.assistant-message.is-user {
+  justify-self: end;
+  background: var(--color-primary);
+  color: #ffffff;
+}
+
+.assistant-message.is-user span,
+.assistant-message.is-user p {
+  color: #ffffff;
+}
+
+.assistant-message span {
+  color: var(--color-primary);
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+.assistant-message p {
+  margin: 0;
+  color: var(--color-text);
+  line-height: 1.45;
+}
+
+.assistant-message-actions,
+.assistant-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.assistant-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+}
+
+.assistant-input-label {
+  display: grid;
+  gap: 6px;
+}
+
+.assistant-input-label span {
+  color: var(--color-primary);
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.assistant-input-label textarea {
+  min-height: 48px;
+  max-height: 120px;
+  resize: vertical;
+}
+
+.assistant-context {
+  border-top: 1px solid var(--color-border);
+  padding-top: 8px;
+}
+
+.assistant-context summary {
+  cursor: pointer;
+  color: var(--color-primary);
+  font-weight: 850;
+}
+
+.assistant-context p {
+  margin: 8px 0;
+}
+
 @keyframes guide-pop {
   from {
     transform: translateY(-6px) scale(0.98);
   }
   to {
     transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 700px) {
+  .guide-menu {
+    top: 72px;
+    right: 8px;
+    left: 8px;
+    width: auto;
+    max-height: calc(100dvh - 88px);
+    padding: 12px;
+  }
+
+  .assistant-feed {
+    max-height: calc(100dvh - 380px);
+  }
+
+  .assistant-message {
+    max-width: 100%;
+  }
+
+  .assistant-form {
+    grid-template-columns: 1fr;
+  }
+
+  .assistant-quick-actions .table-action,
+  .assistant-message-actions .table-action {
+    width: auto;
   }
 }
 
