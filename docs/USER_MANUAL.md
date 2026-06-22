@@ -68,7 +68,7 @@ The left sidebar is grouped by how people work.
 | --- | --- | --- |
 | Daily Work | `Home` | Quick start, recent activity, and shortcuts |
 | Daily Work | `Stock Overview` | Current calculated stock totals |
-| Daily Work | `Sales` | Fulfill client sales, recurring orders, and seasonal transactions |
+| Daily Work | `Sales` | Fulfill client sales, recurring orders, menu sales, and direct stock sales |
 | Daily Work | `Purchases` | Receive supplier deliveries and create stock-in work |
 | Daily Work | `Stock Actions` | Prepare manual stock work, product work, corrections, and send saved work |
 | Relationships | `Clients` | Customer records, default menus, order patterns, and hidden contact details |
@@ -138,7 +138,7 @@ Sales are order-first:
 The page includes:
 
 - client selection
-- sale type: one-time, recurring, or seasonal
+- sale type: one-time or recurring
 - menu-item or direct-stock mode
 - fulfillment location
 - quantity and notes
@@ -169,11 +169,13 @@ Use `Stock Actions` for manual stock work, product lifecycle work, corrections, 
 
 The left side is the action form. The right side is `Work to Send`.
 
-Choose the action type from the action tabs, fill in the required fields, write a reason, then click `Save Action`.
+Choose the action type from the action tabs, choose one or more products when the action supports it, fill in the required fields, write a reason, then click `Save Action`.
 
 Saved work stays in `Work to Send` until you send it.
 
 Important: saved work is sent as one batch. If one saved item has a validation problem, the whole batch is rejected so the history stays consistent.
+
+When several products are selected for the same stock action, StockLedger saves grouped work: one event per product, sharing the same action context.
 
 ## 10. Action Types
 
@@ -187,7 +189,7 @@ Example:
 12 cases of Tonic Water arrived at Dry Store.
 ```
 
-Choose the product, destination location, amount received, and reason.
+Choose one or more products, destination location, amount received, and reason.
 
 ### Use Stock
 
@@ -201,7 +203,7 @@ Examples:
 - wasted
 - broken
 
-Choose the product, source location, amount used, and reason.
+Choose one or more products, source location, amount used, and reason.
 
 ### Move Stock
 
@@ -213,7 +215,7 @@ Example:
 8 bottles of Juniper Gin moved from Dry Store to Main Bar.
 ```
 
-Choose:
+Choose one or more products, then choose:
 
 - `Move From`
 - `Move To`
@@ -226,11 +228,11 @@ The source and destination must be different.
 
 Use this when a hand count does not match the system count.
 
-Choose the product and count location. Enter the number you physically counted. StockLedger shows the current calculated count and creates the correction amount.
+Choose one or more products and the count location. Enter the number you physically counted. StockLedger shows the current calculated count and creates the correction amount for each selected product.
 
 This does not overwrite history. It adds a new correction movement.
 
-### Reverse
+### Undo Record
 
 Use this when one previous movement was wrong.
 
@@ -238,7 +240,7 @@ Choose the original movement. StockLedger creates a new reversing movement.
 
 The original record is not deleted.
 
-### Enroll
+### Enroll New Product
 
 Use this when a product should be added to the catalog.
 
@@ -246,19 +248,19 @@ Enter the product name, category, unit, low-stock threshold, and reason.
 
 After saving, the product appears locally and the enrollment waits in `Work to Send`.
 
-### Suspend
+### Suspend Product
 
 Use this when a product should stop appearing in normal stock actions.
 
 If the product still has stock, StockLedger prepares closure work so the remaining balance is closed through audit-visible records.
 
-Suspension work waits in `Work to Send` until it is sent.
+You can select more than one product. Suspension work waits in `Work to Send` until it is sent.
 
-### Reactivate
+### Reactivate Product
 
 Use this when a suspended product should be selectable again.
 
-Reactivation does not create stock movement. It only returns the product to active use.
+You can select more than one suspended product. Reactivation does not create stock movement. It only returns the product to active use.
 
 ## 11. Work to Send
 
@@ -339,7 +341,7 @@ Use `Fulfill Sale` from the detail panel when you want to start a sale using tha
 
 Use `Suppliers` for purchasing relationships and receiving follow-up.
 
-The Suppliers page uses a table-first layout. Click a supplier row to open full details on the right side of the table.
+The Suppliers page uses a table-first layout with status tabs, supplier search, and a product filter. Click a supplier row to open full details on the right side of the table.
 
 The table shows:
 
@@ -375,14 +377,15 @@ Use `Fulfill Sale` from the detail panel to open a sale already prepared with th
 
 Use `Products` to review the catalog.
 
-The screen has:
+The Products page uses one filtered catalog table. Use the status tabs, search, and category filter to narrow the list.
 
-- `Active Products`
-- `Inactive Products`
+The table shows:
+
 - product category
 - unit
 - low-stock threshold
 - lifecycle status
+- last lifecycle change
 
 Create, suspend, and reactivate products from `Stock Actions`. Product changes use the same queue and sync rules as stock movements.
 
@@ -390,7 +393,7 @@ Create, suspend, and reactivate products from `Stock Actions`. Product changes u
 
 Use `Locations` to review storage, service, and prep areas.
 
-The Locations page uses a filtered table. Click a location row to open replayed balances and recent activity on the right side of the table.
+The Locations page uses a filtered table. Click `Add Location` to register a new storage, service, prep, or delivery place for future stock movements. Click a location row to open replayed balances on the right side of the table.
 
 The table shows:
 
@@ -398,9 +401,9 @@ The table shows:
 - owner
 - status
 - stocked rows
-- review signals
+- review count
 
-The detail panel shows balances by product, recent activity, technical location details, and bottom actions for stock view or stock action.
+The detail panel shows balances by product, technical location details, and bottom actions for stock view or stock action. Detailed movement history belongs in `Audit Trail`.
 
 Location stock is still replayed from events. Locations do not store final stock totals directly.
 
@@ -408,14 +411,12 @@ Location stock is still replayed from events. Locations do not store final stock
 
 Use `Reports` when you need a decision-focused view instead of a raw event list.
 
-Reports currently show:
+Reports use compact summary tables for:
 
 - `Stock Health`
 - `Sales by Client`
 - `Receiving by Supplier`
 - `Stock Movement Mix`
-- `Recent Source Activity`
-- `Review Signals`
 - `Export Boundary`
 
 Reports avoid private contact details and supplier terms by default.
@@ -426,21 +427,18 @@ Before exporting final reports in production, the system should require role che
 
 Use `Audit Trail` when a stock number needs explaining.
 
-The audit view shows:
+The audit view uses a row-detail layout. The table shows:
 
 - action type
 - product
 - source document such as sale, purchase, menu sale, manual action, or correction
-- location
 - quantity change
-- new balance
-- person
-- device
-- reason
+
+Click a row to open full details on the right side. The detail panel shows location, new balance, source, actor, reason, device, batch, and idempotency details.
 
 Batch IDs and validation internals stay hidden in `Technical details`.
 
-If a movement was wrong, choose `Prepare reverse record` from the audit row. This opens `Stock Actions` with `Reverse` selected. Review the reversal and write a reason before saving it.
+If a movement was wrong, choose `Prepare undo record` from the detail panel. This opens `Stock Actions` with `Undo Record` selected. Review the reversal and write a reason before saving it.
 
 ## 21. Users & Roles
 
@@ -501,7 +499,7 @@ Do not delete history.
 
 Use one of these:
 
-- `Reverse` if one old movement was wrong.
+- `Undo Record` if one old movement was wrong.
 - `Correct Count` if the current stock does not match a hand count.
 - Remove the item from `Work to Send` if it has not been sent yet.
 
@@ -531,7 +529,7 @@ Use this simple order:
 | A batch is rejected | Review `Work to Send`, fix or remove the invalid item, then send again |
 | A product is missing from stock actions | Check `Products`; it may be inactive |
 | A stock number looks wrong | Open `Audit Trail` and review the movement history |
-| You entered the wrong movement | Use `Reverse` after sync, or remove it from `Work to Send` before sync |
+| You entered the wrong movement | Use `Undo Record` after sync, or remove it from `Work to Send` before sync |
 | A sale did not change stock | Confirm it was fulfilled, then check `Work to Send` |
 | A purchase did not change stock | Confirm it was received, then check `Work to Send` |
 | A client contact or supplier term is hidden | Open the matching details block only if your role needs it |
@@ -548,7 +546,7 @@ Use this simple order:
 | Batch | A group of saved work sent together |
 | Audit Trail | The history used to explain stock numbers |
 | Correction | A new movement that fixes a count difference |
-| Reverse | A new movement that cancels an earlier mistake |
+| Undo Record | A new movement that cancels an earlier mistake |
 | Sale | A client-facing business record that can create stock-out events when fulfilled |
 | Purchase | A supplier-facing business record that can create stock-in events when received |
 | Menu | A sellable client item or bundle mapped to stock-product recipe lines |

@@ -1,5 +1,6 @@
 .product-table-wrap {
-  overflow-x: hidden;
+  height: clamp(320px, calc(100dvh - 300px), 680px);
+  overflow: auto;
 }
 
 .product-status {

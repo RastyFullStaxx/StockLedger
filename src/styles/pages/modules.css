@@ -166,39 +166,70 @@
   margin-bottom: 10px;
 }
 
+.record-table-controls {
+  margin: 0 0 10px;
+}
+
 .record-filter-tabs {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-wrap: nowrap;
+  gap: 8px;
+  align-items: stretch;
+  width: fit-content;
+  max-width: 100%;
+  min-height: var(--stock-overview-control-height);
+  padding: 0;
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: rgba(244, 249, 247, 0.72);
+  scrollbar-width: thin;
 }
 
 .record-filter-tab {
-  min-height: 38px;
-  padding: 0 12px;
-  border: 1px solid var(--color-border-strong);
+  min-height: var(--stock-overview-control-height);
+  padding: 0 13px;
+  border: 1px solid transparent;
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.78);
-  box-shadow: var(--glass-inset);
+  background: transparent;
+  box-shadow: none;
   color: var(--color-text-muted);
-  font-weight: 780;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.record-filter-tab:hover {
+  border-color: var(--color-border-strong);
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--color-primary-strong);
+  box-shadow: var(--glass-inset);
 }
 
 .record-filter-tab.is-active {
   border-color: var(--color-primary-strong);
   background: var(--color-primary);
   color: #ffffff;
+  box-shadow: none;
 }
 
 .record-table-shell {
   overflow: auto;
-  max-height: calc(100dvh - 240px);
+  height: clamp(320px, calc(100dvh - 260px), 680px);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.68);
 }
 
+.report-table-shell {
+  height: clamp(210px, 28dvh, 320px);
+}
+
+.report-summary-table {
+  min-width: 520px;
+}
+
 .sales-record-panel .record-table-shell {
-  max-height: calc(100dvh - 300px);
+  height: clamp(300px, calc(100dvh - 330px), 620px);
 }
 
 .record-table {
@@ -531,6 +562,103 @@
   text-align: right;
 }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  background: rgba(8, 28, 24, 0.22);
+  backdrop-filter: blur(8px);
+}
+
+.modal-panel {
+  width: min(560px, 100%);
+  max-height: calc(100dvh - 44px);
+  overflow: auto;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: var(--shadow-panel);
+}
+
+.modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 18px 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.modal-header span {
+  display: block;
+  color: var(--color-primary);
+  font-size: 0.78rem;
+  font-weight: 840;
+  text-transform: uppercase;
+}
+
+.modal-header h2 {
+  margin: 3px 0 0;
+  font-size: 1.35rem;
+  line-height: 1.1;
+}
+
+.modal-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 16px 18px 18px;
+}
+
+.modal-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--color-primary-strong);
+  font-weight: 760;
+}
+
+.modal-form input,
+.modal-form select {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 700;
+}
+
+.modal-form input {
+  padding: 0 12px;
+}
+
+.modal-form .field-select-wrap {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.modal-note,
+.modal-actions {
+  grid-column: 1 / -1;
+}
+
+.modal-note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  font-weight: 680;
+}
+
+.modal-actions {
+  justify-content: flex-end;
+}
+
 .recipe-preview {
   display: grid;
   gap: 7px;
@@ -821,7 +949,8 @@
   .role-matrix-row dl,
   .device-trust-row dl,
   .record-workspace.has-detail,
-  .record-detail-list {
+  .record-detail-list,
+  .modal-form {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -839,7 +968,9 @@
   }
 
   .business-form-footer,
-  .business-form .form-field-span-2 {
+  .business-form .form-field-span-2,
+  .modal-note,
+  .modal-actions {
     grid-column: span 1;
   }
 
