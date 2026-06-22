@@ -38,8 +38,14 @@ This runs unit tests, builds the app, starts a temporary Vite dev server on an o
 For quick server-free checks:
 
 ```bash
-npm test
-npm run build
+npm run verify:quick
+npm run verify:build
+```
+
+For UI-only work, run the browser smoke without repeating unit tests and production build:
+
+```bash
+npm run verify:ui
 ```
 
 For debugging browser failures, keep the temporary server alive after a failed run:
@@ -55,7 +61,7 @@ npm run smoke:browser
 ```
 
 The unit tests cover replay, validation, atomic sync rejection, idempotency, and audit trail ordering.
-The browser smoke uses Playwright Chromium to load the local UI, create actions, verify Work to Send, and sync the batch.
+The browser smoke uses Playwright Chromium to load the local UI, check the expanded module navigation, create actions, verify Work to Send, and sync the batch.
 
 ## Browser Runtime Note
 

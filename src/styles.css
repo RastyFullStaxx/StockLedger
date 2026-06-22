@@ -14,6 +14,7 @@
 @import './styles/pages/home.css';
 @import './styles/pages/compose.css';
 @import './styles/pages/stock.css';
+@import './styles/pages/modules.css';
 @import './styles/pages/products.css';
 @import './styles/pages/outbox.css';
 @import './styles/pages/audit.css';

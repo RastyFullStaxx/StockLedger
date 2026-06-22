@@ -77,6 +77,7 @@ Repository and docs reviewed:
 - `docs/SYNC_ENGINE.md`
 - `docs/OFFLINE_ARCHITECTURE.md`
 - `docs/INVENTORY_LOGIC.md`
+- `docs/PRODUCT_EXPANSION_PLAN.md`
 - `.agents/skills/data-privacy-pii-guardian/SKILL.md`
 - `.agents/skills/design-taste-frontend/SKILL.md`
 - `.agents/skills/frontend-design/SKILL.md`
@@ -93,6 +94,7 @@ Verification run on 2026-06-13:
 - `[x]` Sync engine design covers outbox pattern, atomic batch, idempotency, retry, and ordering strategy.
 - `[x]` Offline architecture covers SQLite/IndexedDB, outbox queue, crash recovery, and consistency rules.
 - `[x]` Inventory logic covers stock equation, variance, shrinkage, transfer, negative stock, and point-in-time reconstruction.
+- `[~]` Product expansion planning now covers sales, purchases, clients, suppliers, menus, reports, users, audit trail, and CI gate strategy.
 - `[x]` All planned file paths in the tracker correspond to paths referenced in AGENTS.md.
 - `[!]` No implementation code exists to run build, lint, or typecheck against.
 - `[!]` No Prisma schema files exist in the `prisma/` directory.

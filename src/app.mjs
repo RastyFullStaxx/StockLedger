@@ -359,11 +359,41 @@ const screenMeta = {
     label: "Stock Overview",
     guide: "Start here. Check total stock first, then look at one location when you need detail.",
   },
+  sales: {
+    title: "Sales",
+    kicker: "Daily Work",
+    label: "Sales",
+    guide: "Create sales, track recurring and seasonal orders, and post stock deductions only when work is fulfilled.",
+  },
+  purchases: {
+    title: "Purchases",
+    kicker: "Daily Work",
+    label: "Purchases",
+    guide: "Plan supplier orders, receive deliveries, and post stock-in events from confirmed receiving work.",
+  },
   compose: {
     title: "Stock Actions",
     kicker: "Actions",
     label: "Stock Actions",
     guide: "Record stock work, product lifecycle work, and send the pending batch from one place.",
+  },
+  clients: {
+    title: "Clients",
+    kicker: "Relationships",
+    label: "Clients",
+    guide: "Manage customer profiles, order patterns, client menus, and activity without exposing private contact details unnecessarily.",
+  },
+  suppliers: {
+    title: "Suppliers",
+    kicker: "Relationships",
+    label: "Suppliers",
+    guide: "Track suppliers, purchase history, delivery expectations, and receiving variance.",
+  },
+  menus: {
+    title: "Menus",
+    kicker: "Relationships",
+    label: "Menus",
+    guide: "Map sellable client menu items to stock products so sales deduct inventory deterministically.",
   },
   products: {
     title: "Products",
@@ -371,11 +401,260 @@ const screenMeta = {
     label: "Products",
     guide: "Use this as a catalog view. Product changes are prepared in Stock Actions so they enter the same work queue.",
   },
+  locations: {
+    title: "Locations",
+    kicker: "Relationships",
+    label: "Locations",
+    guide: "Maintain stock places such as storage, bar, kitchen, cellar, and future delivery zones.",
+  },
+  reports: {
+    title: "Reports",
+    kicker: "Control",
+    label: "Reports",
+    guide: "Review stock, sales, purchases, clients, variance, and audit activity by decision group.",
+  },
   audit: {
-    title: "Audit",
+    title: "Audit Trail",
     kicker: "History",
-    label: "Audit",
+    label: "Audit Trail",
     guide: "Use this when a number looks wrong. It shows who recorded each change and how stock was affected.",
+  },
+  users: {
+    title: "Users & Roles",
+    kicker: "Control",
+    label: "Users & Roles",
+    guide: "Plan staff access, role assignment, device trust, and privacy-safe user administration.",
+  },
+  settings: {
+    title: "Settings",
+    kicker: "Control",
+    label: "Settings",
+    guide: "Configure site defaults, sync behavior, numbering, offline retention, and tenant-safe data handling.",
+  },
+};
+
+const navigationGroups = [
+  {
+    label: "Daily Work",
+    items: ["home", "dashboard", "sales", "purchases", "compose"],
+  },
+  {
+    label: "Relationships",
+    items: ["clients", "suppliers", "menus", "products", "locations"],
+  },
+  {
+    label: "Control",
+    items: ["reports", "audit", "users", "settings"],
+  },
+];
+
+const modulePageContent = {
+  sales: {
+    title: "Sales workspace",
+    summary: "Sales are client-facing records first. Stock only changes when the sale is fulfilled and posted.",
+    primaryAction: "Create Sale",
+    secondaryAction: "Review Recurring",
+    metrics: [
+      ["Due Today", "7"],
+      ["Recurring", "4"],
+      ["Seasonal", "2"],
+      ["To Fulfill", "5"],
+    ],
+    sections: [
+      ["New Sale", "Client, sale date, items, price notes, and fulfillment location."],
+      ["Recurring Orders", "Standing orders with frequency, next due date, and default menu items."],
+      ["Seasonal Transactions", "Date-ranged order templates for events, holidays, and limited menus."],
+      ["To Fulfill", "Approved sales waiting to post stock-out events."],
+      ["Sales History", "Completed sales linked to stock deductions and audit trail records."],
+    ],
+    workflow: [
+      "Draft sale does not affect stock.",
+      "Fulfillment posts one or more STOCK_OUT events.",
+      "Voids use compensating records and stock reversals.",
+    ],
+  },
+  purchases: {
+    title: "Purchasing and receiving",
+    summary: "Purchases separate what was ordered from what actually arrived, so stock-in happens from receiving.",
+    primaryAction: "Create Purchase",
+    secondaryAction: "Receive Stock",
+    metrics: [
+      ["Incoming", "3"],
+      ["Late", "1"],
+      ["Variance", "2"],
+      ["Suppliers", "6"],
+    ],
+    sections: [
+      ["New Purchase", "Supplier, expected date, requested items, quantities, and notes."],
+      ["Incoming Deliveries", "Open purchase orders and receiving schedule."],
+      ["Receive Stock", "Confirm actual quantities, destination location, and delivery condition."],
+      ["Supplier History", "Previous deliveries, short shipments, and reliability notes."],
+    ],
+    workflow: [
+      "Purchase order does not affect stock.",
+      "Receiving posts STOCK_IN events.",
+      "Short or damaged deliveries are recorded explicitly.",
+    ],
+  },
+  clients: {
+    title: "Client relationships",
+    summary: "Clients are customers or buyers. Their private contact data should be shown only when needed.",
+    primaryAction: "Add Client",
+    secondaryAction: "Open Client Menus",
+    metrics: [
+      ["Active", "24"],
+      ["Recurring", "8"],
+      ["Seasonal", "5"],
+      ["Needs Follow-up", "3"],
+    ],
+    sections: [
+      ["Client Profile", "Business name, delivery notes, and privacy-protected contact details."],
+      ["Default Menu", "Client-specific menu or price list used during sales entry."],
+      ["Recurring Orders", "Standing sales templates and next due dates."],
+      ["Seasonal Activity", "Event-based or date-ranged transactions."],
+      ["Sales History", "Past orders linked back to stock movements."],
+    ],
+    workflow: [
+      "Use opaque record IDs in URLs and logs.",
+      "Hide contact details unless the role needs them.",
+      "Audit exports and profile access.",
+    ],
+  },
+  suppliers: {
+    title: "Supplier management",
+    summary: "Suppliers explain where stock came from and how reliable deliveries are.",
+    primaryAction: "Add Supplier",
+    secondaryAction: "View Purchases",
+    metrics: [
+      ["Active", "9"],
+      ["Due This Week", "4"],
+      ["Late Deliveries", "1"],
+      ["Variance Cases", "2"],
+    ],
+    sections: [
+      ["Supplier Profile", "Business details, order notes, and preferred delivery days."],
+      ["Products Supplied", "Catalog links for products usually bought from this supplier."],
+      ["Purchase History", "Orders, receipts, short deliveries, and damaged goods."],
+      ["Reliability", "Delivery variance and timing indicators."],
+    ],
+    workflow: [
+      "Costs and supplier terms are business-sensitive.",
+      "Receiving remains the only purchase step that changes stock.",
+      "Supplier reports link to purchase and audit records.",
+    ],
+  },
+  menus: {
+    title: "Client menus and recipes",
+    summary: "Menus translate sellable items into deterministic stock deductions when sales are fulfilled.",
+    primaryAction: "Create Menu Item",
+    secondaryAction: "Preview Deductions",
+    metrics: [
+      ["Menu Items", "18"],
+      ["Client Menus", "6"],
+      ["Seasonal", "3"],
+      ["Draft Changes", "2"],
+    ],
+    sections: [
+      ["Menu Items", "Sellable items, bundles, or client-specific order lines."],
+      ["Recipe Mapping", "Which stock products and quantities each menu item deducts."],
+      ["Client Menus", "Default menus for recurring customers."],
+      ["Seasonal Menus", "Effective dates and limited-time item availability."],
+      ["Deduction Preview", "Test stock impact before publishing changes."],
+    ],
+    workflow: [
+      "Menu versions must be replayable.",
+      "Old sales use the menu version active at fulfillment time.",
+      "Menu setup does not change stock by itself.",
+    ],
+  },
+  locations: {
+    title: "Location setup",
+    summary: "Locations are event attributes, not stored stock buckets. They organize replay views.",
+    primaryAction: "Add Location",
+    secondaryAction: "Review Balances",
+    metrics: [
+      ["Active", String(locations.length)],
+      ["Storage", "2"],
+      ["Service", "1"],
+      ["Kitchen", "1"],
+    ],
+    sections: locations.map((location) => [location.name, "Available for stock movements, receiving, and location-level reports."]),
+    workflow: [
+      "Location changes should preserve historical event meaning.",
+      "Deactivate unused locations instead of rewriting old records.",
+      "Reports filter by location attributes during replay.",
+    ],
+  },
+  reports: {
+    title: "Detailed reports",
+    summary: "Reports are grouped by decisions: stock, movement, sales, purchases, clients, variance, and audit.",
+    primaryAction: "Build Report",
+    secondaryAction: "Export Summary",
+    metrics: [
+      ["Stock Reports", "4"],
+      ["Sales Reports", "5"],
+      ["Purchase Reports", "3"],
+      ["Audit Reports", "3"],
+    ],
+    sections: [
+      ["Stock", "Current stock, low stock, negative stock, and stock by location."],
+      ["Movement", "Stock in, out, transfer, adjustment, and reversal history."],
+      ["Sales", "Sales by client, item, period, recurring, and seasonal source."],
+      ["Purchases", "Received stock, supplier totals, and delivery variance."],
+      ["Variance", "Physical count differences, shrinkage, and corrections."],
+      ["Audit", "User actions, device actions, reversals, and sync batches."],
+    ],
+    workflow: [
+      "Filters should include date range, product, location, client, and supplier.",
+      "Every report row should link back to source records.",
+      "Exports must respect role and PII rules.",
+    ],
+  },
+  users: {
+    title: "Users, roles, and devices",
+    summary: "User administration needs role clarity, device trust, and audit-safe privacy controls.",
+    primaryAction: "Invite User",
+    secondaryAction: "Review Devices",
+    metrics: [
+      ["Users", "12"],
+      ["Managers", "3"],
+      ["Trusted Devices", "5"],
+      ["Pending Invites", "2"],
+    ],
+    sections: [
+      ["Users", "Staff accounts, status, and role assignment."],
+      ["Roles", "GLOBAL_ADMIN, CLIENT_ADMIN, MANAGER, STAFF, and AUDITOR."],
+      ["Device Trust", "Approved terminals, mobile devices, and offline sync access."],
+      ["Access History", "Sensitive access and export activity."],
+    ],
+    workflow: [
+      "Never expose user PII in logs or error text.",
+      "Device trust changes must be audited.",
+      "Role changes require manager or admin authority.",
+    ],
+  },
+  settings: {
+    title: "Tenant settings",
+    summary: "Settings collect site defaults without mixing them into daily work pages.",
+    primaryAction: "Review Defaults",
+    secondaryAction: "Sync Settings",
+    metrics: [
+      ["Site", "1"],
+      ["Devices", "5"],
+      ["Numbering", "3"],
+      ["Retention Rules", "2"],
+    ],
+    sections: [
+      ["Site Profile", "Tenant name, operating locations, and default work location."],
+      ["Sync", "Offline retention, retry behavior, and send-work defaults."],
+      ["Numbering", "Readable prefixes for sales, purchases, receiving, and adjustments."],
+      ["Privacy", "Local cache policy, export permissions, and data retention."],
+    ],
+    workflow: [
+      "Settings should not change historical events.",
+      "Tenant-level settings need audit records.",
+      "Offline cache policy must protect PII and business-sensitive data.",
+    ],
   },
 };
 
@@ -671,14 +950,6 @@ function restoreFocusSnapshot(app, snapshot) {
 }
 
 function renderSidebar() {
-  const navItems = [
-    ["home", screenMeta.home],
-    ["dashboard", screenMeta.dashboard],
-    ["products", screenMeta.products],
-    ["compose", screenMeta.compose],
-    ["audit", screenMeta.audit],
-  ];
-
   return `
     <aside class="sidebar" aria-label="Primary navigation">
       <div class="brand-lockup">
@@ -702,21 +973,18 @@ function renderSidebar() {
         }
       </div>
       <nav class="nav-list">
-        <div class="nav-group-items">
-          ${navItems
-            .map(
-              ([key, item]) => `
-                <button class="nav-item ${state.activeView === key ? "is-active" : ""}" data-view="${key}" type="button">
-                  ${icon(navIcon(key))}
-                  <span>
-                    <span class="nav-item-title">${item.label}</span>
-                  </span>
-                  ${key === "compose" && state.outbox.length ? `<strong>${state.outbox.length}</strong>` : ""}
-                </button>
-              `,
-            )
-            .join("")}
-        </div>
+        ${navigationGroups
+          .map(
+            (group) => `
+              <section class="nav-group" aria-label="${escapeAttr(group.label)}">
+                <span class="nav-group-title">${group.label}</span>
+                <div class="nav-group-items">
+                  ${group.items.map((key) => renderNavItem(key)).join("")}
+                </div>
+              </section>
+            `,
+          )
+          .join("")}
       </nav>
       <div class="sidebar-divider" role="separator"></div>
       <div class="account-menu">
@@ -743,6 +1011,20 @@ function renderSidebar() {
         }
       </div>
     </aside>
+  `;
+}
+
+function renderNavItem(key) {
+  const item = screenMeta[key] ?? screenMeta.dashboard;
+
+  return `
+    <button class="nav-item ${state.activeView === key ? "is-active" : ""}" data-view="${key}" type="button">
+      ${icon(navIcon(key))}
+      <span>
+        <span class="nav-item-title">${item.label}</span>
+      </span>
+      ${key === "compose" && state.outbox.length ? `<strong>${state.outbox.length}</strong>` : ""}
+    </button>
   `;
 }
 
@@ -874,7 +1156,16 @@ function guideTips() {
   const tips = {
     dashboard: ["Use Total Stock for the master count.", "Use By Location to check one store room, bar, or kitchen.", "Open Detailed List only when you need every product-location row."],
     compose: ["Choose the action in user terms.", "Record what happened, not the final stock number.", "For Correct Stock Count, enter what you counted — the system shows the current count and calculates the difference.", "Send pending work from the Work to Send panel."],
-    audit: ["Use History when a number needs explaining.", "Prepare a reverse record instead of deleting history.", "The original movement remains visible."],
+    sales: ["Draft sales do not change stock.", "Fulfillment posts stock-out events.", "Recurring and seasonal sales should start from templates."],
+    purchases: ["Purchase orders do not change stock.", "Receiving posts stock-in events.", "Short deliveries should become explicit variance records."],
+    clients: ["Clients are customers, not StockLedger tenants.", "Reveal contact details only when needed.", "Client menus and recurring orders belong here."],
+    suppliers: ["Supplier costs and terms are sensitive.", "Receiving history explains stock-in records.", "Reliability belongs with purchase reports."],
+    menus: ["Menus translate sold items into stock deductions.", "Version menu recipes before using them in sales.", "Preview stock impact before publishing changes."],
+    locations: ["Locations are event attributes.", "Deactivate old locations instead of rewriting history.", "Use location filters for replayed stock views."],
+    reports: ["Start from the decision someone needs to make.", "Keep filters visible.", "Link report rows back to source records and audit trail."],
+    audit: ["Use Audit Trail when a number needs explaining.", "Prepare a reverse record instead of deleting history.", "The original movement remains visible."],
+    users: ["Role changes need an audit record.", "Device trust controls offline access.", "Do not expose user PII in logs or errors."],
+    settings: ["Settings should not rewrite history.", "Keep sync and privacy controls tenant-scoped.", "Review offline retention before rollout."],
     products: ["Use Products as a catalog view.", "Enroll, suspend, or reactivate products from Stock Actions.", "Keep product naming consistent for easy searching."],
   };
 
@@ -901,6 +1192,7 @@ function renderActiveView(localLedger, stockRows, outboxValidation) {
   if (state.activeView === "compose" || state.activeView === "outbox") return renderComposer(localLedger, outboxValidation);
   if (state.activeView === "audit") return renderAudit(localLedger);
   if (state.activeView === "products") return renderProducts();
+  if (modulePageContent[state.activeView]) return renderModulePage(state.activeView);
   return renderDashboard(localLedger, stockRows, outboxValidation);
 }
 
@@ -915,13 +1207,23 @@ function renderLanding(localLedger, stockRows, outboxValidation) {
         <div class="landing-copy">
           <h2>Inventory That Explains Every Number.</h2>
           <p>Record movements, keep work safe offline, and replay the ledger when a count needs proof.</p>
-          <div class="landing-actions">
-            <button class="button button-primary" data-view="compose" type="button">${icon("plus")}Stock Actions</button>
-            <button class="button button-secondary" data-view="dashboard" type="button">${icon("layers")}Open Stock Overview</button>
-          </div>
+        <div class="landing-actions">
+            <button class="button button-primary" data-view="sales" type="button">${icon("send")}Record Sale</button>
+            <button class="button button-secondary" data-view="purchases" type="button">${icon("plus")}Receive Purchase</button>
         </div>
       </div>
+    </div>
         <div class="landing-grid">
+          <article class="landing-card">
+            <span>${icon("send")}</span>
+            <h3>Record Sales</h3>
+            <button class="table-action" data-view="sales" type="button">Open Sales</button>
+          </article>
+          <article class="landing-card">
+            <span>${icon("plus")}</span>
+            <h3>Receive Purchases</h3>
+            <button class="table-action" data-view="purchases" type="button">Open Purchases</button>
+          </article>
           <article class="landing-card">
             <span>${icon("layers")}</span>
             <h3>See The Master Stock</h3>
@@ -930,21 +1232,22 @@ function renderLanding(localLedger, stockRows, outboxValidation) {
           <article class="landing-card">
             <span>${icon("history")}</span>
             <h3>Trace Every Change</h3>
-            <button class="table-action" data-view="audit" type="button">Open History</button>
-          </article>
-          <article class="landing-card">
-            <span>${icon("send")}</span>
-            <h3>Send Saved Work</h3>
-            <button class="table-action" data-view="compose" type="button">Open Stock Actions</button>
+            <button class="table-action" data-view="audit" type="button">Audit Trail</button>
           </article>
           <article class="landing-card">
             <span>${icon("list")}</span>
-            <h3>Manage Products</h3>
-            <button class="table-action" data-view="products" type="button">Open Catalog</button>
+            <h3>Build Reports</h3>
+            <button class="table-action" data-view="reports" type="button">Open Reports</button>
+          </article>
+          <article class="landing-card">
+            <span>${icon("plus")}</span>
+            <h3>Send Saved Work</h3>
+            <button class="table-action" data-view="compose" type="button">Open Stock Actions</button>
           </article>
         </div>
       <article class="panel landing-recent">
         <div class="panel-header panel-header--compact">
+          <h2>Recent Ledger Activity</h2>
           <button class="table-action" data-view="audit" type="button">View All</button>
         </div>
         <div class="landing-timeline">
@@ -974,6 +1277,55 @@ function renderDashboard(localLedger, stockRows, outboxValidation) {
           ${renderStockControls()}
         </div>
         ${renderStockView(stockRows)}
+      </article>
+    </section>
+  `;
+}
+
+function renderModulePage(key) {
+  const content = modulePageContent[key];
+  if (!content) return "";
+
+  return `
+    <section class="content-grid module-page" aria-label="${escapeAttr(content.title)}">
+      <article class="panel panel-wide module-hero">
+        <div>
+          <span>${screenMeta[key]?.kicker ?? "Module"}</span>
+          <h2>${content.title}</h2>
+          <p>${content.summary}</p>
+        </div>
+        <div class="module-hero-actions">
+          <button class="button button-primary" type="button">${icon(navIcon(key))}${content.primaryAction}</button>
+          <button class="button button-secondary" type="button">${content.secondaryAction}</button>
+        </div>
+      </article>
+      <section class="module-metrics" aria-label="${escapeAttr(content.title)} metrics">
+        ${content.metrics.map(([label, value]) => metricCard(label, value)).join("")}
+      </section>
+      <article class="panel panel-wide">
+        <div class="panel-header panel-header--compact">
+          <h2>Page Sections</h2>
+        </div>
+        <div class="module-section-grid">
+          ${content.sections
+            .map(
+              ([title, text]) => `
+                <section class="module-section-card">
+                  <h3>${title}</h3>
+                  <p>${text}</p>
+                </section>
+              `,
+            )
+            .join("")}
+        </div>
+      </article>
+      <article class="panel panel-wide module-workflow">
+        <div class="panel-header panel-header--compact">
+          <h2>Ledger Rules</h2>
+        </div>
+        <ul>
+          ${content.workflow.map((item) => `<li>${item}</li>`).join("")}
+        </ul>
       </article>
     </section>
   `;
@@ -2856,9 +3208,18 @@ function navIcon(view) {
   const icons = {
     home: "home",
     dashboard: "layers",
+    sales: "send",
+    purchases: "plus",
+    clients: "home",
+    suppliers: "layers",
+    menus: "list",
     products: "list",
+    locations: "map",
     compose: "plus",
+    reports: "list",
     audit: "history",
+    users: "home",
+    settings: "refresh",
   };
 
   return icons[view] ?? "layers";
@@ -2891,14 +3252,7 @@ function icon(name) {
 }
 
 function viewTitle() {
-  const titles = {
-    home: "StockLedger",
-    dashboard: "Stock Overview",
-    products: "Products",
-    compose: "Stock Actions",
-    audit: "History",
-  };
-  return titles[state.activeView] ?? "Stock Overview";
+  return (screenMeta[state.activeView] ?? screenMeta.dashboard).title;
 }
 
 function getProductCatalog() {

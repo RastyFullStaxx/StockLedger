@@ -35,6 +35,17 @@
   gap: 8px;
 }
 
+.event-form .field-select-wrap {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.event-form .field-select-wrap .field-select-trigger {
+  min-height: 48px;
+}
+
 .action-type-label {
   color: var(--color-primary-strong);
   font-size: 0.96rem;

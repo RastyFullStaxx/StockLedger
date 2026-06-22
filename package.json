@@ -9,6 +9,9 @@
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
     "smoke:browser": "node test/browser-smoke.mjs",
+    "verify:quick": "npm run test",
+    "verify:ui": "node test/verify.mjs --skip-unit --skip-build",
+    "verify:build": "npm run build",
     "verify": "node test/verify.mjs",
     "verify:debug": "node test/verify.mjs --keep-server-on-failure"
   },

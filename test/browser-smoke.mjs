@@ -39,7 +39,19 @@ try {
   await page.reload({ waitUntil: "networkidle" });
 
   await page.getByRole("heading", { name: "StockLedger" }).waitFor();
-  await page.getByRole("button", { name: /Open Stock Overview/ }).click();
+  for (const [view, heading] of [
+    ["sales", "Sales"],
+    ["purchases", "Purchases"],
+    ["clients", "Clients"],
+    ["menus", "Menus"],
+    ["reports", "Reports"],
+    ["users", "Users & Roles"],
+  ]) {
+    await page.locator(`.nav-item[data-view='${view}']`).click();
+    await page.getByRole("heading", { name: heading, exact: true }).waitFor();
+  }
+
+  await page.locator(".nav-item[data-view='dashboard']").click();
   await page.getByRole("heading", { name: "Stock Overview" }).waitFor();
   await page.locator(".nav-item[data-view='compose']").click();
   await page.getByRole("heading", { name: "Stock Actions" }).waitFor();
@@ -66,8 +78,8 @@ try {
     throw new Error(`Expected no Send Work navigation button, saw ${sendWorkNavCount}.`);
   }
 
-  await page.getByRole("button", { name: "Audit" }).click();
-  await page.getByRole("heading", { name: "History" }).waitFor();
+  await page.getByRole("button", { name: "Audit Trail" }).click();
+  await page.getByRole("heading", { name: "Audit Trail" }).waitFor();
   await page.getByRole("button", { name: "Prepare reverse record" }).first().click();
   await page.getByRole("heading", { name: "Stock Actions" }).waitFor();
   await page.locator(".action-type-tab.is-active").getByText("Reverse", { exact: true }).waitFor();

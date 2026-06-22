@@ -11,6 +11,8 @@ import {
 const args = new Set(process.argv.slice(2));
 const keepServerOnFailure = args.has("--keep-server-on-failure");
 const skipBrowser = args.has("--skip-browser");
+const skipUnit = args.has("--skip-unit");
+const skipBuild = args.has("--skip-build");
 const cwd = process.cwd();
 const logDirectory = createLogDirectory();
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
@@ -23,15 +25,23 @@ let failed = false;
 console.log(`[verify] logs: ${logDirectory}`);
 
 try {
-  await runCommand("unit tests", npmCommand, ["test"], {
-    cwd,
-    logFile: join(logDirectory, "unit-tests.log"),
-  });
+  if (!skipUnit) {
+    await runCommand("unit tests", npmCommand, ["test"], {
+      cwd,
+      logFile: join(logDirectory, "unit-tests.log"),
+    });
+  } else {
+    console.log("[verify] skipping unit tests");
+  }
 
-  await runCommand("production build", npmCommand, ["run", "build"], {
-    cwd,
-    logFile: join(logDirectory, "build.log"),
-  });
+  if (!skipBuild) {
+    await runCommand("production build", npmCommand, ["run", "build"], {
+      cwd,
+      logFile: join(logDirectory, "build.log"),
+    });
+  } else {
+    console.log("[verify] skipping production build");
+  }
 
   if (!skipBrowser) {
     server = startCommand("vite dev server", npmCommand, ["run", "dev", "--", "--port", String(port)], {

@@ -1,0 +1,87 @@
+.module-page {
+  gap: 10px;
+}
+
+.module-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 16px;
+}
+
+.module-hero span {
+  color: var(--color-primary);
+  font-size: 0.82rem;
+  font-weight: 820;
+}
+
+.module-hero h2 {
+  margin: 4px 0 0;
+  font-size: clamp(1.55rem, 2.2vw, 2.2rem);
+}
+
+.module-hero p {
+  max-width: 760px;
+  margin: 7px 0 0;
+  color: var(--color-text-muted);
+}
+
+.module-hero-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.module-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.module-section-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 18px;
+}
+
+.module-section-card {
+  display: grid;
+  gap: 5px;
+  padding: 12px 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.module-section-card h3 {
+  margin: 0;
+  color: var(--color-primary-strong);
+  font-size: 1rem;
+}
+
+.module-section-card p {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.module-workflow ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.module-workflow li {
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 900px) {
+  .module-hero,
+  .module-metrics,
+  .module-section-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .module-hero-actions {
+    justify-content: flex-start;
+  }
+}

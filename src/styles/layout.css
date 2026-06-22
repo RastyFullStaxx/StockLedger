@@ -164,8 +164,26 @@
 
 .nav-list {
   display: grid;
-  gap: 16px;
+  align-content: start;
+  gap: 14px;
+  min-height: 0;
+  overflow-y: auto;
   margin-top: 2px;
+  padding-right: 2px;
+  scrollbar-width: thin;
+}
+
+.nav-group {
+  display: grid;
+  gap: 6px;
+}
+
+.nav-group-title {
+  padding: 0 9px;
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 820;
+  letter-spacing: 0;
 }
 
 .nav-group-items {
@@ -440,6 +458,7 @@ button.account-popover-toggle > .mini-toggle-track.is-on {
 }
 
 .is-sidebar-collapsed .brand-copy,
+.is-sidebar-collapsed .nav-group-title,
 .is-sidebar-collapsed .nav-item span,
 .is-sidebar-collapsed .account-trigger span:not(.account-avatar),
 .is-sidebar-collapsed .account-trigger > .icon {
