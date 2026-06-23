@@ -13,6 +13,8 @@
   --surface-panel-soft: rgba(244, 249, 247, 0.82);
   --surface-panel: rgba(244, 249, 247, 0.78);
   --surface-panel-soft-muted: rgba(244, 249, 247, 0.74);
+  --overlay-dim: rgba(3, 31, 26, 0.48);
+  --overlay-blur: blur(12px);
   --focus-ring-color: rgba(11, 95, 86, 0.38);
   --focus-ring: 3px solid var(--focus-ring-color);
   --focus-ring-offset: 3px;

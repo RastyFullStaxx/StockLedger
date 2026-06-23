@@ -802,8 +802,8 @@
   display: grid;
   place-items: center;
   padding: 22px;
-  background: rgba(8, 28, 24, 0.22);
-  backdrop-filter: blur(8px);
+  background: var(--overlay-dim);
+  backdrop-filter: var(--overlay-blur);
 }
 
 .modal-panel {

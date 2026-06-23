@@ -43,6 +43,9 @@ export function answerAssistantQuestion(question, context) {
     };
   }
 
+  const copilotAnswer = assistantCopilotAnswer(question, normalized, context, meta, activeView);
+  if (copilotAnswer) return copilotAnswer;
+
   if (matchesAny(normalized, ["notification", "attention", "urgent", "need review", "needs attention", "problem", "warning", "issue", "alert", "what needs attention now"])) {
     return assistantNotificationAnswer(context);
   }
@@ -163,6 +166,211 @@ export function answerAssistantQuestion(question, context) {
   }
 
   return assistantOutOfScopeAnswer();
+}
+
+function assistantCopilotAnswer(question, normalized, context, meta, activeView) {
+  const intent = classifyAssistantIntent(normalized);
+  if (!intent) return null;
+
+  const evidence = collectAssistantEvidence(question, context);
+  if (intent === "goal") return assistantGoalAnswer(normalized, context, meta, activeView, evidence);
+  if (intent === "why") return assistantWhyAnswer(question, context, evidence);
+  if (intent === "safety") return assistantSafetyAnswer(normalized, context, evidence);
+  if (intent === "history") return assistantHistoryAnswer(question, context, evidence);
+
+  return null;
+}
+
+function classifyAssistantIntent(normalized) {
+  if (matchesAny(normalized, ["i am trying to", "i'm trying to", "i want to", "i need to", "need to", "trying to"])) return "goal";
+  if (matchesAny(normalized, ["why is", "why are", "why did", "why does", "why do", "why was", "why were", "explain why"])) return "why";
+  if (matchesAny(normalized, ["is it safe", "safe to", "can i send", "should i send", "can we send", "ready to send", "okay to send", "ok to send", "can i change", "should i change"])) return "safety";
+  if (matchesAny(normalized, ["what happened", "what changed", "history of", "trace", "explain the history", "why did it change"])) return "history";
+  return null;
+}
+
+function collectAssistantEvidence(question, context) {
+  const rows = context.stockRows();
+  const product = findMentionedProduct(question, context.products ?? []);
+  const location = findMentionedLocation(question, context.locations ?? []);
+  const productRows = product ? rows.filter((row) => row.product_id === product.id) : [];
+  const locationRows = location ? rows.filter((row) => row.location === location.name) : [];
+  const targetRows = productRows.length ? productRows : locationRows;
+  const lowRows = rows.filter((row) => Number(row.quantity) >= 0 && Number(row.quantity) <= context.productLow(row.product_id));
+  const negativeRows = rows.filter((row) => Number(row.quantity) < 0);
+  const workItems = safeList(() => context.workItems());
+  const validations = safeList(() => context.validations());
+  const invalidCount = validations.filter((result) => !result.valid).length;
+  const notifications = safeList(() => context.notifications());
+  const relatedSales = product ? safeList(() => context.sales).filter((sale) => sale.product_id === product.id || `${sale.item_label ?? ""}`.toLowerCase().includes(product.name.toLowerCase())) : [];
+  const relatedPurchases = product ? safeList(() => context.purchases).filter((purchase) => purchase.product_id === product.id || `${purchase.item_label ?? ""}`.toLowerCase().includes(product.name.toLowerCase())) : [];
+
+  return {
+    product,
+    location,
+    rows,
+    targetRows,
+    lowRows,
+    negativeRows,
+    workItems,
+    validations,
+    invalidCount,
+    notifications,
+    relatedSales,
+    relatedPurchases,
+  };
+}
+
+function assistantGoalAnswer(normalized, context, meta, activeView, evidence) {
+  const action = actionForGoal(normalized, context);
+  const risk = assistantRiskLevel(evidence);
+  const reason = risk.reason ? `\n\nRisk check: ${risk.reason}` : "";
+
+  if (action) {
+    return {
+      text: `Got it. You’re trying to ${action.goal}.\n\nUse ${action.label}. ${action.reason}${reason}\n\nI’d open the action workspace, choose the matching action type, and record what happened in real life rather than editing a stock number directly.`,
+      actions: [
+        { label: "Open Stock Actions", view: "compose" },
+        ...(risk.view ? [{ label: risk.label, view: risk.view }] : []),
+      ],
+    };
+  }
+
+  return {
+    text: `I can help with that from ${meta.title}. I’m reading your goal as operational stock work, so I’d first check whether anything is unsafe, then choose the action that matches what happened.\n\n${context.guideTipsForView(activeView).slice(0, 3).map((tip, index) => `${index + 1}. ${tip}`).join("\n")}${reason}`,
+    actions: pageAssistantActions(activeView, context),
+  };
+}
+
+function assistantWhyAnswer(question, context, evidence) {
+  if (evidence.product) {
+    const total = evidence.targetRows.reduce((sum, row) => sum + Number(row.quantity), 0);
+    const lowRows = evidence.targetRows.filter((row) => Number(row.quantity) >= 0 && Number(row.quantity) <= context.productLow(row.product_id));
+    const negativeRows = evidence.targetRows.filter((row) => Number(row.quantity) < 0);
+    const rowLines = evidence.targetRows.length
+      ? evidence.targetRows.map((row) => `- ${row.location}: ${context.formatQuantity(row.quantity)} ${context.productUnit(row.product_id)}`).join("\n")
+      : "- No replayed stock rows are showing for this product.";
+    const sourceHints = [
+      ...evidence.relatedSales.slice(0, 2).map((sale) => `sale ${sale.status}: ${sale.item_label ?? context.productName(sale.product_id)} from ${sale.location}`),
+      ...evidence.relatedPurchases.slice(0, 2).map((purchase) => `purchase ${purchase.status}: ${purchase.item_label ?? context.productName(purchase.product_id)} into ${purchase.location}`),
+    ];
+    const cause = negativeRows.length
+      ? "The urgent reason is a below-zero row. That usually means a sale, transfer, or correction has outpaced recorded receiving, so the audit trail should be checked before treating the balance as final."
+      : lowRows.length
+        ? "The reason is threshold pressure: at least one location is at or below the configured low-stock level."
+        : "It does not look low from the replayed rows I can see. If it still feels wrong, the audit trail is the place to compare recent movement records.";
+
+    return {
+      text: `${evidence.product.name} totals ${context.formatQuantity(total)} ${evidence.product.unit}. ${cause}\n\nCurrent rows:\n${rowLines}${sourceHints.length ? `\n\nRelated source hints:\n${sourceHints.map((hint) => `- ${hint}`).join("\n")}` : ""}`,
+      actions: [
+        { label: "Open Stock Overview", view: "dashboard" },
+        { label: "Open Audit Trail", view: "audit" },
+        ...(lowRows.length || negativeRows.length ? [{ label: "Prepare Stock In", view: "compose" }] : []),
+      ],
+    };
+  }
+
+  const urgent = [...evidence.negativeRows, ...evidence.lowRows].slice(0, 5);
+  return {
+    text: `The most likely explanation is in the replayed stock rows and saved work.\n\n${urgent.length ? urgent.map((row) => `- ${row.product_name} at ${row.location}: ${context.formatQuantity(row.quantity)} ${context.productUnit(row.product_id)}`).join("\n") : "No low or below-zero rows are standing out right now."}\n\nFor a precise “why,” open Audit Trail and trace the product or location movement history.`,
+    actions: [
+      { label: "Open Stock Overview", view: "dashboard" },
+      { label: "Open Audit Trail", view: "audit" },
+    ],
+  };
+}
+
+function assistantSafetyAnswer(normalized, context, evidence) {
+  const wantsSend = matchesAny(normalized, ["send", "saved work", "queue", "outbox", "sync"]);
+  const wantsSettings = matchesAny(normalized, ["change", "settings", "policy", "retention", "export", "device"]);
+  const risk = assistantRiskLevel(evidence);
+
+  if (wantsSend) {
+    const readyText = evidence.invalidCount
+      ? `Not yet. ${evidence.invalidCount} validation result${evidence.invalidCount === 1 ? "" : "s"} need attention before sending.`
+      : evidence.workItems.length
+        ? `Yes, with a human review first. ${evidence.workItems.length} queued work item${evidence.workItems.length === 1 ? "" : "s"} look ready to send as one atomic batch.`
+        : "There is no saved work waiting to send.";
+    return {
+      text: `${readyText}\n\nBefore sending, scan the queue labels and make sure the work reflects what actually happened. If something is wrong, create an undo or correction rather than editing history.`,
+      actions: [
+        { label: "Open Stock Actions", view: "compose" },
+        { label: "Open Audit Trail", view: "audit" },
+      ],
+    };
+  }
+
+  if (wantsSettings) {
+    return {
+      text: `${evidence.workItems.length ? "I would pause before changing settings while saved work is waiting." : "This is a reasonable time to review settings because no queued work is blocking the policy view."}\n\n${risk.reason || "The main safety check is whether settings changes could affect offline retention, export behavior, or device trust before queued work is sent."}`,
+      actions: [
+        { label: "Open Settings", view: "settings" },
+        ...(evidence.workItems.length ? [{ label: "Review Saved Work", view: "compose" }] : []),
+      ],
+    };
+  }
+
+  return {
+    text: `Safety read: ${risk.reason || "nothing urgent is blocking the next step from the current session data."}\n\nWhen in doubt, verify the stock row, then use Stock Actions for new work or Audit Trail for explanation.`,
+    actions: [
+      { label: "Open Stock Overview", view: "dashboard" },
+      { label: "Open Audit Trail", view: "audit" },
+    ],
+  };
+}
+
+function assistantHistoryAnswer(question, context, evidence) {
+  if (evidence.product) {
+    const sourceHints = [
+      ...evidence.relatedPurchases.slice(-3).map((purchase) => `Purchase: ${purchase.item_label ?? context.productName(purchase.product_id)} received at ${purchase.location}, quantity ${context.formatQuantity(purchase.quantity)}, status ${purchase.status}.`),
+      ...evidence.relatedSales.slice(-3).map((sale) => `Sale: ${sale.item_label ?? context.productName(sale.product_id)} left from ${sale.location}, quantity ${context.formatQuantity(sale.quantity)}, status ${sale.status}.`),
+    ];
+    const rows = evidence.targetRows.map((row) => `- ${row.location}: ${context.formatQuantity(row.quantity)} ${context.productUnit(row.product_id)}`).join("\n");
+
+    return {
+      text: `Here’s the trace I can summarize locally for ${evidence.product.name}.\n\nCurrent replay:\n${rows || "- No replayed rows found."}\n\n${sourceHints.length ? `Recent source records I can see:\n${sourceHints.map((hint) => `- ${hint}`).join("\n")}` : "I do not have a direct source record hint for this product in the current page context."}\n\nFor the exact event-by-event trail, open Audit Trail and filter by the product.`,
+      actions: [
+        { label: "Open Audit Trail", view: "audit" },
+        { label: "Open Stock Overview", view: "dashboard" },
+      ],
+    };
+  }
+
+  return {
+    text: "I can explain the current state, but the exact history needs a product, location, or source record to trace. Ask “what happened to Fresh Lime?” or open Audit Trail to inspect the event sequence.",
+    actions: [{ label: "Open Audit Trail", view: "audit" }],
+  };
+}
+
+function actionForGoal(normalized, context) {
+  const entries = [
+    { phrases: ["receive", "delivery", "stock in", "arrived", "purchase"], label: context.eventLabels.STOCK_IN ?? "Stock In", goal: "record received stock", reason: "It adds inventory into a location from receiving or restock work." },
+    { phrases: ["use", "consume", "waste", "sold", "sell", "stock out"], label: context.eventLabels.STOCK_OUT ?? "Use Stock", goal: "record stock leaving inventory", reason: "It records real usage, sales, waste, or consumption as stock leaving a location." },
+    { phrases: ["move", "transfer", "relocate", "send to", "from bar to"], label: context.eventLabels.STOCK_TRANSFER ?? "Move Stock", goal: "move stock between locations", reason: "It keeps the same product in the ledger while changing its location." },
+    { phrases: ["count", "correct", "adjust", "physical", "variance"], label: context.eventLabels.STOCK_ADJUSTMENT ?? "Correct Stock Count", goal: "correct a counted balance", reason: "It records the counted reality as an adjustment instead of rewriting past events." },
+    { phrases: ["undo", "reverse", "mistake", "wrong"], label: context.eventLabels.STOCK_REVERT ?? "Undo Record", goal: "undo a previous movement", reason: "It creates a compensating record that points back to the original movement." },
+    { phrases: ["new product", "enroll", "create product"], label: context.eventLabels.PRODUCT_CREATED ?? "Enroll New Product", goal: "add a catalog product", reason: "It queues product catalog work through the same audited action flow." },
+    { phrases: ["suspend", "deactivate", "stop product"], label: context.eventLabels.PRODUCT_DEACTIVATED ?? "Suspend Product", goal: "suspend a product", reason: "It closes replayed stock where needed and marks the product inactive locally." },
+    { phrases: ["reactivate", "activate again", "bring back"], label: context.eventLabels.PRODUCT_REACTIVATED ?? "Reactivate Product", goal: "reactivate a suspended product", reason: "It restores the catalog item without creating stock movement." },
+  ];
+
+  return entries.find((entry) => entry.phrases.some((phrase) => normalized.includes(phrase))) ?? null;
+}
+
+function assistantRiskLevel(evidence) {
+  if (evidence.invalidCount > 0) {
+    return { level: "high", reason: `${evidence.invalidCount} saved validation result${evidence.invalidCount === 1 ? "" : "s"} need attention before sending.`, label: "Review Saved Work", view: "compose" };
+  }
+  if (evidence.negativeRows.length > 0) {
+    return { level: "high", reason: `${evidence.negativeRows.length} stock row${evidence.negativeRows.length === 1 ? "" : "s"} are below zero, so audit review should come before routine changes.`, label: "Open Audit Trail", view: "audit" };
+  }
+  if (evidence.lowRows.length > 0) {
+    return { level: "medium", reason: `${evidence.lowRows.length} stock row${evidence.lowRows.length === 1 ? "" : "s"} are at or below threshold.`, label: "Open Stock Overview", view: "dashboard" };
+  }
+  if (evidence.workItems.length > 0) {
+    return { level: "medium", reason: `${evidence.workItems.length} queued work item${evidence.workItems.length === 1 ? "" : "s"} should be reviewed before policy changes.`, label: "Review Saved Work", view: "compose" };
+  }
+  return { level: "low", reason: "", label: "", view: "" };
 }
 
 function assistantNextStepAnswer(context, meta, activeView) {
