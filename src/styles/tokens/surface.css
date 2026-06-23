@@ -13,6 +13,14 @@
   --surface-panel-soft: rgba(244, 249, 247, 0.82);
   --surface-panel: rgba(244, 249, 247, 0.78);
   --surface-panel-soft-muted: rgba(244, 249, 247, 0.74);
+  --table-header-bg: var(--color-primary);
+  --table-header-color: #ffffff;
+  --table-header-border-color: rgba(255, 255, 255, 0.24);
+  --table-header-padding-block: 12px;
+  --table-header-padding-inline: 14px;
+  --table-header-font-size: 0.8rem;
+  --table-header-font-weight: 880;
+  --table-header-line-height: 1.16;
   --overlay-dim: rgba(3, 31, 26, 0.48);
   --overlay-blur: blur(12px);
   --focus-ring-color: rgba(11, 95, 86, 0.38);

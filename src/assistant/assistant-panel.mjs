@@ -134,6 +134,7 @@ export function createAssistantContext({
 }) {
   return {
     activeView: state.activeView,
+    recentMessages: Array.isArray(state.assistantMessages) ? state.assistantMessages.slice(-8) : [],
     screenMeta,
     actionTemplates,
     eventLabels,

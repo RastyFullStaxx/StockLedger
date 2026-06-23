@@ -49,6 +49,19 @@
   vertical-align: middle;
 }
 
+.product-table-wrap .product-table th {
+  padding: var(--table-header-padding-block) var(--table-header-padding-inline);
+  border: 1px solid var(--table-header-border-color);
+  background: var(--table-header-bg);
+  color: var(--table-header-color);
+  font-family: var(--font-heading);
+  font-size: var(--table-header-font-size);
+  font-weight: var(--table-header-font-weight);
+  line-height: var(--table-header-line-height);
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
 .product-table-wrap .product-table .product-col-product,
 .product-table-wrap .product-table .product-col-category,
 .product-table-wrap .product-table .product-col-unit,

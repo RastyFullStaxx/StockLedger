@@ -27,6 +27,9 @@ export function answerAssistantQuestion(question, context) {
 
   if (smallTalk) return smallTalk;
 
+  const followUp = assistantFollowUpAnswer(normalized, context, meta);
+  if (followUp) return followUp;
+
   if (matchesAny(normalized, ["help", "help me", "how can i use", "what can you do", "what can you help", "walk me through", "explain"])) {
     return assistantCapabilitiesAnswer(context, meta);
   }
@@ -166,6 +169,74 @@ export function answerAssistantQuestion(question, context) {
   }
 
   return assistantOutOfScopeAnswer();
+}
+
+function assistantFollowUpAnswer(normalized, context, meta) {
+  if (!isFollowUpQuestion(normalized)) return null;
+
+  const recentAssistantText = latestAssistantText(context);
+  if (!recentAssistantText) {
+    return {
+      text: `I can keep going, but I need a subject. Ask me to explain a product, saved work, settings, or the current page, and I’ll stay specific to ${meta.title}.`,
+      actions: pageAssistantActions(context.activeView ?? "dashboard", context),
+    };
+  }
+
+  const recent = normalizeAssistantText(recentAssistantText);
+  if (matchesAny(recent, ["saved work", "queued", "queue", "atomic batch", "send"])) {
+    const outbox = assistantOutboxAnswer(context);
+    return {
+      text: `More detail on the saved work:\n\n${outbox.text}\n\nThe human check is simple: does each queued item match something that actually happened? If yes, send once. If no, prepare an undo or correction.`,
+      actions: outbox.actions,
+    };
+  }
+
+  if (matchesAny(recent, ["low stock", "threshold", "below zero", "needs restock", "replenishment"])) {
+    const lowStock = assistantLowStockAnswer(context);
+    return {
+      text: `More detail on the stock risk:\n\n${lowStock.text}\n\nI’m not treating low stock as a failure by itself. It becomes urgent when it blocks service, repeats after receiving, or goes below zero.`,
+      actions: lowStock.actions,
+    };
+  }
+
+  if (matchesAny(recent, ["settings", "privacy", "policy", "retention", "device trust", "export"])) {
+    const settings = assistantSettingsAnswer(context);
+    return {
+      text: `More detail on the policy side:\n\n${settings.text}`,
+      actions: settings.actions,
+    };
+  }
+
+  if (matchesAny(recent, ["stock actions", "action type", "stock in", "use stock", "move stock", "correct stock", "undo record"])) {
+    return assistantActionAnswer("what actions can I use", context);
+  }
+
+  return {
+    text: `I can expand on that, but I don’t want to guess wrong. The last thing I said was about ${meta.title}; ask “why is [product] low?”, “is it safe to send?”, or “which action should I use?” and I’ll anchor the answer to evidence.`,
+    actions: pageAssistantActions(context.activeView ?? "dashboard", context),
+  };
+}
+
+function isFollowUpQuestion(normalized) {
+  return matchesAny(normalized, [
+    "tell me more",
+    "more detail",
+    "explain that",
+    "what do you mean",
+    "why",
+    "why so",
+    "how so",
+    "go on",
+    "continue",
+    "expand",
+    "that one",
+    "what about that",
+  ]);
+}
+
+function latestAssistantText(context) {
+  const messages = Array.isArray(context.recentMessages) ? context.recentMessages : [];
+  return [...messages].reverse().find((message) => message?.role !== "user" && `${message.text ?? ""}`.trim())?.text ?? "";
 }
 
 function assistantCopilotAnswer(question, normalized, context, meta, activeView) {
@@ -825,6 +896,20 @@ function humanJoin(items) {
 function findMentionedProduct(question, products) {
   const normalized = normalizeAssistantText(question);
   return products.find((product) => normalizeAssistantText(product.name).split(" ").every((part) => normalized.includes(part)));
+}
+
+function findMentionedLocation(question, locations) {
+  const normalized = normalizeAssistantText(question);
+  return locations.find((location) => normalizeAssistantText(location.name).split(" ").every((part) => normalized.includes(part)));
+}
+
+function safeList(read) {
+  try {
+    const value = read();
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
 }
 
 function normalizeAssistantText(value) {

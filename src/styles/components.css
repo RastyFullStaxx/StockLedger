@@ -363,10 +363,16 @@ td {
 }
 
 th {
-  background: rgba(235, 245, 242, 0.92);
-  color: var(--color-text-muted);
-  font-size: 0.86rem;
-  font-weight: 900;
+  padding: var(--table-header-padding-block) var(--table-header-padding-inline);
+  border: 1px solid var(--table-header-border-color);
+  background: var(--table-header-bg);
+  color: var(--table-header-color);
+  font-family: var(--font-heading);
+  font-size: var(--table-header-font-size);
+  font-weight: var(--table-header-font-weight);
+  line-height: var(--table-header-line-height);
+  letter-spacing: 0;
+  text-transform: uppercase;
 }
 
 td,

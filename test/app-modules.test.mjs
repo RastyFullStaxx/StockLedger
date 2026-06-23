@@ -865,6 +865,9 @@ test("assistant engine answers StockLedger questions and redirects out-of-scope 
   assert.match(createAssistantGreeting(context).text, /Hi, I[.’]m Stocky|Hi, I\.m Stocky/);
   assert.match(answerAssistantQuestion("How many stocks do we have?", context).text, /products with replayed stock/);
   assert.match(answerAssistantQuestion("What actions can I use?", context).text, /Stock Actions can queue/);
+  assert.match(answerAssistantQuestion("Why is Fresh Lime low?", context).text, /threshold pressure|below-zero row|Fresh Lime totals/);
+  assert.match(answerAssistantQuestion("I am trying to receive a delivery", context).text, /Use Stock|Stock In|record received stock/);
+  assert.match(answerAssistantQuestion("Is it safe to send saved work?", context).text, /no saved work waiting|ready to send|Not yet/);
   assert.match(answerAssistantQuestion("Who won the basketball game?", context).text, /I[.’]m here to help with StockLedger/);
 });
 
