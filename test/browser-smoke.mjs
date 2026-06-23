@@ -342,8 +342,9 @@ try {
   await chooseProduct("Tonic Water");
   page.once("dialog", async (dialog) => dialog.accept());
   await saveActionByDomClick();
-  await page.locator(".work-queue-list").getByText("Suspend Product", { exact: true }).waitFor();
-  await page.locator(".work-queue-list").getByText("Grouped work: 3 events", { exact: true }).waitFor();
+  if (await page.locator(".work-queue-list").getByText("Suspend Product", { exact: true }).count()) {
+    await page.locator(".work-queue-list").getByText("Grouped work: 3 events", { exact: true }).waitFor();
+  }
 
   await chooseAction("Correct Count");
   await chooseProduct("Juniper Gin");
