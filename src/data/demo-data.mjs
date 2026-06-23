@@ -126,8 +126,8 @@ export const DEFAULT_MENU_ITEMS = [
     sale_type: "recurring",
     default_location: "Main Bar",
     recipe: [
-      { product_id: "prod-gin", quantity: 0.25 },
-      { product_id: "prod-tonic", quantity: 0.25 },
+      { product_id: "prod-gin", quantity: 1 },
+      { product_id: "prod-tonic", quantity: 1 },
     ],
   },
   {
@@ -137,8 +137,8 @@ export const DEFAULT_MENU_ITEMS = [
     sale_type: "one_time",
     default_location: "Main Bar",
     recipe: [
-      { product_id: "prod-rum", quantity: 0.35 },
-      { product_id: "prod-lime", quantity: 0.2 },
+      { product_id: "prod-rum", quantity: 1 },
+      { product_id: "prod-lime", quantity: 1 },
     ],
   },
   {
@@ -282,13 +282,13 @@ export function seedEvents() {
     { type: "STOCK_TRANSFER", product_id: "prod-gin", from_location: "Dry Store", to_location: "Main Bar", quantity: 8, reason: "Opening bar par level" },
     { type: "STOCK_TRANSFER", product_id: "prod-rum", from_location: "Cellar", to_location: "Main Bar", quantity: 7, reason: "Event service par level" },
     { type: "STOCK_TRANSFER", product_id: "prod-tonic", from_location: "Dry Store", to_location: "Main Bar", quantity: 6, reason: "Opening bar par level" },
-    { type: "STOCK_OUT", product_id: "prod-gin", from_location: "Main Bar", to_location: null, quantity: 1.5, reason: "Recurring menu sale fulfilled for Harbor Room", source_type: "sale", source_id: "seed-sale-harbor-001", source_label: "Sale - Harbor Room - Juniper Gin & Tonic" },
-    { type: "STOCK_OUT", product_id: "prod-tonic", from_location: "Main Bar", to_location: null, quantity: 1.5, reason: "Recurring menu sale fulfilled for Harbor Room", source_type: "sale", source_id: "seed-sale-harbor-001", source_label: "Sale - Harbor Room - Juniper Gin & Tonic" },
+    { type: "STOCK_OUT", product_id: "prod-gin", from_location: "Main Bar", to_location: null, quantity: 6, reason: "Recurring menu sale fulfilled for Harbor Room", source_type: "sale", source_id: "seed-sale-harbor-001", source_label: "Sale - Harbor Room - Juniper Gin & Tonic" },
+    { type: "STOCK_OUT", product_id: "prod-tonic", from_location: "Main Bar", to_location: null, quantity: 6, reason: "Recurring menu sale fulfilled for Harbor Room", source_type: "sale", source_id: "seed-sale-harbor-001", source_label: "Sale - Harbor Room - Juniper Gin & Tonic" },
     { type: "STOCK_OUT", product_id: "prod-rum", from_location: "Main Bar", to_location: null, quantity: 2, reason: "Seasonal event service fulfilled for Sunfold Events", source_type: "sale", source_id: "seed-sale-sunfold-001", source_label: "Sale - Sunfold Events - Harbor Rum" },
     { type: "STOCK_OUT", product_id: "prod-lime", from_location: "Kitchen", to_location: null, quantity: 9, reason: "Prep usage" },
     { type: "STOCK_ADJUSTMENT", product_id: "prod-tonic", from_location: null, to_location: "Main Bar", quantity: -1, reason: "Physical count variance" },
     { type: "STOCK_TRANSFER", product_id: "prod-lime", from_location: "Kitchen", to_location: "Main Bar", quantity: 4, reason: "Bar garnish prep" },
-    { type: "STOCK_OUT", product_id: "prod-lime", from_location: "Main Bar", to_location: null, quantity: 1.2, reason: "Direct stock sale fulfilled for North Pier Cafe", source_type: "sale", source_id: "seed-sale-north-pier-001", source_label: "Sale - North Pier Cafe - Fresh Lime" },
+    { type: "STOCK_OUT", product_id: "prod-lime", from_location: "Main Bar", to_location: null, quantity: 1, reason: "Direct stock sale fulfilled for North Pier Cafe", source_type: "sale", source_id: "seed-sale-north-pier-001", source_label: "Sale - North Pier Cafe - Fresh Lime" },
   ];
 
   return seed.map((entry, index) =>
@@ -363,7 +363,7 @@ export function seedSales() {
       product_ids: ["prod-lime"],
       item_label: "Fresh Lime",
       location: "Main Bar",
-      quantity: 1.2,
+      quantity: 1,
       notes: "Seeded wholesale refill usage.",
       event_id: "seed-event-14",
       event_count: 1,
@@ -443,6 +443,14 @@ export function defaultState() {
     productCategoryFilter: "all",
     stockPage: 1,
     auditPage: 1,
+    productPage: 1,
+    clientPage: 1,
+    supplierPage: 1,
+    menuPage: 1,
+    locationPage: 1,
+    userPage: 1,
+    salesPage: 1,
+    purchasePage: 1,
     outboxPage: 1,
     activeProductsPage: 1,
     inactiveProductsPage: 1,

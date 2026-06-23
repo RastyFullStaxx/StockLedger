@@ -119,6 +119,84 @@ test("validation rejects STOCK_TRANSFER when source and destination are the same
   });
 });
 
+test("validation rejects decimal STOCK_IN quantities", () => {
+  const event = createInventoryEvent({
+    ...base,
+    type: "STOCK_IN",
+    to_location: "Main Bar",
+    quantity: 2.5,
+    sequence_number: 1,
+  });
+
+  assert.deepEqual(validateEvent(event), {
+    valid: false,
+    reason: "quantity must be a whole number.",
+  });
+});
+
+test("validation rejects decimal STOCK_OUT quantities", () => {
+  const event = createInventoryEvent({
+    ...base,
+    type: "STOCK_OUT",
+    from_location: "Main Bar",
+    quantity: 3.5,
+    sequence_number: 1,
+  });
+
+  assert.deepEqual(validateEvent(event), {
+    valid: false,
+    reason: "quantity must be a whole number.",
+  });
+});
+
+test("validation rejects decimal STOCK_TRANSFER quantities", () => {
+  const event = createInventoryEvent({
+    ...base,
+    type: "STOCK_TRANSFER",
+    from_location: "Main Bar",
+    to_location: "Dry Store",
+    quantity: 1.25,
+    sequence_number: 1,
+  });
+
+  assert.deepEqual(validateEvent(event), {
+    valid: false,
+    reason: "quantity must be a whole number.",
+  });
+});
+
+test("validation rejects decimal STOCK_ADJUSTMENT quantities", () => {
+  const event = createInventoryEvent({
+    ...base,
+    type: "STOCK_ADJUSTMENT",
+    to_location: "Main Bar",
+    quantity: -2.5,
+    sequence_number: 1,
+  });
+
+  assert.deepEqual(validateEvent(event), {
+    valid: false,
+    reason: "quantity must be a whole number.",
+  });
+});
+
+test("validation rejects decimal STOCK_REVERT quantities", () => {
+  const event = createInventoryEvent({
+    ...base,
+    type: "STOCK_REVERT",
+    from_location: "Main Bar",
+    to_location: null,
+    quantity: 1.75,
+    sequence_number: 1,
+    original_event_id: "event-original",
+  });
+
+  assert.deepEqual(validateEvent(event), {
+    valid: false,
+    reason: "quantity must be a whole number.",
+  });
+});
+
 test("sync batch is atomic and preserves ledger when one event is invalid", () => {
   const existing = [
     createInventoryEvent({ ...base, type: "STOCK_IN", to_location: "Main Bar", quantity: 10, sequence_number: 1 }),
@@ -131,6 +209,24 @@ test("sync batch is atomic and preserves ledger when one event is invalid", () =
   const result = applySyncBatch(existing, incoming);
 
   assert.equal(result.success, false);
+  assert.equal(result.ledger.length, 1);
+  assert.deepEqual(result.failed_event_ids, [incoming[1].event_id]);
+});
+
+test("sync batch with one decimal quantity fails atomically", () => {
+  const existing = [
+    createInventoryEvent({ ...base, type: "STOCK_IN", to_location: "Main Bar", quantity: 10, sequence_number: 1 }),
+  ];
+  const incoming = [
+    createInventoryEvent({ ...base, type: "STOCK_OUT", from_location: "Main Bar", quantity: 3, sequence_number: 2 }),
+    createInventoryEvent({ ...base, type: "STOCK_OUT", from_location: "Main Bar", quantity: 2.25, sequence_number: 3 }),
+    createInventoryEvent({ ...base, type: "STOCK_TRANSFER", from_location: "Main Bar", to_location: "Dry Store", quantity: 1, sequence_number: 4 }),
+  ];
+
+  const result = applySyncBatch(existing, incoming);
+
+  assert.equal(result.success, false);
+  assert.equal(result.processed_count, 0);
   assert.equal(result.ledger.length, 1);
   assert.deepEqual(result.failed_event_ids, [incoming[1].event_id]);
 });

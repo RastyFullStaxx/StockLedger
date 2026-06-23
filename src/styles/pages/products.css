@@ -1,6 +1,12 @@
 .product-table-wrap {
-  height: clamp(320px, calc(100dvh - 300px), 680px);
-  overflow: auto;
+  height: clamp(320px, calc(100dvh - 260px), 680px);
+  max-height: clamp(320px, calc(100dvh - 260px), 680px);
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: auto;
+  box-sizing: border-box;
 }
 
 .product-status {

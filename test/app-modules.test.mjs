@@ -99,6 +99,9 @@ test("demo data module creates isolated default state with valid seed events", (
   assert.notEqual(firstState.products, secondState.products);
   assert.equal(firstState.products.length, DEFAULT_PRODUCTS.length);
   assert.equal(firstState.serverLedger.every((event) => validateEvent(event).valid), true);
+  for (const event of firstState.serverLedger.filter((entry) => entry.type.startsWith("STOCK_"))) {
+    assert.equal(Number.isInteger(Number(event.quantity)), true, `seed stock event ${event.event_id} must be integer`);
+  }
   assert.equal(firstState.sales.length > 0, true);
   assert.equal(firstState.purchases.length > 0, true);
 });
@@ -132,6 +135,9 @@ test("production seed creates a loaded valid ledger state", () => {
 
   for (const event of [...state.serverLedger, ...state.outbox]) {
     assert.equal(validateEvent(event).valid, true, `invalid seed event ${event.event_id}`);
+    if (event.type.startsWith("STOCK_")) {
+      assert.equal(Number.isInteger(Number(event.quantity)), true, `seed stock event ${event.event_id} must be integer`);
+    }
   }
 
   for (const sale of state.sales) {
@@ -452,6 +458,67 @@ test("stock action event builder creates grouped sale events from explicit form 
   assert.equal(events.every((event) => validateEvent(event).valid), true);
 });
 
+test("stock action builders reject decimal quantities for menu, sale, and purchase flows", () => {
+  let idIndex = 0;
+  const builder = createStockActionEventBuilder({
+    tenant,
+    nextId: (prefix) => `${prefix}-${++idIndex}`,
+    currentBatchId: () => "batch-decimals",
+    nextSequence: () => 80,
+    productName: (productId) => ({ "prod-gin": "Juniper Gin", "prod-tonic": "Tonic Water" })[productId] ?? productId,
+    sourceDetailsOptions: { clients: DEFAULT_CLIENTS, saleTypeLabels },
+    now: () => 1710000000000,
+  });
+
+  const menuEvents = builder.buildEvents({
+    type: "STOCK_OUT",
+    product_id: "prod-gin",
+    product_ids: ["prod-gin", "prod-tonic"],
+    product_quantities: { "prod-gin": 2.5, "prod-tonic": 1 },
+    from_location: "Main Bar",
+    to_location: "",
+    quantity: 1,
+    original_event_id: "",
+    reason: "Menu draft",
+    attach_sale: false,
+    attach_purchase: false,
+  });
+
+  assert.equal(validateEvent(menuEvents[0]).valid, false);
+  assert.equal(validateEvent(menuEvents[0]).reason, "quantity must be a finite number.");
+  assert.equal(validateEvent(menuEvents[1]).valid, true);
+
+  const saleEvent = builder.buildEvent({
+    type: "STOCK_OUT",
+    product_id: "prod-gin",
+    product_ids: ["prod-gin"],
+    from_location: "Main Bar",
+    to_location: "",
+    quantity: 3.25,
+    original_event_id: "",
+    reason: "Direct sale",
+    attach_sale: false,
+    attach_purchase: false,
+  });
+  assert.equal(validateEvent(saleEvent).valid, false);
+  assert.equal(validateEvent(saleEvent).reason, "quantity must be a finite number.");
+
+  const purchaseEvent = builder.buildEvent({
+    type: "STOCK_IN",
+    product_id: "prod-gin",
+    product_ids: ["prod-gin"],
+    from_location: "",
+    to_location: "Cellar",
+    quantity: 4.5,
+    original_event_id: "",
+    reason: "Decimal purchase",
+    attach_sale: false,
+    attach_purchase: false,
+  });
+  assert.equal(validateEvent(purchaseEvent).valid, false);
+  assert.equal(validateEvent(purchaseEvent).reason, "quantity must be a finite number.");
+});
+
 test("stock action event builder centralizes physical count and undo event rules", () => {
   let idIndex = 0;
   const originalEvent = {
@@ -493,6 +560,20 @@ test("stock action event builder centralizes physical count and undo event rules
   assert.equal(adjustment.reason, "Physical count 6 vs system 8");
   assert.equal(validateEvent(adjustment).valid, true);
 
+  const invalidAdjustment = builder.buildEvent({
+    type: "STOCK_ADJUSTMENT",
+    product_id: "prod-gin",
+    product_ids: ["prod-gin"],
+    product_physical_counts: { "prod-gin": 6.2 },
+    from_location: "",
+    to_location: "Main Bar",
+    quantity: 1,
+    original_event_id: "",
+    reason: "Bad count",
+  });
+  assert.equal(validateEvent(invalidAdjustment).valid, false);
+  assert.equal(validateEvent(invalidAdjustment).reason, "quantity must be a finite number.");
+
   const revert = builder.buildEvent({
     type: "STOCK_REVERT",
     product_id: "prod-gin",
@@ -505,6 +586,33 @@ test("stock action event builder centralizes physical count and undo event rules
   assert.equal(revert.quantity, 3);
   assert.equal(revert.original_event_id, "event-original");
   assert.equal(validateEvent(revert).valid, true);
+
+  const decimalRevertBuilder = createStockActionEventBuilder({
+    tenant,
+    nextId: (prefix) => `${prefix}-decimal-${++idIndex}`,
+    currentBatchId: () => "batch-physical",
+    nextSequence: () => 20,
+    findEventForRevert: (eventId) =>
+      eventId === "event-original-decimal"
+        ? {
+            ...originalEvent,
+            event_id: "event-original-decimal",
+            quantity: 2.5,
+          }
+        : null,
+    productName: (productId) => ({ "prod-lime": "Fresh Lime", "prod-gin": "Juniper Gin" })[productId] ?? productId,
+    formatQuantity,
+    systemCountForProduct: (_form, productId) => (productId === "prod-gin" ? 8 : null),
+    now: () => 1710000000000,
+  });
+  const decimalRevert = decimalRevertBuilder.buildEvent({
+    type: "STOCK_REVERT",
+    product_id: "prod-gin",
+    original_event_id: "event-original-decimal",
+    reason: "Wrong sale",
+  });
+  assert.equal(validateEvent(decimalRevert).valid, false);
+  assert.equal(validateEvent(decimalRevert).reason, "quantity must be a finite number.");
 });
 
 test("stock action business records append, rollback, and sync linked source records", () => {
@@ -641,7 +749,7 @@ test("product lifecycle module builds closure work and catalog state without app
       product_id: product.id,
       product_name: product.name,
       to_location: "Cellar",
-      quantity: 1.5,
+      quantity: 2,
       sequence_number: 3,
       timestamp: 1710000002000,
     }),
@@ -650,12 +758,12 @@ test("product lifecycle module builds closure work and catalog state without app
 
   assert.deepEqual(closures, [
     { location: "Main Bar", balance: 3, closureQuantity: -3 },
-    { location: "Cellar", balance: 1.5, closureQuantity: -1.5 },
+    { location: "Cellar", balance: 2, closureQuantity: -2 },
   ]);
-  assert.equal(formatDeactivationClosures(closures, { formatQuantity }), "Main Bar: +3 | Cellar: +1.5");
+  assert.equal(formatDeactivationClosures(closures, { formatQuantity }), "Main Bar: +3 | Cellar: +2");
   assert.equal(
     formatMultiProductDeactivationClosures([product], { events, formatQuantity }),
-    "Test Syrup: Main Bar: +3 | Cellar: +1.5",
+    "Test Syrup: Main Bar: +3 | Cellar: +2",
   );
   assert.equal(nextProductId("Test Syrup", [{ id: "prod-test-syrup" }]), "prod-test-syrup-1");
   assert.equal(normalizeClosureQuantity(0.00000001), 0);
@@ -754,10 +862,10 @@ test("assistant engine answers StockLedger questions and redirects out-of-scope 
     formatQuantity,
   };
 
-  assert.match(createAssistantGreeting(context).text, /Hi, I.m Stocky/);
+  assert.match(createAssistantGreeting(context).text, /Hi, I[.’]m Stocky|Hi, I\.m Stocky/);
   assert.match(answerAssistantQuestion("How many stocks do we have?", context).text, /products with replayed stock/);
   assert.match(answerAssistantQuestion("What actions can I use?", context).text, /Stock Actions can queue/);
-  assert.match(answerAssistantQuestion("Who won the basketball game?", context).text, /I.m Stocky/);
+  assert.match(answerAssistantQuestion("Who won the basketball game?", context).text, /I[.’]m here to help with StockLedger/);
 });
 
 test("assistant panel module builds notifications, context, and Stocky markup without app rendering", () => {

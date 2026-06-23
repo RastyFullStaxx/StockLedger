@@ -1,3 +1,5 @@
+const HIGH_CONFIDENCE_KNOWLEDGE_SCORE = 6;
+
 export function createAssistantGreeting(context) {
   const activeView = context.activeView ?? "dashboard";
   const meta = context.screenMeta[activeView] ?? context.screenMeta.dashboard;
@@ -9,7 +11,7 @@ export function createAssistantGreeting(context) {
     : "- Nothing urgent is showing right now.";
 
   return {
-    text: `Hi, I’m Stocky. You’re on ${meta.title}.\n\n${pagePurposeText(meta)}\n\nYou can ${humanJoin(tips.map(cleanTipForSentence))}.\n\nRight now:\n${notificationText}\n\nAsk me about stock counts, saved work, what to do next, how an action works, or why a number looks off.`,
+    text: `Hi, I’m Stocky. I’m here on ${meta.title} to help you keep stock actions simple and safe.\n\n${pagePurposeText(meta)}\n\nA good place to start is: ${humanJoin(tips.map(cleanTipForSentence))}.\n\nWhat looks like this right now:\n${notificationText}\n\nAsk me about stock counts, saved work, what to do next, how an action works, or why a number looks off.`,
     actions: actionLines,
   };
 }
@@ -19,12 +21,19 @@ export function answerAssistantQuestion(question, context) {
   const activeView = context.activeView ?? "dashboard";
   const meta = context.screenMeta[activeView] ?? context.screenMeta.dashboard;
   const smallTalk = assistantSmallTalkAnswer(normalized, meta, context);
+  const knowledgeMatches = retrieveAssistantKnowledge(question, context);
+  const topKnowledgeScore = knowledgeMatches[0]?.score ?? 0;
+  const confidentMatches = knowledgeMatches.filter((entry) => entry.score >= HIGH_CONFIDENCE_KNOWLEDGE_SCORE);
 
   if (smallTalk) return smallTalk;
 
-  if (matchesAny(normalized, ["what should i do", "what next", "next step", "help me", "guide me", "where should i start"])) {
+  if (matchesAny(normalized, ["help", "help me", "how can i use", "what can you do", "what can you help", "walk me through", "explain"])) {
+    return assistantCapabilitiesAnswer(context, meta);
+  }
+
+  if (matchesAny(normalized, ["what should i do", "what next", "next step", "help me", "guide me", "where should i start", "best next step", "what do i do now"])) {
     return {
-      text: `On ${meta.title}, I’d start with what is most operationally useful: ${humanJoin(context.guideTipsForView(activeView).slice(0, 3).map(cleanTipForSentence))}. If anything feels unclear, check notifications first, then record the action that matches what actually happened.`,
+      text: `On ${meta.title}, I’d start with what is most useful today: ${humanJoin(context.guideTipsForView(activeView).slice(0, 3).map(cleanTipForSentence))}. If you are unsure, check notifications first and then record the action that matches what actually happened.`,
       actions: [
         ...pageAssistantActions(activeView, context).slice(0, 2),
         { label: "Notifications", view: activeView },
@@ -35,48 +44,76 @@ export function answerAssistantQuestion(question, context) {
   if (matchesAny(normalized, ["what is this page", "current page", "this page for", "where am i", "about this page"])) {
     const tips = context.guideTipsForView(activeView).slice(0, 4).map((tip) => `- ${tip}`).join("\n");
     return {
-      text: `${meta.title}: ${pagePurposeText(meta)}\n\nWhat you can do here:\n${tips}`,
+      text: `${meta.title}: ${pagePurposeText(meta)}\n\nHere’s what this page is for:\n${tips}`,
       actions: pageAssistantActions(activeView, context),
     };
   }
 
-  if (matchesAny(normalized, ["notification", "attention", "urgent", "need review", "needs attention", "problem", "warning", "issue", "alert"])) {
+  if (matchesAny(normalized, ["notification", "attention", "urgent", "need review", "needs attention", "problem", "warning", "issue", "alert", "what needs attention now"])) {
     return assistantNotificationAnswer(context);
   }
 
-  if (matchesAny(normalized, ["how many stock", "how much stock", "stock count", "total stock", "inventory count", "on hand", "available", "how many product", "product count", "inventory total"])) {
+  if (matchesAny(normalized, ["how many stock", "how much stock", "stock count", "total stock", "inventory count", "on hand", "available", "how many product", "product count", "inventory total", "stock level", "stock levels", "stock balance", "current stock", "inventory level"])) {
     return assistantStockAnswer(question, context);
   }
 
-  if (matchesAny(normalized, ["low stock", "restock", "below", "zero", "negative"])) {
+  if (matchesAny(normalized, ["low stock", "restock", "below", "zero", "negative", "reorder", "minimum", "reorder point", "stock threshold"])) {
     return assistantLowStockAnswer(context);
   }
 
-  if (matchesAny(normalized, ["work to send", "saved work", "outbox", "send work", "pending", "queue", "sync"])) {
+  if (matchesAny(normalized, ["work to send", "saved work", "outbox", "send work", "pending", "queue", "sync", "sync queue", "pending work", "online", "offline"])) {
     return assistantOutboxAnswer(context);
   }
 
-  if (matchesAny(normalized, ["what actions", "available actions", "action type", "stock action", "stock in", "use stock", "move stock", "correct count", "correct stock", "enroll", "suspend", "reactivate"])) {
+  if (matchesAny(normalized, ["what actions", "available actions", "action type", "stock action", "stock in", "use stock", "move stock", "correct count", "correct stock", "enroll", "suspend", "reactivate", "stock transfer", "stock adjustment", "adjust stock", "deactivate product", "reactivate product"])) {
     return assistantActionAnswer(question, context);
   }
 
-  if (matchesAny(normalized, ["location", "where is", "place", "bar", "cellar", "store", "kitchen"])) {
+  if (matchesAny(normalized, ["location", "where is", "place", "bar", "cellar", "store", "kitchen", "where can i find"])) {
     return assistantLocationAnswer(question, context);
   }
 
-  if (matchesAny(normalized, ["client", "customer", "supplier", "vendor", "menu", "recipe", "user", "role", "setting", "policy"])) {
-    const matches = retrieveAssistantKnowledge(question, context).slice(0, 4);
-    if (matches.length > 0) {
+  if (matchesAny(normalized, ["client", "customer", "supplier", "vendor", "menu", "recipe", "setting", "policy"])) {
+    if (confidentMatches.length > 0) {
+      const matches = confidentMatches.slice(0, 4);
       return {
-        text: `Here’s the most relevant StockLedger context I found:\n\n${matches.map((entry) => `- ${entry.title}: ${entry.body}`).join("\n")}`,
+        text: `Here’s the most relevant StockLedger context I found for you:\n\n${matches.map((entry) => `- ${entry.title}: ${entry.body}`).join("\n")}`,
         actions: assistantActionsFromKnowledge(matches, context),
       };
     }
   }
 
+  if (matchesAny(normalized, ["role", "permission", "roles", "access", "admin", "admin role", "rbac", "global_admin", "client_admin", "staff"])) {
+    return {
+      text: "StockLedger uses role-based access: GLOBAL_ADMIN (system owner), CLIENT_ADMIN (client-level controls), and STAFF (operations). Access scope is enforced per tenant and follows user role + device trust settings.",
+      actions: [{ label: "Open Users", view: "users" }],
+    };
+  }
+
+  if (matchesAny(normalized, ["tenant", "multi tenant", "isolation", "isolated", "per-tenant", "per tenant", "client db", "master db", "database per client"])) {
+    return {
+      text: "Tenant data is isolated across a master registry and per-client event stores. Every query and action is tenant-scoped so stock history from one client is never queried against another.",
+      actions: [{ label: "Open Audit Trail", view: "audit" }],
+    };
+  }
+
+  if (matchesAny(normalized, ["idempotent", "idempotency", "duplicate", "duplicates", "retry", "same event", "replay duplicate", "dedupe", "dedup"])) {
+    return {
+      text: "Idempotency keys are used to prevent duplicate event application. If a batch is resent, the server can detect the repeat and skip double-apply so stock stays correct.",
+      actions: [{ label: "Open Audit Trail", view: "audit" }],
+    };
+  }
+
+  if (matchesAny(normalized, ["batch", "atomic", "rollback", "failed batch", "partial", "all or nothing", "transaction", "sync failure", "sync failed"])) {
+    return {
+      text: "Sync runs in atomic mode: either the batch applies fully or it is rejected as a whole. A partial success is not allowed, so any failure means you should correct the batch and resend.",
+      actions: [{ label: "Open Stock Actions", view: "compose" }],
+    };
+  }
+
   if (matchesAny(normalized, ["undo", "reverse", "mistake", "revert"])) {
     return {
-      text: "Use Undo Record when a previous stock movement needs a compensating event. StockLedger does not delete or rewrite history; it creates a STOCK_REVERT that references the original event. Open Audit Trail, pick an eligible movement, then prepare the undo record.",
+      text: "Use Undo Record when a previous movement needs a compensating event. StockLedger does not delete history; it writes a STOCK_REVERT that points to the original event. Open Audit Trail, pick the movement, and prepare the undo record.",
       actions: [
         { label: "Open Audit Trail", view: "audit" },
         { label: "Open Stock Actions", view: "compose" },
@@ -86,14 +123,14 @@ export function answerAssistantQuestion(question, context) {
 
   if (matchesAny(normalized, ["event sourced", "event-sourced", "ledger", "history", "audit", "immutable"])) {
     return {
-      text: "StockLedger is an event-sourced inventory ledger. Stock is not edited directly. Each action creates an immutable event, and stock numbers come from replaying STOCK_IN, STOCK_OUT, STOCK_TRANSFER, STOCK_ADJUSTMENT, STOCK_REVERT, and product lifecycle events. If something is wrong, record a correction or undo record instead of changing history.",
+      text: "StockLedger is an event-sourced ledger, so stock is never edited directly. Every action creates an immutable event, and stock is calculated by replaying STOCK_IN, STOCK_OUT, STOCK_TRANSFER, STOCK_ADJUSTMENT, STOCK_REVERT, and product lifecycle events. If something looks off, add a correction or undo record instead of changing history.",
       actions: [{ label: "Open Audit Trail", view: "audit" }],
     };
   }
 
   if (matchesAny(normalized, ["sale", "sell", "customer", "client"])) {
     return {
-      text: "Sales can create stock usage when fulfilled. Draft sale records do not move stock. A fulfilled direct stock sale queues STOCK_OUT work, while a menu sale creates grouped STOCK_OUT events from the recipe lines.",
+      text: "Sales can create stock usage when fulfilled. Draft sales are planning only; they do not move stock yet. When fulfilled, a direct stock sale queues STOCK_OUT work, while a menu sale creates grouped STOCK_OUT events from its recipe lines.",
       actions: [
         { label: "Open Sales", view: "sales" },
         { label: "Open Stock Actions", view: "compose" },
@@ -103,7 +140,7 @@ export function answerAssistantQuestion(question, context) {
 
   if (matchesAny(normalized, ["purchase", "supplier", "receive", "stock in", "delivery"])) {
     return {
-      text: "Purchases are optional receiving records linked to Stock In. Use Purchases when supplier context matters. Use Stock Actions > Stock In when stock arrived without a formal purchase record.",
+      text: "Use Purchases when supplier context matters (what arrived, from whom, and when). Use Stock Actions > Stock In when stock arrived but you don’t need a formal purchase record.",
       actions: [
         { label: "Open Purchases", view: "purchases" },
         { label: "Open Stock Actions", view: "compose" },
@@ -115,24 +152,47 @@ export function answerAssistantQuestion(question, context) {
     return assistantOutOfScopeAnswer();
   }
 
-  const matches = retrieveAssistantKnowledge(question, context).slice(0, 3);
-  if (matches.length > 0) {
+  if (confidentMatches.length > 0) {
+    const matches = confidentMatches.slice(0, 3);
     return {
-      text: `Here is what I found:\n\n${matches.map((entry) => `- ${entry.title}: ${entry.body}`).join("\n")}`,
+      text: `Here is what I found, in plain words:\n\n${matches.map((entry) => `- ${entry.title}: ${entry.body}`).join("\n")}`,
       actions: assistantActionsFromKnowledge(matches, context),
     };
+  }
+
+  if (topKnowledgeScore > 0 || isStockLedgerQuestion(normalized)) {
+    return assistantUncertainAnswer();
   }
 
   return assistantOutOfScopeAnswer();
 }
 
+function assistantUncertainAnswer() {
+  return {
+    text: "I can help with StockLedger, but I can’t answer this confidently from the current session data. Try one of these instead: “What needs attention?”, “How much stock do we have?”, “What should I do next?”, or “How does sync and idempotency work?”.",
+    actions: [
+      { label: "Open Stock Overview", view: "dashboard" },
+      { label: "Open Stock Actions", view: "compose" },
+      { label: "Open Audit Trail", view: "audit" },
+    ],
+  };
+}
+
 function assistantOutOfScopeAnswer() {
   return {
-    text: "I’m Stocky, and I’m here to help with StockLedger. I can’t reliably answer that from this local inventory session, and I don’t want to guess. I can help with stock on hand, low stock, saved work, page purpose, actions, audit behavior, products, locations, sales, purchases, users, reports, and settings. Try “What needs attention?”, “How many stocks do we have?”, or “What should I do next?”",
+    text: "I’m here to help with StockLedger, and I don’t want to guess outside what this session can show me. I can help with stock on hand, low stock, saved work, page purpose, actions, audit behavior, products, locations, sales, purchases, users, reports, and settings. Try one of these: “What needs attention?”, “How much stock do we have?”, or “What should I do next?”",
     actions: [
       { label: "Open Stock Overview", view: "dashboard" },
       { label: "Open Stock Actions", view: "compose" },
     ],
+  };
+}
+
+function assistantCapabilitiesAnswer(context, meta) {
+  const activeView = context.activeView ?? "dashboard";
+  return {
+    text: `Great, we can keep this short. I can help you with ${meta.title}, stock levels, saved work, page guidance, action selection, low stock planning, and audit-safe corrections. If you tell me your goal (“what should I do now?” or “how many X are left?”), I’ll give you the next practical step.`,
+    actions: pageAssistantActions(activeView, context),
   };
 }
 
@@ -141,28 +201,28 @@ function assistantSmallTalkAnswer(normalized, meta, context) {
 
   if (!normalized) {
     return {
-      text: `I’m here. Ask me about ${meta.title}, saved work, stock counts, audit history, sales, purchases, or what needs attention.`,
+      text: `I’m here and ready. Ask me about ${meta.title}, saved work, stock counts, audit history, sales, purchases, or what needs attention, and I’ll keep the answer practical.`,
       actions: pageAssistantActions(activeView, context),
     };
   }
 
   if (matchesAny(normalized, ["hello", "hi", "hey", "good morning", "good afternoon", "good evening"])) {
     return {
-      text: `Hi, I’m Stocky. I’ll keep things practical and stay with the ledger. On ${meta.title}, I can explain the page, point out what needs attention, and help you choose the right stock action without exposing private details unnecessarily.`,
+      text: `Hi there — I’m Stocky. On ${meta.title}, I can explain the page, point out what needs attention, and help you choose the right stock action in plain language.`,
       actions: pageAssistantActions(activeView, context),
     };
   }
 
   if (matchesAny(normalized, ["thank", "thanks", "appreciate"])) {
     return {
-      text: "You’re welcome. I’ll stay focused on the ledger and keep the answers practical.",
+      text: "You’re welcome. I’ll stay practical and keep helping you move stock safely.",
       actions: pageAssistantActions(activeView, context).slice(0, 2),
     };
   }
 
   if (matchesAny(normalized, ["who are you", "what can you do", "what can i ask"])) {
     return {
-      text: "I’m Stocky, the local StockLedger support bot. I answer from this session’s screens, seeded demo data, saved work, and the event-sourced rules: stock is replayed from immutable events, corrections create new events, and private operational details stay tucked away unless they are useful.",
+      text: "I’m Stocky, the local StockLedger guide. I answer from what this session shows: screens, demo state, saved work, and event-sourced rules — stock is replayed from immutable events, corrections make new events, and private details stay protected unless they matter.",
       actions: [
         { label: "Current Page", view: activeView },
         { label: "Stock Overview", view: "dashboard" },
@@ -196,7 +256,7 @@ function assistantStockAnswer(question, context) {
       ? productRows.map((row) => `${row.location}: ${context.formatQuantity(row.quantity)} ${product.unit}`).join("\n")
       : "No replayed stock at any location.";
     return {
-      text: `${product.name} has ${context.formatQuantity(total)} ${product.unit} on hand.\n${places}`,
+      text: `${product.name} currently has ${context.formatQuantity(total)} ${product.unit} on hand.\n${places}`,
       actions: [{ label: "Open Stock Overview", view: "dashboard" }],
     };
   }
@@ -208,7 +268,7 @@ function assistantStockAnswer(question, context) {
   const totalUnits = totals.reduce((sum, row) => sum + Number(row.quantity), 0);
 
   return {
-    text: `There are ${totals.length} products with replayed stock and ${context.formatQuantity(totalUnits)} total counted units across products.\n${totalLines}`,
+    text: `You currently have ${totals.length} products with replayed stock and ${context.formatQuantity(totalUnits)} total counted units.\n${totalLines || "No products currently have replayed stock."}`,
     actions: [{ label: "Open Stock Overview", view: "dashboard" }],
   };
 }
@@ -238,7 +298,7 @@ function assistantOutboxAnswer(context) {
   const lines = workItems.slice(0, 6).map((item) => `- ${item.label}: ${item.product_name}, ${item.location}, ${item.amount}`).join("\n");
 
   return {
-    text: `${context.outbox.length} event${context.outbox.length === 1 ? "" : "s"} are saved locally in ${workItems.length} work item${workItems.length === 1 ? "" : "s"}. ${invalid.length ? `${invalid.length} item${invalid.length === 1 ? "" : "s"} need validation.` : "Everything queued is ready."}\n${lines || "No work is waiting to send."}`,
+    text: `${context.outbox.length} event${context.outbox.length === 1 ? "" : "s"} are saved locally in ${workItems.length} queued work item${workItems.length === 1 ? "" : "s"}. ${invalid.length ? `${invalid.length} of those item${invalid.length === 1 ? "" : "s"} still need attention.` : "Everything queued is ready to send."}\n${lines || "No work is waiting to send."}`,
     actions: [{ label: "Open Stock Actions", view: "compose" }],
   };
 }
@@ -256,13 +316,13 @@ function assistantActionAnswer(question, context) {
 
   if (directMatch && !matchesAny(normalized, ["what actions", "available actions", "action type", "stock action"])) {
     return {
-      text: `${directMatch.label}: ${directMatch.template.summary} ${directMatch.template.help ?? ""}\n\nRequired: ${(directMatch.template.requiredFields ?? []).join(", ") || "No special fields"}.`,
+      text: `${directMatch.label} is the right fit.\n\n${directMatch.template.summary} ${directMatch.template.help ?? ""}\n\nRequired fields: ${(directMatch.template.requiredFields ?? []).join(", ") || "No special fields"}.`,
       actions: [{ label: "Open Stock Actions", view: "compose" }],
     };
   }
 
   return {
-    text: `Stock Actions can queue the daily work without editing stock directly:\n\n${actionEntries
+    text: `Stock Actions can queue work while keeping stock history immutable:\n\n${actionEntries
       .map((entry) => `- ${entry.label}: ${entry.template.summary}`)
       .join("\n")}\n\nUse the action name that matches what happened in real life. Stocky will prefer corrections and undo records over changing history.`,
     actions: [{ label: "Open Stock Actions", view: "compose" }],
@@ -393,6 +453,30 @@ function assistantKnowledgeBase(context) {
       view: "settings",
       keywords: "setting numbering sequence document code",
     })),
+    {
+      title: "Sync and idempotency",
+      body: "Sync is atomic and queue-based. Idempotency keys protect from accidental duplicate event application.",
+      view: "audit",
+      keywords: "sync batch queue outbox idempotent idempotency atomic",
+    },
+    {
+      title: "Event replay model",
+      body: "Stock is always derived from immutable event replay. Actions create new events; history is not edited in place.",
+      view: "audit",
+      keywords: "replay event sourced immutable stock history ledger",
+    },
+    {
+      title: "Tenant isolation",
+      body: "Tenant isolation uses a master registry plus per-client storage so one client’s stock state cannot mix with another.",
+      view: "settings",
+      keywords: "tenant isolation multi tenant per client database",
+    },
+    {
+      title: "User access roles",
+      body: "Role model includes GLOBAL_ADMIN, CLIENT_ADMIN, and STAFF, each with different permission scope and audit visibility.",
+      view: "users",
+      keywords: "role rbac global_admin client_admin staff permission",
+    },
   ];
 
   return [
@@ -475,12 +559,25 @@ function expandAssistantTokens(tokens) {
     ["vendor", ["supplier", "purchase"]],
     ["place", ["location"]],
     ["room", ["location"]],
+    ["sync", ["outbox", "online", "offline", "batch"]],
+    ["syncing", ["outbox", "online", "offline", "batch"]],
+    ["online", ["connect", "outbox", "sync"]],
+    ["offline", ["outbox", "queue", "sync"]],
+    ["replay", ["event", "ledger", "history", "immutable"]],
+    ["event", ["ledger", "history", "replay"]],
+    ["tenant", ["isolation", "client db", "master db", "multi tenant"]],
+    ["admin", ["role", "permission", "rbac", "access"]],
+    ["admins", ["role", "permission", "rbac", "access"]],
     ["count", ["stock", "quantity", "inventory"]],
     ["counts", ["stock", "quantity", "inventory"]],
     ["amount", ["quantity", "stock"]],
+    ["remaining", ["stock", "balance"]],
+    ["balance", ["stock", "quantity", "inventory"]],
+    ["threshold", ["low", "restock", "minimum"]],
     ["waiting", ["queue", "outbox", "pending"]],
     ["saved", ["queue", "outbox", "pending"]],
     ["mistake", ["undo", "reverse", "audit"]],
+    ["mistakes", ["undo", "reverse", "audit"]],
     ["wrong", ["undo", "reverse", "correction"]],
   ]);
   const expanded = new Set(tokens);
@@ -493,6 +590,45 @@ function expandAssistantTokens(tokens) {
 
 function matchesAny(value, phrases) {
   return phrases.some((phrase) => value.includes(phrase));
+}
+
+function isStockLedgerQuestion(normalized) {
+  return matchesAny(
+    normalized,
+    [
+      "stock",
+      "inventory",
+      "ledger",
+      "audit",
+      "product",
+      "location",
+      "sale",
+      "purchase",
+      "supplier",
+      "client",
+      "menu",
+      "report",
+      "user",
+      "role",
+      "sync",
+      "outbox",
+      "queue",
+      "undo",
+      "reverse",
+      "event",
+      "batch",
+      "low",
+      "restock",
+      "count",
+      "settings",
+      "page",
+      "screen",
+      "tenant",
+      "admin",
+      "action",
+      "replay",
+    ],
+  );
 }
 
 function isLikelyOutOfScopeQuestion(normalized) {

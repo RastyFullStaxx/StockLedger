@@ -112,12 +112,16 @@
   border-color: var(--color-primary-strong);
   background: var(--color-primary);
   color: #ffffff;
+  font-weight: 860;
+  box-shadow: 0 8px 18px rgba(11, 95, 86, 0.2);
 }
 
 .action-type-tab[aria-pressed="true"] {
   border-color: var(--color-primary-strong);
   background: var(--color-primary);
   color: #ffffff;
+  font-weight: 860;
+  box-shadow: 0 8px 18px rgba(11, 95, 86, 0.2);
 }
 
 .product-checklist {

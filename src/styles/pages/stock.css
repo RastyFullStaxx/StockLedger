@@ -181,7 +181,12 @@
 
 .stock-overview-grid .stock-table:not(.product-table-wrap) {
   height: clamp(320px, calc(100dvh - 260px), 680px);
-  overflow: auto;
+  max-height: clamp(320px, calc(100dvh - 260px), 680px);
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: auto;
+  box-sizing: border-box;
 }
 
 .stock-table th,

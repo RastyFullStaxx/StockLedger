@@ -773,7 +773,7 @@ function renderDashboard(localLedger, stockRows, outboxValidation) {
   return `
     <section class="content-grid stock-overview-grid">
       ${renderStatusRail(localLedger, stockRows, outboxValidation)}
-      <article class="panel panel-wide record-table-panel">
+      <article class="panel panel-wide panel--flush-table record-table-panel">
         <div class="stock-overview-toolbar-row">
           ${renderStockControls()}
         </div>
@@ -794,6 +794,9 @@ function renderClientsPage() {
     search: state.clientSearch ?? "",
     menuId: state.clientMenuFilter ?? "all",
   });
+  const clientPagination = paginateRows(clients, state.clientPage);
+  state.clientPage = clientPagination.page;
+  const visibleClients = clientPagination.pageRows;
   const selectedClient = clients.find((client) => client.id === state.selectedClientId) ?? null;
 
   return `
@@ -807,7 +810,7 @@ function renderClientsPage() {
       <section class="record-workspace ${selectedClient ? "has-detail" : ""}" data-record-workspace="clients" aria-label="Client records">
         <article class="panel record-table-panel">
           ${renderClientControls()}
-          ${renderClientTable(clients, selectedClient)}
+          ${renderClientTable(visibleClients, selectedClient, clientPagination, clients.length)}
         </article>
         ${selectedClient ? renderClientDetailPanel(selectedClient) : ""}
       </section>
@@ -864,7 +867,7 @@ function renderClientFilterTab(value, label) {
   `;
 }
 
-function renderClientTable(clients, selectedClient) {
+function renderClientTable(clients, selectedClient, pagination = null, totalCount = 0) {
   return `
     <div class="record-table-shell">
       <table class="record-table client-record-table">
@@ -892,6 +895,7 @@ function renderClientTable(clients, selectedClient) {
           }
         </tbody>
       </table>
+      ${pagination ? renderTablePagination("client", pagination, totalCount) : ""}
     </div>
   `;
 }
@@ -967,6 +971,9 @@ function renderSuppliersPage(localLedger) {
     search: state.supplierSearch ?? "",
     productId: state.supplierProductFilter ?? "all",
   });
+  const supplierPagination = paginateRows(suppliers, state.supplierPage);
+  state.supplierPage = supplierPagination.page;
+  const visibleSuppliers = supplierPagination.pageRows;
   const selectedSupplier = suppliers.find((supplier) => supplier.id === state.selectedSupplierId) ?? null;
 
   return `
@@ -980,7 +987,7 @@ function renderSuppliersPage(localLedger) {
       <section class="record-workspace ${selectedSupplier ? "has-detail" : ""}" data-record-workspace="suppliers" aria-label="Supplier records">
         <article class="panel record-table-panel">
           ${renderSupplierControls()}
-          ${renderSupplierTable(suppliers, selectedSupplier, purchases, receivingEvents)}
+          ${renderSupplierTable(visibleSuppliers, selectedSupplier, purchases, receivingEvents, supplierPagination, suppliers.length)}
         </article>
         ${selectedSupplier ? renderSupplierDetailPanel(selectedSupplier, purchases, receivingEvents) : ""}
       </section>
@@ -1036,7 +1043,7 @@ function renderSupplierFilterTab(value, label) {
   `;
 }
 
-function renderSupplierTable(suppliers, selectedSupplier, purchases, receivingEvents) {
+function renderSupplierTable(suppliers, selectedSupplier, purchases, receivingEvents, pagination = null, totalCount = 0) {
   return `
     <div class="record-table-shell">
       <table class="record-table supplier-record-table">
@@ -1066,6 +1073,7 @@ function renderSupplierTable(suppliers, selectedSupplier, purchases, receivingEv
           }
         </tbody>
       </table>
+      ${pagination ? renderTablePagination("supplier", pagination, totalCount) : ""}
     </div>
   `;
 }
@@ -1142,6 +1150,9 @@ function renderMenusPage() {
     search: state.menuSearch ?? "",
     clientId: state.menuClientFilter ?? "all",
   });
+  const menuPagination = paginateRows(menus, state.menuPage);
+  state.menuPage = menuPagination.page;
+  const visibleMenus = menuPagination.pageRows;
   const selectedMenu = menus.find((menu) => menu.id === state.selectedMenuId) ?? null;
 
   return `
@@ -1155,7 +1166,7 @@ function renderMenusPage() {
       <section class="record-workspace ${selectedMenu ? "has-detail" : ""}" data-record-workspace="menus" aria-label="Menu records">
         <article class="panel record-table-panel">
           ${renderMenuControls()}
-          ${renderMenuTable(menus, selectedMenu)}
+          ${renderMenuTable(visibleMenus, selectedMenu, menuPagination, menus.length)}
         </article>
         ${selectedMenu ? renderMenuDetailPanel(selectedMenu) : ""}
       </section>
@@ -1219,7 +1230,7 @@ function renderMenuFilterTab(value, label) {
   `;
 }
 
-function renderMenuTable(menus, selectedMenu) {
+function renderMenuTable(menus, selectedMenu, pagination = null, totalCount = 0) {
   return `
     <div class="record-table-shell">
       <table class="record-table menu-record-table">
@@ -1249,6 +1260,7 @@ function renderMenuTable(menus, selectedMenu) {
           }
         </tbody>
       </table>
+      ${pagination ? renderTablePagination("menu", pagination, totalCount) : ""}
     </div>
   `;
 }
@@ -1341,6 +1353,9 @@ function renderLocationsPage(localLedger, stockRows) {
     search: state.locationSearch ?? "",
     kind: state.locationKindFilter ?? "all",
   });
+  const locationPagination = paginateRows(filteredLocationRows, state.locationPage);
+  state.locationPage = locationPagination.page;
+  const visibleLocations = locationPagination.pageRows;
   const selectedLocation = filteredLocationRows.find((location) => location.id === state.selectedLocationId) ?? null;
 
   return `
@@ -1354,7 +1369,7 @@ function renderLocationsPage(localLedger, stockRows) {
       <section class="record-workspace ${selectedLocation ? "has-detail" : ""}" data-record-workspace="locations" aria-label="Location records">
         <article class="panel record-table-panel">
           ${renderLocationControls()}
-          ${renderLocationTable(filteredLocationRows, selectedLocation, stockRows)}
+          ${renderLocationTable(visibleLocations, selectedLocation, stockRows, locationPagination, filteredLocationRows.length)}
         </article>
         ${selectedLocation ? renderLocationDetailPanel(selectedLocation, stockRows, localLedger) : ""}
       </section>
@@ -1415,7 +1430,7 @@ function renderLocationFilterTab(value, label) {
   `;
 }
 
-function renderLocationTable(locationRows, selectedLocation, stockRows) {
+function renderLocationTable(locationRows, selectedLocation, stockRows, pagination = null, totalCount = 0) {
   return `
     <div class="record-table-shell">
       <table class="record-table location-record-table">
@@ -1445,6 +1460,7 @@ function renderLocationTable(locationRows, selectedLocation, stockRows) {
           }
         </tbody>
       </table>
+      ${pagination ? renderTablePagination("location", pagination, totalCount) : ""}
     </div>
   `;
 }
@@ -1629,6 +1645,9 @@ function renderUsersPage() {
     search: state.userSearch ?? "",
     role: state.userRoleFilter ?? "all",
   });
+  const userPagination = paginateRows(users, state.userPage);
+  state.userPage = userPagination.page;
+  const visibleUsers = userPagination.pageRows;
   const selectedUser = users.find((user) => user.id === state.selectedUserId) ?? null;
 
   return `
@@ -1642,7 +1661,7 @@ function renderUsersPage() {
       <section class="record-workspace ${selectedUser ? "has-detail" : ""}" data-record-workspace="users" aria-label="Staff access records">
         <article class="panel record-table-panel">
           ${renderUserControls()}
-          ${renderUserTable(users, selectedUser)}
+          ${renderUserTable(visibleUsers, selectedUser, userPagination, users.length)}
         </article>
         ${selectedUser ? renderUserDetailPanel(selectedUser) : ""}
       </section>
@@ -1713,7 +1732,7 @@ function renderUserFilterTab(value, label) {
   `;
 }
 
-function renderUserTable(users, selectedUser) {
+function renderUserTable(users, selectedUser, pagination = null, totalCount = 0) {
   return `
     <div class="record-table-shell">
       <table class="record-table user-record-table">
@@ -1741,6 +1760,7 @@ function renderUserTable(users, selectedUser) {
           }
         </tbody>
       </table>
+      ${pagination ? renderTablePagination("user", pagination, totalCount) : ""}
     </div>
   `;
 }
@@ -2314,6 +2334,9 @@ function renderBusinessRecordPanel({ title, empty, records, type, selectedRecord
 
 function renderPurchaseRecordWorkspace({ title, empty, records, selectedRecord }) {
   const safeRecords = [...records].slice().reverse();
+  const purchasePagination = paginateRows(safeRecords, state.purchasePage);
+  state.purchasePage = purchasePagination.page;
+  const pageRecords = purchasePagination.pageRows;
   const safeSearch = escapeAttr(state.purchaseSearch ?? "");
 
   return `
@@ -2373,12 +2396,13 @@ function renderPurchaseRecordWorkspace({ title, empty, records, selectedRecord }
             </thead>
             <tbody>
               ${
-                safeRecords.length === 0
+                pageRecords.length === 0
                   ? `<tr><td colspan="5"><div class="empty-state"><strong>${escapeHtml(empty)}</strong></div></td></tr>`
-                  : safeRecords.map((record) => renderPurchaseTableRow(record, selectedRecord)).join("")
+                  : pageRecords.map((record) => renderPurchaseTableRow(record, selectedRecord)).join("")
               }
             </tbody>
           </table>
+          ${renderTablePagination("purchase", purchasePagination, safeRecords.length)}
         </div>
         ${selectedRecord ? renderPurchaseDetailPanel(selectedRecord) : ""}
       </section>
@@ -2446,6 +2470,9 @@ function renderPurchaseDetailPanel(record) {
 
 function renderSalesRecordWorkspace({ title, empty, records, selectedRecord }) {
   const safeRecords = [...records].slice().reverse();
+  const salesPagination = paginateRows(safeRecords, state.salesPage);
+  state.salesPage = salesPagination.page;
+  const pageRecords = salesPagination.pageRows;
   const safeSaleSearch = escapeAttr(state.saleSearch ?? "");
 
   return `
@@ -2508,12 +2535,13 @@ function renderSalesRecordWorkspace({ title, empty, records, selectedRecord }) {
             </thead>
             <tbody>
               ${
-                safeRecords.length === 0
+                pageRecords.length === 0
                   ? `<tr><td colspan="6"><div class="empty-state"><strong>${escapeHtml(empty)}</strong></div></td></tr>`
-                  : safeRecords.map((record) => renderSaleTableRow(record, selectedRecord)).join("")
+                  : pageRecords.map((record) => renderSaleTableRow(record, selectedRecord)).join("")
               }
             </tbody>
           </table>
+          ${renderTablePagination("sale", salesPagination, safeRecords.length)}
         </div>
         ${selectedRecord ? renderSaleDetailPanel(selectedRecord) : ""}
       </section>
@@ -2633,6 +2661,9 @@ function renderProducts() {
     search: state.productSearch ?? "",
     productLastStateLabel,
   });
+  const productPagination = paginateRows(products, state.productPage);
+  state.productPage = productPagination.page;
+  const visibleProducts = productPagination.pageRows;
   const activeProducts = getActiveProducts().length;
   const inactiveProducts = getInactiveProducts().length;
   const categories = selectProductCategories(getProductCatalog());
@@ -2645,12 +2676,13 @@ function renderProducts() {
         ${metricCard("Categories", categories.length)}
         ${metricCard("Low Thresholds", getProductCatalog().filter((product) => Number(product.low) > 0).length)}
       </section>
-      <article class="panel panel-wide panel--flush-table record-table-panel">
+      <article class="panel panel-wide record-table-panel">
         <div class="panel-header panel-header--compact">
           <button class="button button-primary" data-view="compose" type="button">${icon("plus")}Open Stock Actions</button>
         </div>
         ${renderProductControls()}
-        ${products.length === 0 ? `<div class="empty-state"><strong>No products match these filters.</strong></div>` : renderProductTable(products)}
+        ${visibleProducts.length === 0 ? `<div class="empty-state"><strong>No products match these filters.</strong></div>` : renderProductTable(visibleProducts)}
+        ${renderTablePagination("product", productPagination, products.length)}
       </article>
     </section>
   `;
@@ -2706,7 +2738,7 @@ function renderProductStatusTab(value, label) {
 
 function renderProductTable(products) {
   return `
-    <div class="table-wrap stock-table product-table-wrap">
+    <div class="stock-table record-table-shell product-table-wrap">
       <table class="product-table">
         <colgroup>
           <col class="product-col-product" />
@@ -2824,8 +2856,8 @@ function renderProductQuantityFields(form, template) {
               <input
                 name="quantity_${escapeAttr(productId)}"
                 type="number"
-                min="${template.requiresPositiveQuantity ? "0.01" : ""}"
-                step="0.01"
+                min="${template.requiresPositiveQuantity ? "1" : "0"}"
+                step="1"
                 value="${escapeAttr(value)}"
                 aria-label="${escapeAttr(`${template.quantityLabel} for ${product?.name ?? productId}`)}"
               />
@@ -3108,7 +3140,8 @@ function renderPhysicalCountFields(form) {
                 <input
                   name="physical_count_${escapeAttr(productId)}"
                   type="number"
-                  step="0.01"
+                  min="0"
+                  step="1"
                   placeholder="Counted"
                   value="${escapeAttr(value)}"
                   aria-label="${escapeAttr(`Physical count for ${product?.name ?? productId}`)}"
@@ -4124,6 +4157,7 @@ function bindEvents() {
   document.querySelectorAll("[data-filter='sale-search']").forEach((input) => {
     input.addEventListener("input", () => {
       state.saleSearch = input.value;
+      state.salesPage = 1;
       state.selectedSaleId = null;
       commit();
     });
@@ -4132,6 +4166,7 @@ function bindEvents() {
   document.querySelectorAll("[data-filter='sale-client']").forEach((select) => {
     select.addEventListener("change", () => {
       state.saleClientFilter = select.value || "all";
+      state.salesPage = 1;
       state.selectedSaleId = null;
       commit();
     });
@@ -4140,6 +4175,7 @@ function bindEvents() {
   document.querySelectorAll("[data-filter='client-search']").forEach((input) => {
     input.addEventListener("input", () => {
       state.clientSearch = input.value;
+      state.clientPage = 1;
       state.selectedClientId = null;
       commit();
     });
@@ -4148,6 +4184,7 @@ function bindEvents() {
   document.querySelectorAll("[data-filter='client-menu']").forEach((select) => {
     select.addEventListener("change", () => {
       state.clientMenuFilter = select.value || "all";
+      state.clientPage = 1;
       state.selectedClientId = null;
       commit();
     });
@@ -4156,6 +4193,7 @@ function bindEvents() {
   document.querySelectorAll("[data-filter='purchase-search']").forEach((input) => {
     input.addEventListener("input", () => {
       state.purchaseSearch = input.value;
+      state.purchasePage = 1;
       state.selectedPurchaseId = null;
       commit();
     });
@@ -4164,6 +4202,7 @@ function bindEvents() {
   document.querySelectorAll("[data-filter='purchase-supplier']").forEach((select) => {
     select.addEventListener("change", () => {
       state.purchaseSupplierFilter = select.value || "all";
+      state.purchasePage = 1;
       state.selectedPurchaseId = null;
       commit();
     });
@@ -4172,6 +4211,7 @@ function bindEvents() {
   document.querySelectorAll("[data-filter='product-search']").forEach((input) => {
     input.addEventListener("input", () => {
       state.productSearch = input.value;
+      state.productPage = 1;
       commit();
     });
   });
@@ -4179,6 +4219,7 @@ function bindEvents() {
   document.querySelectorAll("[data-filter='product-category']").forEach((select) => {
     select.addEventListener("change", () => {
       state.productCategoryFilter = select.value || "all";
+      state.productPage = 1;
       commit();
     });
   });
@@ -4186,6 +4227,7 @@ function bindEvents() {
   document.querySelectorAll("[data-filter='supplier-search']").forEach((input) => {
     input.addEventListener("input", () => {
       state.supplierSearch = input.value;
+      state.supplierPage = 1;
       state.selectedSupplierId = null;
       commit();
     });
@@ -4194,6 +4236,7 @@ function bindEvents() {
   document.querySelectorAll("[data-filter='supplier-product']").forEach((select) => {
     select.addEventListener("change", () => {
       state.supplierProductFilter = select.value || "all";
+      state.supplierPage = 1;
       state.selectedSupplierId = null;
       commit();
     });
@@ -4202,6 +4245,7 @@ function bindEvents() {
   document.querySelectorAll("[data-filter='menu-search']").forEach((input) => {
     input.addEventListener("input", () => {
       state.menuSearch = input.value;
+      state.menuPage = 1;
       state.selectedMenuId = null;
       commit();
     });
@@ -4210,6 +4254,7 @@ function bindEvents() {
   document.querySelectorAll("[data-filter='menu-client']").forEach((select) => {
     select.addEventListener("change", () => {
       state.menuClientFilter = select.value || "all";
+      state.menuPage = 1;
       state.selectedMenuId = null;
       commit();
     });
@@ -4218,6 +4263,7 @@ function bindEvents() {
   document.querySelectorAll("[data-filter='location-search']").forEach((input) => {
     input.addEventListener("input", () => {
       state.locationSearch = input.value;
+      state.locationPage = 1;
       state.selectedLocationId = null;
       commit();
     });
@@ -4226,6 +4272,7 @@ function bindEvents() {
   document.querySelectorAll("[data-filter='location-kind']").forEach((select) => {
     select.addEventListener("change", () => {
       state.locationKindFilter = select.value || "all";
+      state.locationPage = 1;
       state.selectedLocationId = null;
       commit();
     });
@@ -4234,6 +4281,7 @@ function bindEvents() {
   document.querySelectorAll("[data-filter='user-search']").forEach((input) => {
     input.addEventListener("input", () => {
       state.userSearch = input.value;
+      state.userPage = 1;
       state.selectedUserId = null;
       commit();
     });
@@ -4242,6 +4290,7 @@ function bindEvents() {
   document.querySelectorAll("[data-filter='user-role']").forEach((select) => {
     select.addEventListener("change", () => {
       state.userRoleFilter = select.value || "all";
+      state.userPage = 1;
       state.selectedUserId = null;
       commit();
     });
@@ -4266,6 +4315,7 @@ function bindEvents() {
   document.querySelectorAll("[data-product-status-filter]").forEach((button) => {
     button.addEventListener("click", () => {
       state.productStatusFilter = button.dataset.productStatusFilter ?? "active";
+      state.productPage = 1;
       commit();
     });
   });
@@ -4298,6 +4348,14 @@ function bindEvents() {
     stock: "stockPage",
     audit: "auditPage",
     outbox: "outboxPage",
+    client: "clientPage",
+    supplier: "supplierPage",
+    menu: "menuPage",
+    location: "locationPage",
+    user: "userPage",
+    sale: "salesPage",
+    purchase: "purchasePage",
+    product: "productPage",
     "active-products": "activeProductsPage",
     "inactive-products": "inactiveProductsPage",
   };
@@ -4331,6 +4389,7 @@ function bindEvents() {
   document.querySelectorAll("[data-client-filter]").forEach((button) => {
     button.addEventListener("click", () => {
       state.clientViewFilter = button.dataset.clientFilter ?? "all";
+      state.clientPage = 1;
       state.selectedClientId = null;
       commit();
     });
@@ -4339,6 +4398,7 @@ function bindEvents() {
   document.querySelectorAll("[data-sale-filter]").forEach((button) => {
     button.addEventListener("click", () => {
       state.saleViewFilter = button.dataset.saleFilter ?? "all";
+      state.salesPage = 1;
       state.selectedSaleId = null;
       commit();
     });
@@ -4347,6 +4407,7 @@ function bindEvents() {
   document.querySelectorAll("[data-purchase-filter]").forEach((button) => {
     button.addEventListener("click", () => {
       state.purchaseViewFilter = button.dataset.purchaseFilter ?? "all";
+      state.purchasePage = 1;
       state.selectedPurchaseId = null;
       commit();
     });
@@ -4355,6 +4416,7 @@ function bindEvents() {
   document.querySelectorAll("[data-supplier-filter]").forEach((button) => {
     button.addEventListener("click", () => {
       state.supplierViewFilter = button.dataset.supplierFilter ?? "all";
+      state.supplierPage = 1;
       state.selectedSupplierId = null;
       commit();
     });
@@ -4363,6 +4425,7 @@ function bindEvents() {
   document.querySelectorAll("[data-menu-filter]").forEach((button) => {
     button.addEventListener("click", () => {
       state.menuViewFilter = button.dataset.menuFilter ?? "all";
+      state.menuPage = 1;
       state.selectedMenuId = null;
       commit();
     });
@@ -4371,6 +4434,7 @@ function bindEvents() {
   document.querySelectorAll("[data-location-record-filter]").forEach((button) => {
     button.addEventListener("click", () => {
       state.locationViewFilter = button.dataset.locationRecordFilter ?? "all";
+      state.locationPage = 1;
       state.selectedLocationId = null;
       commit();
     });
@@ -4379,6 +4443,7 @@ function bindEvents() {
   document.querySelectorAll("[data-user-filter]").forEach((button) => {
     button.addEventListener("click", () => {
       state.userViewFilter = button.dataset.userFilter ?? "all";
+      state.userPage = 1;
       state.selectedUserId = null;
       commit();
     });
@@ -4988,7 +5053,7 @@ function openStockInAction() {
 
 function validBusinessQuantity(rawQuantity) {
   const quantity = Number(rawQuantity);
-  return Number.isFinite(quantity) && quantity > 0 ? quantity : null;
+  return Number.isFinite(quantity) && Number.isInteger(quantity) && quantity > 0 ? quantity : null;
 }
 
 function isKnownLocation(locationName) {
@@ -5156,9 +5221,16 @@ function fulfillSaleFromForm(form) {
     saleProductId = menuItem.recipe[0]?.product_id ?? normalized.product_id;
     saleMenuItemId = menuItem.id;
     saleItemLabel = menuItem.name;
-    events = menuItem.recipe.map((line) => {
-      const lineQuantity = Number((Number(line.quantity) * quantity).toFixed(4));
-      return withWorkItem(
+    for (const line of menuItem.recipe) {
+      const lineQuantity = validBusinessQuantity(line.quantity);
+      if (lineQuantity === null) {
+        showToast("Menu recipes must use whole-number quantities.", "error");
+        commit();
+        return;
+      }
+      const eventLineQuantity = lineQuantity * quantity;
+      events.push(
+        withWorkItem(
         createInventoryEvent({
           ...tenant,
           event_id: nextId("sale-stock-out"),
@@ -5169,7 +5241,7 @@ function fulfillSaleFromForm(form) {
           product_name: productName(line.product_id),
           from_location: normalized.location,
           to_location: null,
-          quantity: lineQuantity,
+          quantity: eventLineQuantity,
           reason: notes || `${saleTypeLabels[normalized.sale_type]} menu sale fulfilled for ${client.name}`,
           source_type: "sale",
           source_id: saleId,
@@ -5179,8 +5251,9 @@ function fulfillSaleFromForm(form) {
           status: "queued",
         }),
         workItemId,
+        ),
       );
-    });
+    }
   } else {
     const product = getProductById(normalized.product_id);
     if (!product || product.is_active === false) {
@@ -5645,7 +5718,7 @@ function normalizeFormForType({ resetTemplateDefaults = false } = {}) {
 
   if (template.quantityEditable) {
     const parsedQuantity = Number(state.form.quantity);
-    if (resetTemplateDefaults || !Number.isFinite(parsedQuantity) || parsedQuantity === 0) {
+    if (resetTemplateDefaults || !Number.isFinite(parsedQuantity) || !Number.isInteger(parsedQuantity) || parsedQuantity === 0) {
       state.form.quantity = defaults.quantity ?? 1;
     }
   } else {
@@ -5706,6 +5779,10 @@ function stockState(row) {
 
 function renderTablePagination(scope, pagination, shownCount) {
   const { page, totalPages, total } = pagination;
+  if (!totalPages || totalPages <= 1) {
+    return "";
+  }
+
   return `
     <div class="table-pagination">
       <span class="table-pagination-info">Showing <strong>${shownCount}</strong> of <strong>${total}</strong> ${total === 1 ? "record" : "records"}</span>

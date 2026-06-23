@@ -81,6 +81,10 @@ export function validateEvent(event) {
     return invalid("quantity must be a finite number.");
   }
 
+  if (!Number.isInteger(quantity)) {
+    return invalid("quantity must be a whole number.");
+  }
+
   if (PRODUCT_AUDIT_EVENT_TYPES.has(event.type) && quantity !== 0) {
     return invalid("Product lifecycle events require quantity of 0.");
   }

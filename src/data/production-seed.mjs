@@ -158,9 +158,9 @@ const SALES = [
     location: "Rooftop Bar",
     notes: "Rooftop opening rush usage.",
     items: [
-      ["prod-vodka", 2.5],
+      ["prod-vodka", 2],
       ["prod-tonic", 2],
-      ["prod-lime", 2.2],
+      ["prod-lime", 2],
     ],
   },
   {
@@ -174,8 +174,8 @@ const SALES = [
     notes: "Post-shift usage capture.",
     items: [
       ["prod-whiskey", 2],
-      ["prod-orange", 1.5],
-      ["prod-bitters", 0.5],
+      ["prod-orange", 2],
+      ["prod-bitters", 1],
       ["prod-ice", 10],
     ],
   },
@@ -190,7 +190,7 @@ const SALES = [
     notes: "Evening margarita station usage.",
     items: [
       ["prod-tequila", 3],
-      ["prod-lime", 3.5],
+      ["prod-lime", 4],
       ["prod-soda", 2],
     ],
   },
@@ -198,7 +198,7 @@ const SALES = [
 
 const ADJUSTMENTS = [
   ["prod-tonic", "Main Bar", -1, "Physical count mismatch after lunch close"],
-  ["prod-lime", "Main Bar", -1.2, "Prep tray shrinkage recorded"],
+  ["prod-lime", "Main Bar", -1, "Prep tray shrinkage recorded"],
   ["prod-mint", "Main Bar", -2, "Wilted bundles removed"],
   ["prod-ice", "Event Hall", -4, "Melt loss after event setup"],
   ["prod-bitters", "Main Bar", 1, "Found sealed bottle behind service well"],
@@ -370,7 +370,7 @@ function buildProductionSeedEvents(products, now) {
     product_id: "prod-vodka",
     from_location: "Rooftop Bar",
     to_location: null,
-    quantity: 2.5,
+    quantity: 2,
     reason: "Duplicate rooftop vodka usage reversed",
     original_event_sequence: revertOriginalSequence,
   });
@@ -417,7 +417,7 @@ function buildProductionOutbox(products, sequenceStart, now) {
       product_id: "prod-lime",
       from_location: "Main Bar",
       to_location: null,
-      quantity: 1.2,
+      quantity: 1,
       reason: "Queued wholesale garnish pull",
       source_type: "sale",
       source_id: "prod-queued-sale-001",

@@ -102,7 +102,7 @@ export function createStockActionEventBuilder({
         product_name: productName(productId),
         from_location: original ? original.from_location : null,
         to_location: original ? original.to_location : null,
-        quantity: original ? Math.abs(Number(original.quantity)) : 1,
+        quantity: original ? Math.abs(toIntegerQuantity(original.quantity)) : 1,
         original_event_id: form.original_event_id || null,
         reason: reason || "Operational event",
         sequence_number: sequenceNumber,
@@ -145,7 +145,21 @@ export function physicalCountVariance(form, productId = form.product_id, systemC
 }
 
 function eventQuantity(form, template, productId, systemCount) {
-  if (template.isPhysicalCount) return physicalCountVariance(form, productId, systemCount) ?? 0;
-  if (template.requiresPositiveQuantity) return Math.abs(Number(quantityForProduct(form, productId) || 0));
-  return Number(quantityForProduct(form, productId) || 0);
+  const quantity = toIntegerQuantity(quantityForProduct(form, productId));
+
+  if (template.isPhysicalCount) {
+    const variance = physicalCountVariance(form, productId, systemCount);
+    if (!Number.isFinite(Number(variance))) {
+      return Number.NaN;
+    }
+    return toIntegerQuantity(variance);
+  }
+  if (Number.isNaN(quantity)) return Number.NaN;
+  if (template.requiresPositiveQuantity) return Math.abs(quantity);
+  return quantity;
+}
+
+function toIntegerQuantity(rawQuantity) {
+  const quantity = Number(rawQuantity);
+  return Number.isFinite(quantity) && Number.isInteger(quantity) ? quantity : Number.NaN;
 }

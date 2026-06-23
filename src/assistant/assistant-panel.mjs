@@ -71,8 +71,8 @@ export function renderAssistantMenu({ state, meta, messages, icon }) {
       </div>
       <form class="assistant-form" data-form="assistant">
         <label class="assistant-input-label">
-          <span>Ask about StockLedger</span>
-          <textarea name="assistant-question" rows="2" placeholder="Ask Stocky about inventory, actions, saved work, audit, reports, or what to do next.">${escapeHtml(state.assistantInput ?? "")}</textarea>
+          <span>Ask Stocky</span>
+          <textarea name="assistant-question" rows="2" placeholder="Ask for help with stock levels, pending work, actions, audit, sales, purchases, or what you should do next.">${escapeHtml(state.assistantInput ?? "")}</textarea>
         </label>
         <button class="button button-primary" type="submit">${icon("send")}Send</button>
       </form>

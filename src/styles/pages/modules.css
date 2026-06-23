@@ -83,7 +83,7 @@
 }
 
 .record-workspace {
-  --record-workspace-height: max(360px, calc(100dvh - 260px));
+  --record-workspace-height: clamp(320px, calc(100dvh - 260px), 680px);
   --record-workspace-gap: var(--topbar-gap);
   --record-detail-panel-pad: var(--panel-padding);
   --record-detail-panel-width: clamp(340px, 44vw, 560px);
@@ -100,7 +100,7 @@
 }
 
 .record-workspace.has-detail {
-  --record-workspace-height: max(560px, calc(100dvh - 180px));
+  --record-workspace-height: clamp(360px, calc(100dvh - 260px), 680px);
   grid-template-columns: minmax(0, 1fr) minmax(var(--record-detail-panel-width), var(--record-detail-panel-width));
   align-items: stretch;
   gap: var(--record-workspace-gap);
@@ -111,6 +111,30 @@
 .record-workspace > .record-detail-panel {
   height: var(--record-workspace-height);
   min-height: 0;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+}
+
+.record-table-panel {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.record-table-panel > .record-table-shell,
+.record-table-panel > .table-wrap,
+.record-table-panel > .stock-table.record-table-shell,
+.record-table-panel > .product-table-wrap {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.record-table-panel .table-wrap {
   min-width: 0;
   max-width: 100%;
   width: 100%;
@@ -174,15 +198,20 @@
 .record-table-shell {
   width: 100%;
   min-width: 0;
-  max-width: 100%;
-  overflow: auto;
-  height: var(--record-workspace-height);
+  box-sizing: border-box;
+  overflow-x: auto;
+  overflow-y: auto;
+  height: var(--record-workspace-height, clamp(320px, calc(100dvh - 260px), 680px));
+  max-height: var(--record-workspace-height, clamp(320px, calc(100dvh - 260px), 680px));
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.68);
 }
 
 .record-workspace.has-detail > .record-table-panel {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
 }
@@ -190,6 +219,9 @@
 .record-workspace.has-detail > .record-table-panel .record-table-shell {
   height: auto;
   min-height: 0;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .report-table-shell {
@@ -210,7 +242,7 @@
 }
 
 .sales-record-panel .record-table-shell {
-  height: max(300px, calc(100dvh - 330px));
+  height: var(--record-workspace-height);
 }
 
 .record-table {
@@ -219,6 +251,12 @@
   max-width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
+}
+
+.record-table-shell > .record-table {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .record-workspace.has-detail .record-table {
