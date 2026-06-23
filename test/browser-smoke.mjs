@@ -187,6 +187,7 @@ try {
   await page.getByLabel("Search suppliers").fill("");
   await page.locator("[data-supplier-row]").filter({ hasText: "Coastal Spirits Supply" }).click();
   await page.getByText("Sensitive terms", { exact: true }).first().waitFor();
+  await expectRecordWorkspaceFits("Suppliers");
   await page.locator(".nav-item[data-view='menus']").click();
   await expectFilterTabsNotClipped("Menus");
   await page.getByLabel("Search menus").fill("Rum");
@@ -196,6 +197,7 @@ try {
   await page.locator("[data-menu-row]").filter({ hasText: "House Pour Menu" }).click();
   await page.getByText("Technical details", { exact: true }).first().waitFor();
   await page.getByText("Fulfillment Rule", { exact: true }).waitFor();
+  await expectRecordWorkspaceFits("Menus");
   await page.locator(".nav-item[data-view='locations']").click();
   await expectFilterTabsNotClipped("Locations");
   await page.getByRole("button", { name: "Add Location", exact: true }).waitFor();
@@ -210,6 +212,7 @@ try {
   await page.locator("[data-location-row]").filter({ hasText: "Smoke Patio" }).waitFor();
   await page.locator("[data-location-row]").filter({ hasText: "Main Bar" }).click();
   await page.locator("[data-record-detail-panel]").getByText("Technical details", { exact: true }).waitFor();
+  await expectRecordWorkspaceFits("Locations");
   await page.locator(".nav-item[data-view='users']").click();
   await expectFilterTabsNotClipped("Users");
   await page.getByText("Role Matrix", { exact: true }).waitFor();
@@ -219,6 +222,7 @@ try {
   await page.getByLabel("Search users").fill("");
   await page.locator("[data-user-row]").filter({ hasText: "Mara V." }).click();
   await page.getByText("Private staff details", { exact: true }).first().waitFor();
+  await expectRecordWorkspaceFits("Users & Roles");
   await page.locator(".nav-item[data-view='settings']").click();
   await page.getByText("Default Location", { exact: true }).waitFor();
   await page.getByText("SALE-2026-00042", { exact: true }).waitFor();
@@ -286,6 +290,7 @@ try {
   await page.getByLabel("Search audit trail").fill("");
   await page.locator("[data-audit-row]").first().click();
   await page.locator("[data-record-detail-panel]").getByText("Technical details", { exact: true }).waitFor();
+  await expectRecordWorkspaceFits("Audit Trail");
   await page.locator("[data-record-detail-panel]").getByRole("button", { name: "Undo", exact: true }).click();
   await page.getByRole("heading", { name: "Stock Actions" }).waitFor();
   await page.locator(".action-type-tab.is-active").getByText("Undo Record", { exact: true }).waitFor();
@@ -428,6 +433,7 @@ try {
   await page.locator("[data-sale-row]").filter({ hasText: "Harbor Room" }).filter({ hasText: "2 products" }).waitFor();
   await page.locator("[data-sale-row]").filter({ hasText: "Harbor Room" }).filter({ hasText: "2 products" }).click();
   await page.locator("[data-record-detail-panel]").getByText("Technical source", { exact: true }).waitFor();
+  await expectRecordWorkspaceFits("Sales");
 
   await page.locator(".nav-item[data-view='purchases']").click();
   await page.getByRole("heading", { name: "Purchases", exact: true }).waitFor();
@@ -436,6 +442,7 @@ try {
   await page.getByLabel("Search purchases").fill("");
   await page.locator("[data-purchase-row]").filter({ hasText: "Matched supplier delivery" }).filter({ hasText: "2 products" }).click();
   await page.locator("[data-record-detail-panel]").getByText("Technical source", { exact: true }).waitFor();
+  await expectRecordWorkspaceFits("Purchases");
 
   await page.locator(".nav-item[data-view='reports']").click();
   await page.getByRole("heading", { name: "Reports", exact: true }).waitFor();

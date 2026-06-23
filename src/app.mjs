@@ -35,10 +35,10 @@ import {
 } from "./config/app-config.mjs";
 import { displayDateTime, escapeAttr, escapeHtml, formatQuantity } from "./utils/format.mjs";
 import {
-  animateSidebarTransition,
   bindTabMotion,
   flushQueuedRecordDetailMotion,
   flushQueuedTabMotion,
+  animateGuideMenuClose,
   queueActiveViewMotion,
   queueRecordDetailMotion,
   queueStockViewMotion,
@@ -770,7 +770,7 @@ function renderDashboard(localLedger, stockRows, outboxValidation) {
   return `
     <section class="content-grid stock-overview-grid">
       ${renderStatusRail(localLedger, stockRows, outboxValidation)}
-      <article class="panel panel-wide panel--flush-table">
+      <article class="panel panel-wide record-table-panel">
         <div class="stock-overview-toolbar-row">
           ${renderStockControls()}
         </div>
@@ -1889,38 +1889,43 @@ function renderSettingsPage() {
       </section>
       <section class="settings-grid" aria-label="Tenant settings">
         <article class="panel settings-panel">
-          <div class="panel-header panel-header--compact">
+          <div class="settings-card-header">
             <h2>Tenant Defaults</h2>
+            <p>Core assumptions used across the workspace.</p>
           </div>
           ${renderSettingsPolicyTable()}
         </article>
         <article class="panel settings-panel">
-          <div class="panel-header panel-header--compact">
+          <div class="settings-card-header">
             <h2>Numbering Rules</h2>
+            <p>Sequence templates for audit-friendly IDs.</p>
           </div>
           ${renderNumberingRuleTable()}
         </article>
       </section>
       <section class="settings-grid" aria-label="Development and privacy settings">
         <article class="panel settings-panel">
-          <div class="panel-header panel-header--compact">
+          <div class="settings-card-header">
             <h2>CI Lanes</h2>
+            <p>Automation checks and environment jobs.</p>
           </div>
           ${renderCiLaneTable()}
         </article>
         <article class="panel settings-panel">
-          <div class="panel-header panel-header--compact">
+          <div class="settings-card-header">
             <h2>Privacy Guardrails</h2>
+            <p>Safety controls that protect private operational data.</p>
           </div>
           ${renderPrivacyGuardrailTable()}
         </article>
       </section>
-      <article class="panel panel-wide report-export-note">
+      <article class="panel settings-summary-card">
         <div>
           <h2>Pipeline Strategy</h2>
           <p>CI is split into unit, build, and browser lanes so fast failures arrive sooner and UI smoke can run independently after dependencies are ready.</p>
         </div>
         <button class="button button-secondary" data-view="reports" type="button">${icon("list")}Open Reports</button>
+        <button class="button button-secondary" data-view="audit" type="button">${icon("history")}Open Audit Trail</button>
       </article>
     </section>
   `;
@@ -1928,97 +1933,55 @@ function renderSettingsPage() {
 
 function renderSettingsPolicyTable() {
   return `
-    <div class="record-table-shell settings-table-shell">
-      <table class="record-table settings-policy-table">
-        <colgroup>
-          <col style="width: 28%" />
-          <col style="width: 22%" />
-          <col style="width: 50%" />
-        </colgroup>
-        <thead>
-          <tr>
-            <th>Setting</th>
-            <th>Value</th>
-            <th>Use</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${SETTINGS_POLICIES.map(
-            (policy) => `
-              <tr>
-                <td><strong>${escapeHtml(policy.label)}</strong></td>
-                <td>${escapeHtml(policy.value)}</td>
-                <td>${escapeHtml(policy.detail)}</td>
-              </tr>
-            `,
-          ).join("")}
-        </tbody>
-      </table>
-    </div>
+    <ul class="settings-list" aria-label="Tenant defaults">
+      ${SETTINGS_POLICIES.map(
+        (policy) => `
+          <li class="settings-row">
+            <div class="settings-row-copy">
+              <strong>${escapeHtml(policy.label)}</strong>
+              <p>${escapeHtml(policy.detail)}</p>
+            </div>
+            <span class="settings-chip">${escapeHtml(policy.value)}</span>
+          </li>
+        `,
+      ).join("")}
+    </ul>
   `;
 }
 
 function renderNumberingRuleTable() {
   return `
-    <div class="record-table-shell settings-table-shell">
-      <table class="record-table settings-numbering-table">
-        <colgroup>
-          <col style="width: 18%" />
-          <col style="width: 32%" />
-          <col style="width: 50%" />
-        </colgroup>
-        <thead>
-          <tr>
-            <th>Prefix</th>
-            <th>Example</th>
-            <th>Use</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${NUMBERING_RULES.map(
-            (rule) => `
-              <tr>
-                <td><strong>${escapeHtml(rule.prefix)}</strong></td>
-                <td><code>${escapeHtml(rule.example)}</code></td>
-                <td>${escapeHtml(rule.use)}</td>
-              </tr>
-            `,
-          ).join("")}
-        </tbody>
-      </table>
-    </div>
+    <ul class="settings-list" aria-label="Numbering rules">
+      ${NUMBERING_RULES.map(
+        (rule) => `
+          <li class="settings-row">
+            <div class="settings-row-copy">
+              <strong>${escapeHtml(rule.prefix)}</strong>
+              <p>${escapeHtml(rule.use)}</p>
+            </div>
+            <span class="settings-code"><code>${escapeHtml(rule.example)}</code></span>
+          </li>
+        `,
+      ).join("")}
+    </ul>
   `;
 }
 
 function renderCiLaneTable() {
   return `
-    <div class="record-table-shell settings-table-shell">
-      <table class="record-table settings-ci-table">
-        <colgroup>
-          <col style="width: 22%" />
-          <col style="width: 34%" />
-          <col style="width: 44%" />
-        </colgroup>
-        <thead>
-          <tr>
-            <th>Lane</th>
-            <th>Command</th>
-            <th>Purpose</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${CI_LANES.map(
-            (lane) => `
-              <tr>
-                <td><strong>${escapeHtml(lane.name)}</strong></td>
-                <td><code>${escapeHtml(lane.command)}</code></td>
-                <td>${escapeHtml(lane.purpose)}</td>
-              </tr>
-            `,
-          ).join("")}
-        </tbody>
-      </table>
-    </div>
+    <ul class="settings-list" aria-label="CI lanes">
+      ${CI_LANES.map(
+        (lane) => `
+          <li class="settings-row">
+            <div class="settings-row-copy">
+              <strong>${escapeHtml(lane.name)}</strong>
+              <p>${escapeHtml(lane.purpose)}</p>
+            </div>
+            <span class="settings-code settings-code--muted"><code>${escapeHtml(lane.command)}</code></span>
+          </li>
+        `,
+      ).join("")}
+    </ul>
   `;
 }
 
@@ -2031,35 +1994,21 @@ function renderPrivacyGuardrailTable() {
   ];
 
   return `
-    <div class="record-table-shell settings-guardrail-shell">
-      <table class="record-table settings-guardrail-table">
-        <colgroup>
-          <col style="width: 24%" />
-          <col style="width: 18%" />
-          <col style="width: 58%" />
-        </colgroup>
-        <thead>
-          <tr>
-            <th>Guardrail</th>
-            <th>Status</th>
-            <th>Policy</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${guardrails
-            .map(
-              ([label, status, policy, tone]) => `
-                <tr>
-                  <td><strong>${escapeHtml(label)}</strong></td>
-                  <td><span class="badge ${tone === "warning" ? "is-warning" : "is-valid"}">${escapeHtml(status)}</span></td>
-                  <td>${escapeHtml(policy)}</td>
-                </tr>
-              `,
-            )
-            .join("")}
-        </tbody>
-      </table>
-    </div>
+    <ul class="settings-list settings-guardrail-list" aria-label="Privacy guardrails">
+      ${guardrails
+        .map(
+          ([label, status, policy, tone]) => `
+            <li class="settings-row">
+              <div class="settings-row-copy">
+                <strong>${escapeHtml(label)}</strong>
+                <p>${escapeHtml(policy)}</p>
+              </div>
+              <span class="badge ${tone === "warning" ? "is-warning" : "is-valid"}">${escapeHtml(status)}</span>
+            </li>
+          `,
+        )
+        .join("")}
+    </ul>
   `;
 }
 
@@ -3626,8 +3575,8 @@ function renderStockView(stockRows) {
 
 function renderMasterStockTable(rows, pagination) {
   return `
-    <div class="table-wrap stock-table">
-      <table>
+    <div class="stock-table record-table-shell">
+      <table class="record-table">
         <thead>
           <tr>
             <th>Product</th>
@@ -3677,8 +3626,8 @@ function renderMasterStockTable(rows, pagination) {
 
 function renderLocationStockTable(rows, pagination) {
   return `
-    <div class="table-wrap stock-table">
-      <table>
+    <div class="stock-table record-table-shell">
+      <table class="record-table">
         <thead>
           <tr>
             <th>Product</th>
@@ -3728,8 +3677,8 @@ function renderLocationStockTable(rows, pagination) {
 
 function renderStockTable(rows, pagination) {
   return `
-    <div class="table-wrap stock-table">
-      <table>
+    <div class="stock-table record-table-shell">
+      <table class="record-table">
         <thead>
           <tr>
             <th>Product</th>
@@ -3930,8 +3879,16 @@ function bindEvents() {
 
   document.querySelectorAll("[data-action='toggle-guide']").forEach((button) => {
     button.addEventListener("click", () => {
-      state.guideOpen = !state.guideOpen;
-      if (state.guideOpen && (!Array.isArray(state.assistantMessages) || state.assistantMessages.length === 0)) {
+      if (state.guideOpen) {
+        animateGuideMenuClose(() => {
+          state.guideOpen = false;
+          commit();
+        });
+        return;
+      }
+
+      state.guideOpen = true;
+      if (!Array.isArray(state.assistantMessages) || state.assistantMessages.length === 0) {
         state.assistantMessages = [createAssistantGreeting()];
       }
       commit();
@@ -3952,9 +3909,8 @@ function bindEvents() {
   });
 
   document.querySelectorAll("[data-action='toggle-sidebar']").forEach((button) => {
-    button.addEventListener("click", async () => {
+    button.addEventListener("click", () => {
       state.sidebarCollapsed = !state.sidebarCollapsed;
-      await animateSidebarTransition(state.sidebarCollapsed);
       state.accountOpen = false;
       commit();
     });

@@ -64,7 +64,7 @@ export function renderAssistantMenu({ state, meta, messages, icon }) {
             <strong>${meta.title}</strong>
           </div>
         </div>
-        <button class="icon-button" data-action="toggle-guide" type="button" aria-label="Close Stocky">${icon("close")}</button>
+        <button class="icon-button assistant-menu-close" data-action="toggle-guide" type="button" aria-label="Close Stocky">${icon("close")}</button>
       </div>
       <div class="assistant-feed" aria-live="polite">
         ${messages.map(renderAssistantMessage).join("")}

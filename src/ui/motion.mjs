@@ -1,10 +1,6 @@
 import { animate } from "motion";
 
 const shouldReduceMotion = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-const sidebarTemplateColumns = {
-  expanded: "236px minmax(0, 1fr)",
-  collapsed: "68px minmax(0, 1fr)",
-};
 const tabMotionQueue = {
   activeView: null,
   stockView: null,
@@ -13,11 +9,16 @@ const recordDetailMotionQueue = {
   view: null,
   mode: null,
 };
+let guideCloseAnimation = null;
+let guideCloseRequestId = 0;
 
-let sidebarMotion = null;
-
-function getSidebarTemplateColumns(collapsed) {
-  return collapsed ? sidebarTemplateColumns.collapsed : sidebarTemplateColumns.expanded;
+function clearGuideCloseAnimation(animation) {
+  if (animation?.cancel) {
+    animation.cancel();
+  }
+  if (guideCloseAnimation === animation) {
+    guideCloseAnimation = null;
+  }
 }
 
 export function queueActiveViewMotion(view) {
@@ -31,56 +32,6 @@ export function queueStockViewMotion(view) {
 export function queueRecordDetailMotion(view, mode = "open") {
   recordDetailMotionQueue.view = view;
   recordDetailMotionQueue.mode = mode;
-}
-
-export function animateSidebarTransition(targetCollapsed) {
-  return new Promise((resolve) => {
-    if (shouldReduceMotion) {
-      resolve();
-      return;
-    }
-
-    const shell = document.querySelector(".app-shell");
-    if (!shell) {
-      resolve();
-      return;
-    }
-
-    const from = window.getComputedStyle(shell).gridTemplateColumns;
-    const to = getSidebarTemplateColumns(targetCollapsed);
-
-    if (from === to) {
-      resolve();
-      return;
-    }
-
-    if (sidebarMotion?.stop) {
-      sidebarMotion.stop();
-    }
-
-    sidebarMotion = animate(
-      shell,
-      {
-        gridTemplateColumns: [from, to],
-      },
-      {
-        duration: 0.24,
-        ease: "easeOut",
-      },
-    );
-
-    sidebarMotion.finished
-      .then(() => {
-        shell.style.removeProperty("grid-template-columns");
-        sidebarMotion = null;
-        resolve();
-      })
-      .catch(() => {
-        shell.style.removeProperty("grid-template-columns");
-        sidebarMotion = null;
-        resolve();
-      });
-  });
 }
 
 function animateTabPress(button) {
@@ -126,6 +77,50 @@ function animateTabHover(button, hovered) {
       ease: "easeOut",
     },
   );
+}
+
+export function animateGuideMenuClose(onComplete = () => {}) {
+  const guideMenu = document.querySelector(".guide-menu");
+  if (!guideMenu || shouldReduceMotion) {
+    onComplete();
+    return;
+  }
+
+  const requestId = ++guideCloseRequestId;
+  clearGuideCloseAnimation(guideCloseAnimation);
+  const animation = animate(
+    guideMenu,
+    {
+      opacity: [1, 0],
+      y: [0, 10],
+      scale: [1, 0.975],
+      filter: ["blur(0px)", "blur(4px)"],
+    },
+    {
+      duration: 0.24,
+      ease: "easeOut",
+    },
+  );
+  guideCloseAnimation = animation;
+
+  if (animation?.finished?.then) {
+    animation.finished
+      .then(() => {
+        if (requestId === guideCloseRequestId) {
+          onComplete();
+        }
+      })
+      .catch(() => {
+        if (requestId === guideCloseRequestId) {
+          onComplete();
+        }
+      })
+      .finally(() => clearGuideCloseAnimation(animation));
+    return;
+  }
+
+  onComplete();
+  clearGuideCloseAnimation(animation);
 }
 
 export function flushQueuedTabMotion(state) {

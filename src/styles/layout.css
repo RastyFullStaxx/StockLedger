@@ -2,6 +2,7 @@
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   min-height: 100dvh;
+  transition: grid-template-columns var(--motion-speed-slow) cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
 .app-shell.is-sidebar-collapsed {
@@ -951,9 +952,26 @@ button.account-popover-toggle > .mini-toggle-track.is-on {
   border-bottom-color: rgba(255, 255, 255, 0.18);
 }
 
-.assistant-menu .guide-menu-header > .icon-button {
+.assistant-menu .guide-menu-header > .assistant-menu-close,
+.assistant-menu .guide-menu-header .assistant-menu-close {
   background: transparent;
   border-color: transparent;
+  box-shadow: none;
+  color: #ffffff;
+}
+
+.assistant-menu .guide-menu-header > .assistant-menu-close:hover,
+.assistant-menu .guide-menu-header .assistant-menu-close:hover,
+.assistant-menu .guide-menu-header > .assistant-menu-close:focus-visible,
+.assistant-menu .guide-menu-header .assistant-menu-close:focus-visible {
+  background: transparent;
+  border-color: transparent;
+  color: #ffffff;
+  box-shadow: none;
+}
+
+.assistant-menu .guide-menu-header > .assistant-menu-close .icon,
+.assistant-menu .guide-menu-header .assistant-menu-close .icon {
   color: #ffffff;
 }
 
