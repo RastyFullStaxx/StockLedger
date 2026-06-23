@@ -134,6 +134,18 @@ let shouldFocusActionOnCompose = state.activeView === "compose";
 let fieldSelectUid = 0;
 let customSelectEventsBound = false;
 let reportChartsModulePromise = null;
+let stockyHomeBubbleMessageIndex = 0;
+let stockyHomeBubbleTimer = null;
+const stockyHomeBubbleMessagePool = [
+  "Stocky here! Always ready to help.",
+  "How's your day? I can check the ledger with you.",
+  "Need a quick stock read? Tap me.",
+  "I can help spot what needs attention.",
+  "Want to trace a stock movement? I'm here.",
+  "Let's keep the bar flowing today.",
+  "Questions about counts, actions, or audit? Ask me.",
+  "I can help you choose the right stock action.",
+];
 const eventSelectPortalMap = new WeakMap();
 
 function saveState() {
@@ -172,6 +184,7 @@ function render() {
     if (assistantFeed) assistantFeed.scrollTop = assistantFeed.scrollHeight;
     mountReportChartsWhenPresent(app);
   });
+  syncStockyHomeBubbleMessageRotation();
 
   if (state.activeView === "compose" && shouldFocusActionOnCompose) {
     requestAnimationFrame(() => {
@@ -324,23 +337,48 @@ function renderTopbar() {
 function renderStockyHomeBubble() {
   return `
     <button class="stocky-home-bubble" data-action="toggle-guide" type="button" aria-label="Open assistant">
-      ${escapeHtml(stockyHomeBubbleMessage())}
+      <span class="stocky-home-bubble-text">${escapeHtml(stockyHomeBubbleMessage())}</span>
     </button>
   `;
 }
 
 function stockyHomeBubbleMessage() {
-  const messages = [
-    "Stocky here! Always ready to help.",
-    "How's your day? I can check the ledger with you.",
-    "Need a quick stock read? Tap me.",
-    "I can help spot what needs attention.",
-    "Want to trace a stock movement? I'm here.",
-    "Let's keep the bar flowing today.",
-    "Questions about counts, actions, or audit? Ask me.",
-    "I can help you choose the right stock action.",
-  ];
-  return messages[Math.floor(Date.now() / 45000) % messages.length];
+  return stockyHomeBubbleMessagePool[stockyHomeBubbleMessageIndex % stockyHomeBubbleMessagePool.length];
+}
+
+function syncStockyHomeBubbleMessageRotation() {
+  const shouldRun = state.activeView === "home" && !state.guideOpen && document.querySelector(".stocky-home-bubble");
+  if (!shouldRun) {
+    stopStockyHomeBubbleMessageRotation();
+    return;
+  }
+
+  const bubbleText = document.querySelector(".stocky-home-bubble .stocky-home-bubble-text");
+  if (bubbleText) bubbleText.textContent = stockyHomeBubbleMessage();
+
+  if (stockyHomeBubbleTimer) return;
+
+  stockyHomeBubbleTimer = setInterval(() => {
+    const latestBubble = document.querySelector(".stocky-home-bubble .stocky-home-bubble-text");
+    if (!latestBubble || state.activeView !== "home" || state.guideOpen) {
+      stopStockyHomeBubbleMessageRotation();
+      return;
+    }
+
+    stockyHomeBubbleMessageIndex = (stockyHomeBubbleMessageIndex + 1) % stockyHomeBubbleMessagePool.length;
+    latestBubble.classList.add("is-fading");
+    setTimeout(() => {
+      if (!document.body.contains(latestBubble)) return;
+      latestBubble.textContent = stockyHomeBubbleMessage();
+      latestBubble.classList.remove("is-fading");
+    }, 220);
+  }, 5000);
+}
+
+function stopStockyHomeBubbleMessageRotation() {
+  if (!stockyHomeBubbleTimer) return;
+  clearInterval(stockyHomeBubbleTimer);
+  stockyHomeBubbleTimer = null;
 }
 
 function renderTopbarPrimaryAction() {
@@ -576,24 +614,20 @@ function renderLanding(localLedger, stockRows, outboxValidation) {
     <section class="landing-shell home-dashboard" aria-label="StockLedger Home">
       <section class="home-kpi-grid" aria-label="Home stock indicators">
         <article class="home-kpi-card">
-          <span>Needs review</span>
+          <span>Needs Review</span>
           <strong>${Math.max(4, attentionRows.length)}</strong>
-          <small>Stock rows at or below threshold</small>
         </article>
         <article class="home-kpi-card">
-          <span>Products live</span>
+          <span>Products Live</span>
           <strong>${stockedProducts}</strong>
-          <small>Products with stock on hand</small>
         </article>
         <article class="home-kpi-card">
-          <span>Work to send</span>
+          <span>Work To Send</span>
           <strong>${state.outbox.length}</strong>
-          <small>${invalidWork ? `${invalidWork} validation issue${invalidWork === 1 ? "" : "s"}` : "Ready for the next sync"}</small>
         </article>
         <article class="home-kpi-card">
-          <span>Last event</span>
+          <span>Last Event</span>
           <strong>${escapeHtml(lastEventAge)}</strong>
-          <small>${lastEvent ? escapeHtml(eventLabels[lastEvent.type] ?? lastEvent.type) : "Ledger waiting for work"}</small>
         </article>
       </section>
       <section class="home-operations-grid" aria-label="Current stock operations">

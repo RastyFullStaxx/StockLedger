@@ -1,10 +1,14 @@
 .landing-shell {
   display: grid;
-  gap: 18px;
+  gap: var(--home-gap, 18px);
 }
 
 .home-dashboard {
-  --home-radius: 10px;
+  --home-radius: var(--panel-radius-lg, var(--radius-lg));
+  --home-gap: var(--topbar-gap);
+  --home-card-gap: calc(var(--home-gap) - 6px);
+  --home-card-padding: var(--panel-padding);
+  --home-chip-icon-bg: rgba(220, 239, 235, 0.42);
   --home-line: rgba(11, 95, 86, 0.22);
   --home-line-strong: rgba(11, 95, 86, 0.46);
   --home-surface: rgba(255, 255, 255, 0.88);
@@ -45,19 +49,19 @@
 .home-kpi-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  gap: var(--home-card-gap);
 }
 
 .home-kpi-card {
   display: grid;
-  align-content: start;
-  gap: 6px;
-  min-height: 104px;
-  padding: 16px;
+  gap: 5px;
+  min-height: 78px;
+  padding: var(--home-card-padding);
   border: 1px solid var(--color-border);
-  border-radius: var(--home-radius);
-  background: var(--home-surface);
-  box-shadow: 0 10px 22px rgba(18, 43, 38, 0.04);
+  border-radius: var(--radius-md);
+  background: var(--surface-paper-soft);
+  box-shadow: var(--glass-inset);
+  backdrop-filter: saturate(150%) blur(18px);
 }
 
 .home-kpi-card span,
@@ -68,24 +72,21 @@
 
 .home-kpi-card span {
   font-size: 0.84rem;
+  text-transform: none;
 }
 
 .home-kpi-card strong {
   color: var(--color-text);
-  font-size: clamp(1.55rem, 2.2vw, 2.15rem);
+  font-size: 1.62rem;
   line-height: 1;
-  font-weight: 860;
+  font-weight: 760;
   font-variant-numeric: tabular-nums;
-}
-
-.home-kpi-card small {
-  line-height: 1.25;
 }
 
 .home-operations-grid {
   display: grid;
   grid-template-columns: minmax(280px, 0.88fr) minmax(0, 2.12fr);
-  gap: 18px;
+  gap: var(--home-gap);
   align-items: stretch;
 }
 
@@ -101,9 +102,9 @@
 .home-live-card {
   display: grid;
   align-content: center;
-  gap: 26px;
+  gap: var(--home-card-gap);
   min-height: 326px;
-  padding: clamp(24px, 4vw, 44px);
+  padding: clamp(22px, 4vw, 42px);
   background: var(--home-surface-soft);
 }
 
@@ -115,8 +116,8 @@
 .home-live-card h2 {
   margin: 0 0 12px;
   max-width: 13ch;
-  color: var(--color-text);
-  font-size: clamp(2.1rem, 3.2vw, 3.35rem);
+  color: var(--color-primary);
+  font-size: clamp(1.5rem, 2.4vw, 2.05rem);
   line-height: 0.98;
   font-weight: 820;
   letter-spacing: 0;
@@ -131,14 +132,14 @@
 
 .home-live-actions {
   display: grid;
-  gap: 12px;
+  gap: var(--home-card-gap);
   max-width: 260px;
 }
 
 .home-live-actions .button {
   justify-content: space-between;
   min-height: 50px;
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   font-weight: 780;
 }
 
@@ -158,9 +159,9 @@
 
 .home-flow-panel {
   display: grid;
-  gap: 14px;
+  gap: var(--home-card-gap);
   min-height: 326px;
-  padding: clamp(18px, 2.3vw, 28px);
+  padding: clamp(var(--home-card-padding), 2.3vw, 30px);
 }
 
 .home-flow-header,
@@ -168,14 +169,14 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--home-card-gap);
 }
 
 .home-flow-header h3,
 .home-card-header h3 {
   margin: 0;
   color: var(--color-text);
-  font-size: 1.15rem;
+  font-size: 1.05rem;
   line-height: 1.1;
   font-weight: 820;
 }
@@ -199,7 +200,7 @@
 .home-flow-content {
   display: grid;
   grid-template-columns: minmax(360px, 1fr) minmax(240px, 0.42fr);
-  gap: clamp(16px, 2.5vw, 32px);
+  gap: clamp(12px, 2vw, var(--home-gap));
   align-items: center;
 }
 
@@ -281,12 +282,12 @@
   z-index: 1;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: calc(var(--home-card-gap) / 2);
   min-width: 148px;
   min-height: 56px;
-  padding: 7px;
+  padding: calc(var(--home-card-padding) / 2);
   border: 1px solid var(--home-line-strong);
-  border-radius: 9px;
+  border-radius: var(--radius-lg);
   background: rgba(255, 255, 255, 0.92);
   color: var(--color-text);
   box-shadow: 0 8px 18px rgba(18, 43, 38, 0.05);
@@ -305,7 +306,7 @@
   padding: 9px 11px;
   content: attr(data-detail);
   border: 1px solid rgba(11, 95, 86, 0.2);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--color-primary);
   color: #ffffff;
   box-shadow: 0 12px 22px rgba(6, 63, 57, 0.16);
@@ -344,7 +345,7 @@
   place-items: center;
   width: 34px;
   height: 34px;
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   background: var(--color-primary-soft);
   color: var(--color-primary);
   flex: 0 0 auto;
@@ -355,7 +356,7 @@
   gap: 2px;
   min-width: 0;
   padding: 7px 9px;
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   background: rgba(244, 249, 247, 0.9);
 }
 
@@ -378,6 +379,22 @@
   --float-y: -4px;
   top: 24px;
   left: 50%;
+  background: var(--color-primary);
+  color: #ffffff;
+  border-color: var(--color-primary-strong);
+}
+
+.flow-node--main .flow-node-icon {
+  background: var(--home-chip-icon-bg);
+  color: #ffffff;
+}
+
+.flow-node--main .flow-node-text {
+  background: transparent;
+}
+
+.flow-node--main small {
+  color: rgba(255, 255, 255, 0.86);
 }
 
 .flow-node--kitchen {
@@ -445,7 +462,7 @@
 .home-attention-list,
 .home-health-list {
   display: grid;
-  gap: 10px;
+  gap: var(--home-card-gap);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -455,12 +472,14 @@
   display: grid;
   grid-template-columns: 38px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
+  gap: var(--home-card-gap);
   min-height: 54px;
-  padding: 9px 12px;
+  padding: 10px 12px;
   border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: #ffffff;
+  border-radius: var(--radius-md);
+  background: var(--color-primary);
+  border-color: var(--color-primary-strong);
+  color: #ffffff;
 }
 
 .event-mark,
@@ -469,27 +488,44 @@
   place-items: center;
   width: 34px;
   height: 34px;
-  border-radius: 7px;
+  border-radius: var(--radius-md);
 }
 
-.event-mark--lime,
+.event-mark {
+  background: var(--home-chip-icon-bg);
+  color: #ffffff;
+}
+
+.event-mark--lime {
+  background: var(--home-chip-icon-bg);
+  color: #ffffff;
+}
+
+.event-mark--move {
+  background: var(--home-chip-icon-bg);
+  color: #ffffff;
+}
+
+.event-mark--count {
+  background: var(--home-chip-icon-bg);
+  color: #ffffff;
+}
+
 .attention-icon--low {
   background: rgba(22, 101, 52, 0.1);
   color: var(--color-success);
 }
 
-.event-mark--move {
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
-}
-
-.event-mark--count,
 .attention-icon--count {
   background: rgba(23, 78, 122, 0.1);
   color: var(--color-info);
 }
 
 .home-event-chips strong,
+.home-event-chips em {
+  color: #ffffff;
+}
+
 .home-attention-list strong,
 .home-action-card strong,
 .home-health-list strong,
@@ -516,16 +552,16 @@
 .home-bottom-grid {
   display: grid;
   grid-template-columns: minmax(280px, 0.95fr) minmax(320px, 0.85fr) minmax(300px, 1.2fr);
-  gap: 18px;
+  gap: var(--home-gap);
   align-items: stretch;
 }
 
 .home-card {
   display: grid;
   align-content: start;
-  gap: 18px;
+  gap: var(--home-card-gap);
   min-height: 292px;
-  padding: 20px;
+  padding: clamp(14px, 1.5vw, var(--home-card-padding));
 }
 
 .attention-count,
@@ -533,9 +569,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 30px;
+  min-width: 36px;
   min-height: 30px;
-  border-radius: 999px;
+  padding: 0 8px;
+  border-radius: var(--radius-md);
   font-weight: 860;
 }
 
@@ -554,11 +591,11 @@
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px;
+  gap: var(--home-card-gap);
   min-height: 58px;
   padding: 10px;
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: #ffffff;
 }
 
@@ -608,7 +645,7 @@
 .home-action-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: var(--home-card-gap);
 }
 
 .home-action-card {
@@ -619,7 +656,7 @@
   min-height: 96px;
   padding: 14px 10px;
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: #ffffff;
   color: var(--color-text);
   text-align: center;
@@ -646,7 +683,7 @@
   place-items: center;
   width: 36px;
   height: 36px;
-  border-radius: 999px;
+  border-radius: var(--radius-md);
   background: var(--color-primary-soft);
   color: var(--color-primary);
 }
@@ -702,7 +739,7 @@
   margin-top: 2px;
   padding: 12px;
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--home-surface-soft);
 }
 
@@ -729,6 +766,10 @@
 
 @supports not (backdrop-filter: blur(1px)) {
   .dashboard-kpi-card {
+    background: var(--color-card-solid);
+  }
+
+  .home-kpi-card {
     background: var(--color-card-solid);
   }
 }

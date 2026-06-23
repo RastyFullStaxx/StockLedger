@@ -753,7 +753,16 @@ button.account-popover-toggle > .mini-toggle-track.is-on {
   line-height: 1.25;
   text-align: left;
   transform: translateY(-50%);
-  animation: stocky-bubble-in 240ms ease-out;
+  animation: stocky-bubble-in 240ms ease-out, stocky-bubble-wiggle 8.2s ease-in-out infinite;
+}
+
+.stocky-home-bubble-text {
+  display: inline-block;
+  transition: opacity var(--motion-speed-fast) ease;
+}
+
+.stocky-home-bubble-text.is-fading {
+  opacity: 0;
 }
 
 .stocky-home-bubble::before {
@@ -781,11 +790,9 @@ button.account-popover-toggle > .mini-toggle-track.is-on {
 
 @keyframes stocky-bubble-in {
   from {
-    transform: translate(-4px, -50%);
     opacity: 0;
   }
   to {
-    transform: translate(0, -50%);
     opacity: 1;
   }
 }
@@ -796,7 +803,7 @@ button.account-popover-toggle > .mini-toggle-track.is-on {
     right: 0;
     max-width: min(280px, calc(100vw - 40px));
     transform: none;
-    animation-name: stocky-bubble-in-mobile;
+    animation: stocky-bubble-in-mobile 240ms ease-out, stocky-bubble-wiggle-mobile 8.2s ease-in-out infinite;
   }
 
   .stocky-home-bubble::before {
@@ -805,6 +812,44 @@ button.account-popover-toggle > .mini-toggle-track.is-on {
     border-right: 0;
     border-left: 1px solid rgba(255, 255, 255, 0.24);
     transform: rotate(45deg);
+  }
+}
+
+@keyframes stocky-bubble-wiggle-mobile {
+  0%,
+  82%,
+  100% {
+    filter: none;
+  }
+  86% {
+    filter: rotate(-2deg);
+  }
+  90% {
+    filter: rotate(2deg);
+  }
+  94% {
+    filter: rotate(1deg);
+  }
+}
+
+@keyframes stocky-bubble-wiggle {
+  0%,
+  82%,
+  100% {
+    transform: translateY(-50%);
+    filter: none;
+  }
+  86% {
+    transform: translateY(-52%);
+    filter: rotate(-2deg);
+  }
+  90% {
+    transform: translateY(-48%);
+    filter: rotate(2deg);
+  }
+  94% {
+    transform: translateY(-50%);
+    filter: rotate(1deg);
   }
 }
 
