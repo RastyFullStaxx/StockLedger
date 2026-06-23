@@ -866,9 +866,21 @@ test("assistant engine answers StockLedger questions and redirects out-of-scope 
   assert.match(answerAssistantQuestion("How many stocks do we have?", context).text, /products with replayed stock/);
   assert.match(answerAssistantQuestion("What actions can I use?", context).text, /Stock Actions can queue/);
   assert.match(answerAssistantQuestion("Why is Fresh Lime low?", context).text, /threshold pressure|below-zero row|Fresh Lime totals/);
+  assert.match(answerAssistantQuestion("I'm lost and not sure what to do", context).text, /First move: plan receiving for Fresh Lime|stock row.+threshold/);
   assert.match(answerAssistantQuestion("I am trying to receive a delivery", context).text, /Use Stock|Stock In|record received stock/);
   assert.match(answerAssistantQuestion("Is it safe to send saved work?", context).text, /no saved work waiting|ready to send|Not yet/);
   assert.match(answerAssistantQuestion("Who won the basketball game?", context).text, /I[.’]m here to help with StockLedger/);
+
+  const freshLimeAnswer = answerAssistantQuestion("Why is Fresh Lime low?", context);
+  const followUpContext = {
+    ...context,
+    recentMessages: [
+      { role: "user", text: "Why is Fresh Lime low?" },
+      { role: "assistant", text: freshLimeAnswer.text },
+    ],
+  };
+  assert.match(answerAssistantQuestion("tell me more", followUpContext).text, /Still looking at Fresh Lime|Current spread/);
+  assert.match(answerAssistantQuestion("what about Main Bar", followUpContext).text, /For Main Bar|Current non-zero rows/);
 });
 
 test("assistant panel module builds notifications, context, and Stocky markup without app rendering", () => {

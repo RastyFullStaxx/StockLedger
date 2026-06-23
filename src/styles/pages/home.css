@@ -1,47 +1,102 @@
 .entry-landing {
-  --entry-ink: #111827;
-  --entry-navy: #12265f;
-  --entry-navy-deep: #0b1742;
+  --entry-ink: #f6fbf8;
+  --entry-navy: #071414;
+  --entry-navy-deep: #020909;
   --entry-teal: var(--color-primary);
   min-height: 100dvh;
   display: grid;
-  grid-template-columns: minmax(340px, 0.34fr) minmax(0, 1fr);
-  padding: 0;
-  background: #eaf4f1;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: clamp(34px, 7vh, 88px);
+  padding: clamp(28px, 4vw, 54px) clamp(28px, 5vw, 78px);
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, rgba(1, 10, 12, 0.74) 0%, rgba(2, 17, 17, 0.6) 31%, rgba(4, 42, 34, 0.44) 55%, rgba(1, 21, 20, 0.48) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.28), rgba(0, 0, 0, 0.58)),
+    url("../../assets/landing-green-hero.png");
+  background-position: center;
+  background-size: cover;
   color: var(--entry-ink);
+  isolation: isolate;
 }
 
-.entry-login-panel,
-.entry-welcome-panel {
+.entry-landing::before,
+.entry-landing::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+}
+
+.entry-landing::before {
+  z-index: -1;
+  background:
+    linear-gradient(90deg, rgba(0, 7, 9, 0.58) 0%, rgba(0, 9, 10, 0.34) 26%, rgba(7, 55, 43, 0.06) 55%, rgba(3, 28, 25, 0.18) 100%),
+    radial-gradient(circle at 18% 58%, rgba(0, 0, 0, 0.22), transparent 29%);
+}
+
+.entry-landing::after {
+  z-index: -1;
+  background:
+    radial-gradient(ellipse at center, transparent 35%, rgba(0, 0, 0, 0.34) 78%, rgba(0, 0, 0, 0.72) 100%),
+    linear-gradient(90deg, rgba(0, 6, 7, 0.24), transparent 46%, rgba(0, 14, 13, 0.16));
+  box-shadow: inset 0 0 180px rgba(0, 0, 0, 0.66);
+}
+
+.entry-header {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(190px, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 24px;
   min-width: 0;
-  overflow: hidden;
 }
 
 .entry-login-panel {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 406px);
+  min-width: 0;
+  overflow: hidden;
   display: grid;
-  grid-template-rows: auto 1fr auto auto;
-  align-items: center;
-  gap: clamp(18px, 3vw, 34px);
-  padding: clamp(22px, 4vw, 44px);
-  border: 0;
-  border-radius: 0;
-  background: #ffffff;
-  box-shadow: none;
+  align-self: center;
+  margin-left: clamp(0px, 1.5vw, 22px);
+  padding: clamp(22px, 3vw, 32px);
+  border: 1px solid rgba(208, 245, 230, 0.18);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(7, 25, 24, 0.8), rgba(4, 17, 17, 0.72));
+  box-shadow: 0 28px 76px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(18px) saturate(130%);
 }
 
 .entry-brand {
   display: inline-flex;
   align-items: center;
   gap: 14px;
-  color: var(--entry-teal);
-  font-size: clamp(1.25rem, 1.5vw, 1.35rem);
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #ffffff;
+  font-size: clamp(1.22rem, 1.7vw, 1.48rem);
   font-weight: 900;
+  line-height: 1;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.46);
 }
 
 .entry-brand img {
-  width: 48px;
-  height: 48px;
+  width: 52px;
+  height: 52px;
   object-fit: contain;
+}
+
+.entry-brand h1 {
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  letter-spacing: 0;
 }
 
 .entry-avatar {
@@ -64,21 +119,21 @@
 
 .entry-login-form {
   display: grid;
-  gap: 12px;
+  gap: 18px;
 }
 
 .entry-login-form label {
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 
 .entry-login-form label > span {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  color: var(--color-text-muted);
-  font-size: 0.78rem;
-  font-weight: 860;
+  color: rgba(245, 252, 248, 0.9);
+  font-size: 0.73rem;
+  font-weight: 880;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
@@ -89,23 +144,33 @@
 
 .entry-login-form input[type="text"],
 .entry-login-form input[type="password"] {
-  min-height: 42px;
-  border-radius: 999px;
-  border-color: rgba(17, 24, 39, 0.34);
-  background: rgba(255, 255, 255, 0.92);
-  text-align: center;
-  font-weight: 780;
+  min-height: 46px;
+  padding: 0 16px;
+  border: 1px solid rgba(226, 255, 244, 0.24);
+  border-radius: 6px;
+  background: rgba(1, 11, 12, 0.42);
+  color: #ffffff;
+  text-align: left;
+  font-weight: 720;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.entry-login-form input[type="text"]:focus,
+.entry-login-form input[type="password"]:focus {
+  border-color: rgba(137, 211, 188, 0.72);
+  background: rgba(1, 13, 13, 0.56);
 }
 
 .entry-login-button {
-  min-height: 44px;
-  border-radius: 999px;
+  min-height: 50px;
+  border-radius: 7px;
   justify-content: center;
-  margin-top: 4px;
-  border-color: var(--entry-teal);
-  background: var(--entry-teal);
-  box-shadow: none;
+  margin-top: 6px;
+  border-color: rgba(83, 176, 151, 0.84);
+  background: linear-gradient(180deg, #2f9a87, var(--entry-teal));
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.16);
   color: #ffffff;
+  font-weight: 860;
 }
 
 .entry-login-options {
@@ -113,9 +178,9 @@
   justify-content: space-between;
   align-items: center;
   gap: 10px;
-  color: var(--color-text-muted);
+  color: rgba(246, 252, 248, 0.88);
   font-size: 0.75rem;
-  font-weight: 740;
+  font-weight: 720;
 }
 
 .entry-login-options label {
@@ -126,8 +191,8 @@
 }
 
 .entry-login-options input {
-  width: 13px;
-  height: 13px;
+  width: 14px;
+  height: 14px;
   min-height: 0;
   accent-color: var(--entry-teal);
 }
@@ -143,8 +208,10 @@
 
 .entry-login-options button {
   padding: 0;
-  color: var(--entry-teal);
-  font-weight: 820;
+  color: #b8dccd;
+  font-weight: 780;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .entry-dots {
@@ -161,42 +228,17 @@
   opacity: 0.92;
 }
 
-.entry-welcome-panel {
-  position: relative;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  min-height: 100dvh;
-  padding: clamp(24px, 4vw, 54px);
-  border-radius: 0;
-  background:
-    linear-gradient(90deg, rgba(2, 38, 31, 0.5), rgba(2, 38, 31, 0.2) 42%, rgba(2, 38, 31, 0.3)),
-    url("../../assets/landing-green-hero.png");
-  background-position: center;
-  background-size: cover;
-  color: #ffffff;
-  box-shadow: none;
-  isolation: isolate;
-}
-
-.entry-welcome-panel::after {
-  position: absolute;
-  inset: 18px;
-  z-index: -1;
-  content: "";
-  border: 0;
-  border-radius: 0;
-  background: none;
-}
-
 .entry-nav {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  gap: clamp(18px, 3vw, 44px);
-  color: rgba(255, 255, 255, 0.82);
-  font-size: 0.72rem;
-  font-weight: 860;
-  text-transform: uppercase;
+  gap: clamp(18px, 3.1vw, 54px);
+  min-width: 0;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 0.86rem;
+  font-weight: 760;
+  text-transform: none;
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.46);
 }
 
 .entry-nav button {
@@ -204,12 +246,13 @@
 }
 
 .entry-nav-signin {
-  min-height: 32px;
-  padding: 0 18px;
+  min-height: 41px;
+  padding: 0 24px;
   border-radius: 999px !important;
-  background: #ffffff !important;
-  color: var(--entry-navy) !important;
-  box-shadow: none !important;
+  background: var(--entry-teal) !important;
+  color: #ffffff !important;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.14) !important;
+  text-shadow: none;
 }
 
 .landing-shell {
@@ -1037,7 +1080,7 @@
 
 @media (max-width: 1280px) {
   .entry-landing {
-    grid-template-columns: minmax(280px, 0.42fr) minmax(0, 1fr);
+    padding-inline: clamp(24px, 4vw, 54px);
   }
 
   .home-operations-grid,
@@ -1056,16 +1099,23 @@
 
 @media (max-width: 900px) {
   .entry-landing {
-    grid-template-columns: minmax(0, 1fr);
+    gap: 42px;
+    background-position: 35% center;
+  }
+
+  .entry-header {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .entry-nav {
+    justify-content: flex-start;
+    gap: 14px 24px;
   }
 
   .entry-login-panel {
-    border-radius: 0;
-  }
-
-  .entry-welcome-panel {
-    min-height: 620px;
-    border-radius: 0;
+    align-self: start;
+    margin-left: 0;
   }
 
   .dashboard-kpi-grid,
@@ -1084,27 +1134,45 @@
 
 @media (max-width: 620px) {
   .entry-landing {
-    padding: 0;
+    gap: 30px;
+    padding: 22px;
+    background-position: 29% center;
   }
 
-  .entry-login-panel,
-  .entry-welcome-panel {
-    border-radius: 0;
+  .entry-header {
+    gap: 20px;
   }
 
   .entry-login-panel {
-    padding: 22px;
+    width: 100%;
+    padding: 20px;
   }
 
-  .entry-welcome-panel {
-    min-height: 560px;
-    padding: 24px;
+  .entry-brand {
+    font-size: 1.08rem;
+    gap: 10px;
+  }
+
+  .entry-brand img {
+    width: 42px;
+    height: 42px;
   }
 
   .entry-nav {
-    justify-content: flex-start;
     flex-wrap: wrap;
-    gap: 12px 18px;
+    gap: 10px 16px;
+    font-size: 0.78rem;
+  }
+
+  .entry-nav-signin {
+    min-height: 36px;
+    padding: 0 18px;
+  }
+
+  .entry-login-options {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
   }
 
   .landing-shell {

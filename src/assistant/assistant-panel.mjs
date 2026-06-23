@@ -55,6 +55,7 @@ export function renderStockyIcon(className = "stocky-avatar") {
 
 export function renderAssistantMenu({ state, meta, messages, icon }) {
   return `
+    <div class="assistant-overlay-dim" data-action="toggle-guide" aria-hidden="true"></div>
     <div class="guide-menu assistant-menu" role="dialog" aria-label="Stocky Assistant">
       <div class="guide-menu-header">
         <div class="assistant-title">

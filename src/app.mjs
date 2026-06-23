@@ -683,33 +683,11 @@ function renderActiveView(localLedger, stockRows, outboxValidation) {
 function renderLandingEntry() {
   return `
     <main class="entry-landing" aria-label="StockLedger sign in">
-      <section class="entry-login-panel" aria-label="Sign in panel">
-        <div class="entry-brand">
-          <img src="/logo.svg" alt="" />
-          <strong>StockLedger</strong>
+      <header class="entry-header">
+        <div class="entry-brand" aria-label="StockLedger">
+          <img src="/logo-white.svg" alt="" />
+          <h1>StockLedger</h1>
         </div>
-        <div class="entry-avatar" aria-hidden="true">
-          ${icon("logIn")}
-        </div>
-        <form class="entry-login-form" data-form="landing-login">
-          <label>
-            <span>${icon("users")}Username</span>
-            <input name="username" type="text" value="northstar.admin" autocomplete="username" />
-          </label>
-          <label>
-            <span>${icon("briefcase")}Passcode</span>
-            <input name="password" type="password" value="stockledger" autocomplete="current-password" />
-          </label>
-          <button class="button button-primary entry-login-button" data-view="home" type="button">Enter StockLedger</button>
-          <div class="entry-login-options">
-            <label><input type="checkbox" checked />Remember me</label>
-            <button type="button" data-view="home">Use demo access</button>
-          </div>
-        </form>
-        <div class="entry-dots" aria-hidden="true"><span></span><span></span><span></span></div>
-      </section>
-
-      <section class="entry-welcome-panel" aria-label="Welcome">
         <nav class="entry-nav" aria-label="Landing links">
           <button type="button" data-view="home">About</button>
           <button type="button" data-view="dashboard">Stock</button>
@@ -717,6 +695,24 @@ function renderLandingEntry() {
           <button type="button" data-view="audit">Audit</button>
           <button class="entry-nav-signin" type="button" data-view="home">Sign In</button>
         </nav>
+      </header>
+
+      <section class="entry-login-panel" aria-label="Sign in panel">
+        <form class="entry-login-form" data-form="landing-login">
+          <label>
+            <span>Username</span>
+            <input name="username" type="text" value="northstar.admin" autocomplete="username" />
+          </label>
+          <label>
+            <span>Passcode</span>
+            <input name="password" type="password" value="stockledger" autocomplete="current-password" />
+          </label>
+          <div class="entry-login-options">
+            <label><input type="checkbox" checked />Remember me</label>
+            <button type="button" data-view="home">Use demo access</button>
+          </div>
+          <button class="button button-primary entry-login-button" data-view="home" type="button">Enter StockLedger</button>
+        </form>
       </section>
     </main>
   `;

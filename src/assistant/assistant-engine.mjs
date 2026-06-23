@@ -182,6 +182,26 @@ function assistantFollowUpAnswer(normalized, context, meta) {
     };
   }
 
+  const currentProductTopic = findMentionedProduct(normalized, context.products ?? []);
+  if (currentProductTopic) {
+    return assistantProductFollowUpAnswer(currentProductTopic, context);
+  }
+
+  const currentLocationTopic = findMentionedLocation(normalized, context.locations ?? []);
+  if (currentLocationTopic) {
+    return assistantLocationFollowUpAnswer(currentLocationTopic, context);
+  }
+
+  const productTopic = findMentionedProduct(recentAssistantText, context.products ?? []);
+  if (productTopic) {
+    return assistantProductFollowUpAnswer(productTopic, context);
+  }
+
+  const locationTopic = findMentionedLocation(recentAssistantText, context.locations ?? []);
+  if (locationTopic) {
+    return assistantLocationFollowUpAnswer(locationTopic, context);
+  }
+
   const recent = normalizeAssistantText(recentAssistantText);
   if (matchesAny(recent, ["saved work", "queued", "queue", "atomic batch", "send"])) {
     const outbox = assistantOutboxAnswer(context);
@@ -217,18 +237,68 @@ function assistantFollowUpAnswer(normalized, context, meta) {
   };
 }
 
+function assistantProductFollowUpAnswer(product, context) {
+  const evidence = collectAssistantEvidence(product.name, context);
+  const rows = evidence.targetRows;
+  const total = rows.reduce((sum, row) => sum + Number(row.quantity), 0);
+  const lowRows = rows.filter((row) => Number(row.quantity) >= 0 && Number(row.quantity) <= context.productLow(row.product_id));
+  const negativeRows = rows.filter((row) => Number(row.quantity) < 0);
+  const rowLines = rows.length
+    ? rows.map((row) => `- ${row.location}: ${context.formatQuantity(row.quantity)} ${context.productUnit(row.product_id)}`).join("\n")
+    : "- No replayed stock rows are visible for this product right now.";
+  const sourceHints = [
+    ...evidence.relatedPurchases.slice(-2).map((purchase) => `purchase ${purchase.status}: ${purchase.item_label ?? context.productName(purchase.product_id)} into ${purchase.location}`),
+    ...evidence.relatedSales.slice(-2).map((sale) => `sale ${sale.status}: ${sale.item_label ?? context.productName(sale.product_id)} from ${sale.location}`),
+  ];
+  const read = negativeRows.length
+    ? "This is an audit-first situation because at least one location is below zero."
+    : lowRows.length
+      ? "This is a replenishment watch item because at least one location is at or below its low threshold."
+      : "This looks stable from the replayed rows I can see.";
+
+  return {
+    text: `Still looking at ${product.name}. Total on hand is ${context.formatQuantity(total)} ${product.unit}. ${read}\n\nCurrent spread:\n${rowLines}${sourceHints.length ? `\n\nRecent source hints:\n${sourceHints.map((hint) => `- ${hint}`).join("\n")}` : ""}\n\nA good next move is to verify the physical count if the number surprises you, then use Stock Actions for receiving, correction, or undo work.`,
+    actions: [
+      { label: "Open Stock Overview", view: "dashboard" },
+      ...(negativeRows.length ? [{ label: "Open Audit Trail", view: "audit" }] : []),
+      ...(lowRows.length || negativeRows.length ? [{ label: "Prepare Stock In", view: "compose" }] : [{ label: "Open Stock Actions", view: "compose" }]),
+    ].slice(0, 3),
+  };
+}
+
+function assistantLocationFollowUpAnswer(location, context) {
+  const rows = context.stockRows().filter((row) => row.location === location.name && Number(row.quantity) !== 0);
+  const lowRows = rows.filter((row) => Number(row.quantity) >= 0 && Number(row.quantity) <= context.productLow(row.product_id));
+  const negativeRows = rows.filter((row) => Number(row.quantity) < 0);
+  const rowLines = rows.length
+    ? rows.slice(0, 8).map((row) => `- ${row.product_name}: ${context.formatQuantity(row.quantity)} ${context.productUnit(row.product_id)}`).join("\n")
+    : "- No non-zero replayed stock is visible here right now.";
+  const read = negativeRows.length
+    ? `${negativeRows.length} row${negativeRows.length === 1 ? "" : "s"} are below zero, so check Audit Trail before more routine work.`
+    : lowRows.length
+      ? `${lowRows.length} row${lowRows.length === 1 ? "" : "s"} are at or below threshold, so receiving or transfer planning may be needed.`
+      : "Nothing looks urgent from the replayed stock rows.";
+
+  return {
+    text: `For ${location.name}, I’m seeing a ${location.kind} location owned by ${location.owner}. ${read}\n\nCurrent non-zero rows:\n${rowLines}`,
+    actions: [
+      { label: "Open Locations", view: "locations" },
+      { label: "Open Stock Overview", view: "dashboard" },
+      ...(negativeRows.length ? [{ label: "Open Audit Trail", view: "audit" }] : []),
+    ].slice(0, 3),
+  };
+}
+
 function isFollowUpQuestion(normalized) {
+  if (["why", "how so", "go on", "continue", "expand"].includes(normalized)) return true;
+  if (normalized.startsWith("what about ")) return true;
+
   return matchesAny(normalized, [
     "tell me more",
     "more detail",
     "explain that",
     "what do you mean",
-    "why",
     "why so",
-    "how so",
-    "go on",
-    "continue",
-    "expand",
     "that one",
     "what about that",
   ]);
@@ -544,14 +614,7 @@ function assistantSmallTalkAnswer(normalized, meta, context) {
   }
 
   if (matchesAny(normalized, ["confused", "lost", "overwhelmed", "not sure", "dont know", "don't know", "stuck"])) {
-    return {
-      text: `Totally fair. Stock systems get noisy fast, so let’s make it small.\n\nStart with one question: “Is anything unsafe right now?” In this session I’d check saved work, then low or below-zero stock, then the audit trail only if a number looks wrong.`,
-      actions: [
-        { label: "What needs attention?", view: meta.title === "Stock Overview" ? "dashboard" : (context.activeView ?? "dashboard") },
-        { label: "Open Stock Overview", view: "dashboard" },
-        { label: "Open Stock Actions", view: "compose" },
-      ],
-    };
+    return assistantCalmTriageAnswer(context, meta, activeView);
   }
 
   if (matchesAny(normalized, ["thank", "thanks", "appreciate"])) {
@@ -573,6 +636,40 @@ function assistantSmallTalkAnswer(normalized, meta, context) {
   }
 
   return null;
+}
+
+function assistantCalmTriageAnswer(context, meta, activeView) {
+  const rows = context.stockRows();
+  const validations = safeList(() => context.validations());
+  const invalid = validations.filter((result) => !result.valid);
+  const workItems = safeList(() => context.workItems());
+  const negativeRows = rows.filter((row) => Number(row.quantity) < 0);
+  const lowRows = rows.filter((row) => Number(row.quantity) >= 0 && Number(row.quantity) <= context.productLow(row.product_id));
+  const firstMove = invalid.length
+    ? `fix ${invalid.length} saved validation issue${invalid.length === 1 ? "" : "s"} before sending anything`
+    : negativeRows.length
+      ? `check ${negativeRows[0].product_name} at ${negativeRows[0].location} because it is below zero`
+      : lowRows.length
+        ? `plan receiving for ${lowRows[0].product_name} at ${lowRows[0].location}`
+        : workItems.length
+          ? `review the ${workItems.length} saved work item${workItems.length === 1 ? "" : "s"} and send once they match reality`
+          : `stay on ${meta.title} and do the next ordinary task`;
+  const readLines = [
+    invalid.length ? `${invalid.length} saved validation issue${invalid.length === 1 ? "" : "s"} need attention.` : "",
+    negativeRows.length ? `${negativeRows.length} stock row${negativeRows.length === 1 ? "" : "s"} are below zero.` : "",
+    lowRows.length ? `${lowRows.length} stock row${lowRows.length === 1 ? "" : "s"} are at or below threshold.` : "",
+    workItems.length ? `${workItems.length} queued work item${workItems.length === 1 ? "" : "s"} are waiting.` : "",
+  ].filter(Boolean);
+
+  return {
+    text: `You’re not behind. Let’s shrink the problem.\n\nFirst move: ${firstMove}.\n\nWhat I’m seeing:\n${readLines.length ? readLines.map((line) => `- ${line}`).join("\n") : "- Nothing urgent is standing out from the current replay or saved work."}\n\nAfter that, use Stock Actions for new work and Audit Trail only when a number needs explanation.`,
+    actions: [
+      ...(invalid.length || workItems.length ? [{ label: "Review Saved Work", view: "compose" }] : []),
+      ...(negativeRows.length || lowRows.length ? [{ label: "Open Stock Overview", view: "dashboard" }] : []),
+      { label: "Open Audit Trail", view: "audit" },
+      ...pageAssistantActions(activeView, context),
+    ].slice(0, 3),
+  };
 }
 
 function assistantNotificationAnswer(context) {

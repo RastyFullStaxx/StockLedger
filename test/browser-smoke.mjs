@@ -126,6 +126,11 @@ try {
   await page.evaluate(() => localStorage.clear());
   await page.reload({ waitUntil: "networkidle" });
 
+  const entryButton = page.getByRole("button", { name: "Enter StockLedger" });
+  if (await entryButton.count()) {
+    await entryButton.click();
+  }
+
   await page.getByRole("heading", { name: "StockLedger" }).waitFor();
   await page.getByRole("button", { name: /Stocky/ }).click();
   await page.getByRole("dialog", { name: "Stocky Assistant" }).waitFor();
