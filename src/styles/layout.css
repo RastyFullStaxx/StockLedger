@@ -91,7 +91,7 @@
 }
 
 .brand-mark-toggle:focus-visible {
-  outline: 2px solid var(--color-primary);
+  outline: 2px solid #ffffff;
   outline-offset: 2px;
 }
 
@@ -452,7 +452,7 @@ button.account-popover-toggle > .mini-toggle-track.is-on {
 }
 
 .is-sidebar-collapsed .sidebar {
-  padding: var(--sidebar-padding) var(--sidebar-padding-collapsed);
+  padding: 18px var(--sidebar-padding-collapsed) var(--sidebar-padding);
   align-items: center;
 }
 
@@ -461,19 +461,22 @@ button.account-popover-toggle > .mini-toggle-track.is-on {
   display: grid;
   justify-items: center;
   justify-content: center;
-  gap: 8px;
-}
-
-.is-sidebar-collapsed .nav-group-items {
   gap: 0;
+  min-height: 0;
 }
 
 .is-sidebar-collapsed .brand-copy,
-.is-sidebar-collapsed .nav-group-title,
 .is-sidebar-collapsed .nav-item span,
 .is-sidebar-collapsed .account-trigger span:not(.account-avatar),
 .is-sidebar-collapsed .account-trigger > .icon {
   display: none;
+}
+
+.is-sidebar-collapsed .nav-group-title {
+  visibility: hidden;
+  overflow: hidden;
+  width: 100%;
+  white-space: nowrap;
 }
 
 .is-sidebar-collapsed .sidebar-toggle {

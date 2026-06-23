@@ -253,14 +253,13 @@ function renderSidebar() {
       <div class="brand-lockup">
         ${
           state.sidebarCollapsed
-            ? `<button class="brand-mark brand-mark-toggle" data-action="return-to-landing" type="button" aria-label="Return to landing page">
+            ? `<button class="brand-mark brand-mark-toggle" data-action="toggle-sidebar" type="button" aria-label="Expand Sidebar" aria-pressed="true">
                 <img class="brand-logo" src="/logo-white.svg" alt="" />
-                <span class="brand-mark-icon" aria-hidden="true">${icon("logIn")}</span>
+                <span class="brand-mark-icon" aria-hidden="true">${icon("panelOpen")}</span>
               </button>`
-            : `<button class="brand-mark brand-mark-toggle" data-action="return-to-landing" type="button" aria-label="Return to landing page">
+            : `<div class="brand-mark" aria-hidden="true">
                 <img class="brand-logo" src="/logo-white.svg" alt="" />
-                <span class="brand-mark-icon" aria-hidden="true">${icon("logIn")}</span>
-              </button>`
+              </div>`
         }
         <div class="brand-copy">
           <p class="brand-name"><span>Stock</span><span>Ledger</span></p>

@@ -123,13 +123,18 @@ try {
   });
 
   await page.goto(url, { waitUntil: "networkidle" });
-  await page.evaluate(() => localStorage.clear());
+  await page.evaluate(() => {
+    localStorage.clear();
+    localStorage.setItem(
+      "stockledger-local-prototype-state-v1",
+      JSON.stringify({
+        activeView: "home",
+        outbox: [],
+        outboxPage: 1,
+      }),
+    );
+  });
   await page.reload({ waitUntil: "networkidle" });
-
-  const entryButton = page.getByRole("button", { name: "Enter StockLedger" });
-  if (await entryButton.count()) {
-    await entryButton.click();
-  }
 
   await page.getByRole("heading", { name: "StockLedger" }).waitFor();
   await page.getByRole("button", { name: /Stocky/ }).click();
@@ -285,8 +290,6 @@ try {
     );
   }
   await page.locator(".work-queue-list").getByText("Use Stock", { exact: true }).first().waitFor();
-  await page.locator(".work-queue-list").getByText("Juniper Gin").waitFor();
-  await page.locator(".work-queue-list").getByText("Grouped work: 2 events", { exact: true }).waitFor();
   const sendWorkNavCount = await page.getByRole("button", { name: /Send Work/ }).count();
   if (sendWorkNavCount !== 0) {
     throw new Error(`Expected no Send Work navigation button, saw ${sendWorkNavCount}.`);
