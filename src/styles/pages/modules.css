@@ -322,8 +322,69 @@
   color: var(--color-text-muted);
 }
 
+.record-table td .record-token.is-positive,
+.record-detail-list .record-token.is-positive,
+.record-detail-heading .record-token.is-positive {
+  border-color: rgba(11, 95, 86, 0.26);
+  background: rgba(11, 95, 86, 0.12);
+  color: var(--color-primary);
+}
+
+.record-table td .record-token.is-negative,
+.record-detail-list .record-token.is-negative,
+.record-detail-heading .record-token.is-negative {
+  border-color: rgba(159, 29, 29, 0.28);
+  background: rgba(159, 29, 29, 0.1);
+  color: var(--color-error);
+}
+
+.record-table td .record-token.is-warning,
+.record-detail-list .record-token.is-warning,
+.record-detail-heading .record-token.is-warning {
+  border-color: rgba(129, 84, 0, 0.28);
+  background: rgba(129, 84, 0, 0.11);
+  color: var(--color-warning);
+}
+
+.record-table td .record-token.is-info,
+.record-detail-list .record-token.is-info,
+.record-detail-heading .record-token.is-info {
+  border-color: rgba(23, 78, 122, 0.24);
+  background: rgba(23, 78, 122, 0.1);
+  color: var(--color-info);
+}
+
+.record-table td .record-token.is-neutral,
+.record-detail-list .record-token.is-neutral,
+.record-detail-heading .record-token.is-neutral {
+  border-color: var(--color-border);
+  background: var(--color-card-muted);
+  color: var(--color-text-muted);
+}
+
 .record-table td .badge {
   font-variant-numeric: tabular-nums;
+}
+
+.record-table td .badge.is-valid,
+.record-detail-list .badge.is-valid {
+  border-color: rgba(22, 101, 52, 0.24);
+  background: rgba(22, 101, 52, 0.1);
+  color: var(--color-success);
+}
+
+.record-table td .badge.is-warning,
+.record-detail-list .badge.is-warning {
+  border-color: rgba(129, 84, 0, 0.28);
+  background: rgba(129, 84, 0, 0.11);
+  color: var(--color-warning);
+}
+
+.record-table td .badge.is-error,
+.record-detail-list .badge.is-error {
+  border-color: rgba(159, 29, 29, 0.26);
+  background: rgba(159, 29, 29, 0.1);
+  color: var(--color-error);
 }
 
 .record-row {

@@ -3,7 +3,7 @@
 }
 
 .audit-table col.audit-col-action {
-  width: 160px;
+  width: 220px;
 }
 
 .audit-table col.audit-col-product {
@@ -11,7 +11,31 @@
 }
 
 .audit-table col.audit-col-change {
-  width: 110px;
+  width: 132px;
+}
+
+.audit-kpi-grid {
+  align-items: stretch;
+}
+
+.audit-kpi-note {
+  margin: -2px 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  font-weight: 680;
+}
+
+.audit-table .audit-action-token {
+  justify-content: center;
+}
+
+.audit-table .audit-change-token {
+  margin-left: auto;
+}
+
+.record-detail-heading .audit-action-token {
+  justify-self: start;
+  text-transform: none;
 }
 
 .audit-table col.audit-col-source {
