@@ -169,6 +169,13 @@ function render() {
 
   const focusSnapshot = captureFocusSnapshot(app);
 
+  if (state.activeView === "landing") {
+    app.innerHTML = renderLandingEntry(localLedger, stockRows);
+    restoreFocusSnapshot(app, focusSnapshot);
+    bindEvents();
+    return;
+  }
+
   app.innerHTML = `
     <div class="app-shell ${state.sidebarCollapsed ? "is-sidebar-collapsed" : ""}">
       ${renderSidebar()}
@@ -177,6 +184,7 @@ function render() {
         ${renderActiveView(localLedger, stockRows, outboxValidation)}
       </main>
       ${renderLocationModal()}
+      ${renderProductLifecycleModal()}
       ${renderToast()}
     </div>
   `;
@@ -440,6 +448,62 @@ function renderLocationModal() {
   `;
 }
 
+function renderProductLifecycleModal() {
+  const mode = state.productLifecycleConfirm;
+  if (mode !== "suspend" && mode !== "reactivate") return "";
+
+  const isSuspend = mode === "suspend";
+  const selectedProducts = selectedProductsForLifecycle(mode);
+  const title = isSuspend ? "Suspend product" : "Reactivate product";
+  const eyebrow = isSuspend ? "Product suspension" : "Product reactivation";
+  const actionLabel = isSuspend ? "Suspend Product" : "Reactivate Product";
+  const warning = !isSuspend && selectedProducts.some((product) => hasPendingProductClosureDebt(product.id))
+    ? "Pending suspension closure events are still in Work to Send for at least one selected product."
+    : "";
+  const closureLines = isSuspend
+    ? selectedProducts.map((product) => `<li><strong>${escapeHtml(product.name)}</strong><span>${escapeHtml(formatDeactivationClosures(getProductDeactivationClosures(product)))}</span></li>`).join("")
+    : "";
+
+  return `
+    <div class="modal-backdrop" data-action="close-product-lifecycle-modal" role="presentation">
+      <section class="modal-panel lifecycle-modal" role="dialog" aria-modal="true" aria-labelledby="product-lifecycle-modal-title">
+        <div class="modal-header">
+          <div>
+            <span>${escapeHtml(eyebrow)}</span>
+            <h2 id="product-lifecycle-modal-title">${escapeHtml(title)}</h2>
+          </div>
+          <button class="icon-button" data-action="close-product-lifecycle-modal" type="button" aria-label="Close ${escapeAttr(title)}">${icon("close")}</button>
+        </div>
+        <div class="lifecycle-modal-body">
+          <p>
+            ${
+              isSuspend
+                ? "This will queue closure work for any replayed stock, then mark the selected product inactive locally."
+                : "This marks the selected suspended product active again. Reactivation does not create stock movement events."
+            }
+          </p>
+          <div class="lifecycle-product-strip" aria-label="Selected products">
+            ${selectedProducts.map((product) => `<span>${escapeHtml(product.name)}</span>`).join("") || `<span>No product selected</span>`}
+          </div>
+          ${
+            isSuspend
+              ? `<div class="lifecycle-preview">
+                  <strong>Closure preview</strong>
+                  <ul>${closureLines || `<li><span>No replayed stock will be closed.</span></li>`}</ul>
+                </div>`
+              : ""
+          }
+          ${warning ? `<p class="lifecycle-warning">${escapeHtml(warning)}</p>` : ""}
+        </div>
+        <div class="modal-actions lifecycle-modal-actions">
+          <button class="button button-secondary" data-action="close-product-lifecycle-modal" type="button">Cancel</button>
+          <button class="button button-primary" data-action="confirm-product-lifecycle" type="button">${icon(isSuspend ? "package" : "refresh")}${escapeHtml(actionLabel)}</button>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
 function guideCueCount() {
   return countGuideCues(guideNotifications());
 }
@@ -602,6 +666,76 @@ function renderActiveView(localLedger, stockRows, outboxValidation) {
   if (state.activeView === "settings") return renderSettingsPage();
   if (state.activeView === "products") return renderProducts();
   return renderDashboard(localLedger, stockRows, outboxValidation);
+}
+
+function renderLandingEntry(localLedger, stockRows) {
+  const activeProducts = stockTotalRows(stockRows).filter((row) => Number(row.quantity) > 0).length;
+  const lowRows = stockRows.filter((row) => Number(row.quantity) >= 0 && Number(row.quantity) <= productLow(row.product_id)).length;
+  const lastEvent = [...localLedger].sort((first, second) => Number(second.timestamp) - Number(first.timestamp))[0];
+  const lastEventLabel = lastEvent ? `${eventLabels[lastEvent.type] ?? lastEvent.type} - ${productName(lastEvent.product_id)}` : "No ledger events yet";
+
+  return `
+    <main class="entry-landing" aria-label="StockLedger sign in">
+      <section class="entry-login-panel" aria-label="Sign in panel">
+        <div class="entry-brand">
+          <img src="/logo.svg" alt="" />
+          <strong>StockLedger</strong>
+        </div>
+        <div class="entry-avatar" aria-hidden="true">
+          ${icon("clipboardPlus")}
+        </div>
+        <form class="entry-login-form" data-form="landing-login">
+          <label>
+            <span>${icon("users")}Username</span>
+            <input name="username" type="text" value="northstar.admin" autocomplete="username" />
+          </label>
+          <label>
+            <span>${icon("briefcase")}Passcode</span>
+            <input name="password" type="password" value="stockledger" autocomplete="current-password" />
+          </label>
+          <button class="button button-primary entry-login-button" data-view="home" type="button">Enter StockLedger</button>
+          <div class="entry-login-options">
+            <label><input type="checkbox" checked />Remember me</label>
+            <button type="button" data-view="home">Use demo access</button>
+          </div>
+        </form>
+        <div class="entry-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+      </section>
+
+      <section class="entry-welcome-panel" aria-label="Welcome">
+        <nav class="entry-nav" aria-label="Landing links">
+          <button type="button" data-view="home">About</button>
+          <button type="button" data-view="dashboard">Stock</button>
+          <button type="button" data-view="reports">Reports</button>
+          <button type="button" data-view="audit">Audit</button>
+          <button class="entry-nav-signin" type="button" data-view="home">Sign In</button>
+        </nav>
+        <div class="entry-welcome-content">
+          <span class="entry-kicker">Event-sourced inventory ledger</span>
+          <h1>Welcome.</h1>
+          <p>Track every bottle, case, transfer, count, and correction without rewriting history.</p>
+          <div class="entry-hero-actions">
+            <button class="button button-primary" data-view="home" type="button">${icon("home")}Open Home</button>
+            <button class="button button-secondary" data-view="compose" type="button">${icon("plus")}Record Action</button>
+          </div>
+        </div>
+        <div class="entry-ledger-strip" aria-label="Ledger snapshot">
+          <article>
+            <span>Live Products</span>
+            <strong>${activeProducts}</strong>
+          </article>
+          <article>
+            <span>Needs Review</span>
+            <strong>${lowRows}</strong>
+          </article>
+          <article>
+            <span>Last Event</span>
+            <strong>${escapeHtml(lastEventLabel)}</strong>
+          </article>
+        </div>
+      </section>
+    </main>
+  `;
 }
 
 function renderLanding(localLedger, stockRows, outboxValidation) {
@@ -794,9 +928,6 @@ function renderClientsPage() {
     search: state.clientSearch ?? "",
     menuId: state.clientMenuFilter ?? "all",
   });
-  const clientPagination = paginateRows(clients, state.clientPage);
-  state.clientPage = clientPagination.page;
-  const visibleClients = clientPagination.pageRows;
   const selectedClient = clients.find((client) => client.id === state.selectedClientId) ?? null;
 
   return `
@@ -810,7 +941,7 @@ function renderClientsPage() {
       <section class="record-workspace ${selectedClient ? "has-detail" : ""}" data-record-workspace="clients" aria-label="Client records">
         <article class="panel record-table-panel">
           ${renderClientControls()}
-          ${renderClientTable(visibleClients, selectedClient, clientPagination, clients.length)}
+          ${renderClientTable(clients, selectedClient)}
         </article>
         ${selectedClient ? renderClientDetailPanel(selectedClient) : ""}
       </section>
@@ -867,7 +998,7 @@ function renderClientFilterTab(value, label) {
   `;
 }
 
-function renderClientTable(clients, selectedClient, pagination = null, totalCount = 0) {
+function renderClientTable(clients, selectedClient) {
   return `
     <div class="record-table-shell">
       <table class="record-table client-record-table">
@@ -895,7 +1026,6 @@ function renderClientTable(clients, selectedClient, pagination = null, totalCoun
           }
         </tbody>
       </table>
-      ${pagination ? renderTablePagination("client", pagination, totalCount) : ""}
     </div>
   `;
 }
@@ -971,9 +1101,6 @@ function renderSuppliersPage(localLedger) {
     search: state.supplierSearch ?? "",
     productId: state.supplierProductFilter ?? "all",
   });
-  const supplierPagination = paginateRows(suppliers, state.supplierPage);
-  state.supplierPage = supplierPagination.page;
-  const visibleSuppliers = supplierPagination.pageRows;
   const selectedSupplier = suppliers.find((supplier) => supplier.id === state.selectedSupplierId) ?? null;
 
   return `
@@ -987,7 +1114,7 @@ function renderSuppliersPage(localLedger) {
       <section class="record-workspace ${selectedSupplier ? "has-detail" : ""}" data-record-workspace="suppliers" aria-label="Supplier records">
         <article class="panel record-table-panel">
           ${renderSupplierControls()}
-          ${renderSupplierTable(visibleSuppliers, selectedSupplier, purchases, receivingEvents, supplierPagination, suppliers.length)}
+          ${renderSupplierTable(suppliers, selectedSupplier, purchases, receivingEvents)}
         </article>
         ${selectedSupplier ? renderSupplierDetailPanel(selectedSupplier, purchases, receivingEvents) : ""}
       </section>
@@ -1043,7 +1170,7 @@ function renderSupplierFilterTab(value, label) {
   `;
 }
 
-function renderSupplierTable(suppliers, selectedSupplier, purchases, receivingEvents, pagination = null, totalCount = 0) {
+function renderSupplierTable(suppliers, selectedSupplier, purchases, receivingEvents) {
   return `
     <div class="record-table-shell">
       <table class="record-table supplier-record-table">
@@ -1073,7 +1200,6 @@ function renderSupplierTable(suppliers, selectedSupplier, purchases, receivingEv
           }
         </tbody>
       </table>
-      ${pagination ? renderTablePagination("supplier", pagination, totalCount) : ""}
     </div>
   `;
 }
@@ -1150,9 +1276,6 @@ function renderMenusPage() {
     search: state.menuSearch ?? "",
     clientId: state.menuClientFilter ?? "all",
   });
-  const menuPagination = paginateRows(menus, state.menuPage);
-  state.menuPage = menuPagination.page;
-  const visibleMenus = menuPagination.pageRows;
   const selectedMenu = menus.find((menu) => menu.id === state.selectedMenuId) ?? null;
 
   return `
@@ -1166,7 +1289,7 @@ function renderMenusPage() {
       <section class="record-workspace ${selectedMenu ? "has-detail" : ""}" data-record-workspace="menus" aria-label="Menu records">
         <article class="panel record-table-panel">
           ${renderMenuControls()}
-          ${renderMenuTable(visibleMenus, selectedMenu, menuPagination, menus.length)}
+          ${renderMenuTable(menus, selectedMenu)}
         </article>
         ${selectedMenu ? renderMenuDetailPanel(selectedMenu) : ""}
       </section>
@@ -1230,7 +1353,7 @@ function renderMenuFilterTab(value, label) {
   `;
 }
 
-function renderMenuTable(menus, selectedMenu, pagination = null, totalCount = 0) {
+function renderMenuTable(menus, selectedMenu) {
   return `
     <div class="record-table-shell">
       <table class="record-table menu-record-table">
@@ -1260,7 +1383,6 @@ function renderMenuTable(menus, selectedMenu, pagination = null, totalCount = 0)
           }
         </tbody>
       </table>
-      ${pagination ? renderTablePagination("menu", pagination, totalCount) : ""}
     </div>
   `;
 }
@@ -1353,9 +1475,6 @@ function renderLocationsPage(localLedger, stockRows) {
     search: state.locationSearch ?? "",
     kind: state.locationKindFilter ?? "all",
   });
-  const locationPagination = paginateRows(filteredLocationRows, state.locationPage);
-  state.locationPage = locationPagination.page;
-  const visibleLocations = locationPagination.pageRows;
   const selectedLocation = filteredLocationRows.find((location) => location.id === state.selectedLocationId) ?? null;
 
   return `
@@ -1369,7 +1488,7 @@ function renderLocationsPage(localLedger, stockRows) {
       <section class="record-workspace ${selectedLocation ? "has-detail" : ""}" data-record-workspace="locations" aria-label="Location records">
         <article class="panel record-table-panel">
           ${renderLocationControls()}
-          ${renderLocationTable(visibleLocations, selectedLocation, stockRows, locationPagination, filteredLocationRows.length)}
+          ${renderLocationTable(filteredLocationRows, selectedLocation, stockRows)}
         </article>
         ${selectedLocation ? renderLocationDetailPanel(selectedLocation, stockRows, localLedger) : ""}
       </section>
@@ -1430,7 +1549,7 @@ function renderLocationFilterTab(value, label) {
   `;
 }
 
-function renderLocationTable(locationRows, selectedLocation, stockRows, pagination = null, totalCount = 0) {
+function renderLocationTable(locationRows, selectedLocation, stockRows) {
   return `
     <div class="record-table-shell">
       <table class="record-table location-record-table">
@@ -1460,7 +1579,6 @@ function renderLocationTable(locationRows, selectedLocation, stockRows, paginati
           }
         </tbody>
       </table>
-      ${pagination ? renderTablePagination("location", pagination, totalCount) : ""}
     </div>
   `;
 }
@@ -1645,9 +1763,6 @@ function renderUsersPage() {
     search: state.userSearch ?? "",
     role: state.userRoleFilter ?? "all",
   });
-  const userPagination = paginateRows(users, state.userPage);
-  state.userPage = userPagination.page;
-  const visibleUsers = userPagination.pageRows;
   const selectedUser = users.find((user) => user.id === state.selectedUserId) ?? null;
 
   return `
@@ -1661,7 +1776,7 @@ function renderUsersPage() {
       <section class="record-workspace ${selectedUser ? "has-detail" : ""}" data-record-workspace="users" aria-label="Staff access records">
         <article class="panel record-table-panel">
           ${renderUserControls()}
-          ${renderUserTable(visibleUsers, selectedUser, userPagination, users.length)}
+          ${renderUserTable(users, selectedUser)}
         </article>
         ${selectedUser ? renderUserDetailPanel(selectedUser) : ""}
       </section>
@@ -1732,7 +1847,7 @@ function renderUserFilterTab(value, label) {
   `;
 }
 
-function renderUserTable(users, selectedUser, pagination = null, totalCount = 0) {
+function renderUserTable(users, selectedUser) {
   return `
     <div class="record-table-shell">
       <table class="record-table user-record-table">
@@ -1760,7 +1875,6 @@ function renderUserTable(users, selectedUser, pagination = null, totalCount = 0)
           }
         </tbody>
       </table>
-      ${pagination ? renderTablePagination("user", pagination, totalCount) : ""}
     </div>
   `;
 }
@@ -2334,9 +2448,6 @@ function renderBusinessRecordPanel({ title, empty, records, type, selectedRecord
 
 function renderPurchaseRecordWorkspace({ title, empty, records, selectedRecord }) {
   const safeRecords = [...records].slice().reverse();
-  const purchasePagination = paginateRows(safeRecords, state.purchasePage);
-  state.purchasePage = purchasePagination.page;
-  const pageRecords = purchasePagination.pageRows;
   const safeSearch = escapeAttr(state.purchaseSearch ?? "");
 
   return `
@@ -2396,13 +2507,12 @@ function renderPurchaseRecordWorkspace({ title, empty, records, selectedRecord }
             </thead>
             <tbody>
               ${
-                pageRecords.length === 0
+                safeRecords.length === 0
                   ? `<tr><td colspan="5"><div class="empty-state"><strong>${escapeHtml(empty)}</strong></div></td></tr>`
-                  : pageRecords.map((record) => renderPurchaseTableRow(record, selectedRecord)).join("")
+                  : safeRecords.map((record) => renderPurchaseTableRow(record, selectedRecord)).join("")
               }
             </tbody>
           </table>
-          ${renderTablePagination("purchase", purchasePagination, safeRecords.length)}
         </div>
         ${selectedRecord ? renderPurchaseDetailPanel(selectedRecord) : ""}
       </section>
@@ -2470,9 +2580,6 @@ function renderPurchaseDetailPanel(record) {
 
 function renderSalesRecordWorkspace({ title, empty, records, selectedRecord }) {
   const safeRecords = [...records].slice().reverse();
-  const salesPagination = paginateRows(safeRecords, state.salesPage);
-  state.salesPage = salesPagination.page;
-  const pageRecords = salesPagination.pageRows;
   const safeSaleSearch = escapeAttr(state.saleSearch ?? "");
 
   return `
@@ -2535,13 +2642,12 @@ function renderSalesRecordWorkspace({ title, empty, records, selectedRecord }) {
             </thead>
             <tbody>
               ${
-                pageRecords.length === 0
+                safeRecords.length === 0
                   ? `<tr><td colspan="6"><div class="empty-state"><strong>${escapeHtml(empty)}</strong></div></td></tr>`
-                  : pageRecords.map((record) => renderSaleTableRow(record, selectedRecord)).join("")
+                  : safeRecords.map((record) => renderSaleTableRow(record, selectedRecord)).join("")
               }
             </tbody>
           </table>
-          ${renderTablePagination("sale", salesPagination, safeRecords.length)}
         </div>
         ${selectedRecord ? renderSaleDetailPanel(selectedRecord) : ""}
       </section>
@@ -2876,9 +2982,10 @@ function renderSaleSourceFields(form) {
   const checked = Boolean(form.attach_sale);
   return `
     <fieldset class="source-detail-panel form-field-span-2">
-      <label class="source-detail-toggle">
-        <input type="checkbox" name="attach_sale" value="true" ${checked ? "checked" : ""} />
-        <span>
+      <label class="source-detail-toggle ${checked ? "is-on" : ""}">
+        <input class="source-detail-toggle-input" type="checkbox" name="attach_sale" value="true" ${checked ? "checked" : ""} />
+        <span class="source-detail-switch" aria-hidden="true"><span></span></span>
+        <span class="source-detail-copy">
           <strong>Attach sale details</strong>
           <small>Use Stock can stand alone, or create a sales record with the same STOCK_OUT work.</small>
         </span>
@@ -2921,9 +3028,10 @@ function renderPurchaseSourceFields(form) {
   const checked = Boolean(form.attach_purchase);
   return `
     <fieldset class="source-detail-panel form-field-span-2">
-      <label class="source-detail-toggle">
-        <input type="checkbox" name="attach_purchase" value="true" ${checked ? "checked" : ""} />
-        <span>
+      <label class="source-detail-toggle ${checked ? "is-on" : ""}">
+        <input class="source-detail-toggle-input" type="checkbox" name="attach_purchase" value="true" ${checked ? "checked" : ""} />
+        <span class="source-detail-switch" aria-hidden="true"><span></span></span>
+        <span class="source-detail-copy">
           <strong>Attach purchase details</strong>
           <small>Stock In can stand alone, or create a receiving record linked to a supplier.</small>
         </span>
@@ -4753,6 +4861,30 @@ function bindEvents() {
     });
   });
 
+  document.querySelectorAll("[data-action='close-product-lifecycle-modal']").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      if (event.currentTarget !== event.target && event.currentTarget.classList.contains("modal-backdrop")) return;
+      state.productLifecycleConfirm = null;
+      commit();
+    });
+  });
+
+  document.querySelectorAll("[data-action='confirm-product-lifecycle']").forEach((button) => {
+    button.addEventListener("click", () => {
+      const mode = state.productLifecycleConfirm;
+      state.productLifecycleConfirm = null;
+      if (mode === "suspend") {
+        suspendProductFromAction({ confirmed: true });
+        return;
+      }
+      if (mode === "reactivate") {
+        reactivateProductFromAction({ confirmed: true });
+        return;
+      }
+      commit();
+    });
+  });
+
   const locationForm = document.querySelector("[data-form='location']");
   if (locationForm) {
     locationForm.addEventListener("input", () => {
@@ -5975,25 +6107,42 @@ function hasPendingProductClosureDebt(productId) {
   return selectHasPendingProductClosureDebt(state.outbox, productId);
 }
 
-function suspendProductFromAction() {
-  const selectedProducts = selectedProductIdsForScope("active", getActiveProducts())
+function selectedProductsForLifecycle(mode) {
+  const isReactivate = mode === "reactivate";
+  const scope = isReactivate ? "inactive" : "active";
+  const products = isReactivate ? getInactiveProducts() : getActiveProducts();
+  return selectedProductIdsForScope(scope, products)
     .map((productId) => getProductById(productId))
-    .filter((product) => product?.is_active);
+    .filter((product) => (isReactivate ? product && !product.is_active : product?.is_active));
+}
+
+function requestProductLifecycleConfirmation(mode) {
+  const selectedProducts = selectedProductsForLifecycle(mode);
+  if (selectedProducts.length === 0) {
+    showToast(`Choose at least one ${mode === "reactivate" ? "suspended" : "active"} product to ${mode}.`, "error");
+    commit();
+    return;
+  }
+
+  state.productLifecycleConfirm = mode;
+  commit();
+}
+
+function suspendProductFromAction({ confirmed = false } = {}) {
+  const selectedProducts = selectedProductsForLifecycle("suspend");
   if (selectedProducts.length === 0) {
     showToast("Choose at least one active product to suspend.", "error");
+    commit();
+    return;
+  }
+
+  if (!confirmed) {
+    requestProductLifecycleConfirmation("suspend");
     return;
   }
 
   const busyKey = selectedProducts.map((product) => product.id).join("|");
   if (productLifecycleBusy === busyKey) return;
-
-  const closurePreview = selectedProducts
-    .map((product) => `${product.name}: ${formatDeactivationClosures(getProductDeactivationClosures(product))}`)
-    .join("\n");
-  const shouldProceed = window.confirm(
-    `Suspend ${selectedProducts.length === 1 ? `"${selectedProducts[0].name}"` : `${selectedProducts.length} products`}?\n\nStock Closure Preview:\n${closurePreview}\n\nThis will add STOCK_ADJUSTMENT closure work per affected location and then mark each product inactive.`,
-  );
-  if (!shouldProceed) return;
 
   productLifecycleBusy = busyKey;
   try {
@@ -6025,23 +6174,19 @@ function suspendProductFromAction() {
   }
 }
 
-function reactivateProductFromAction() {
-  const selectedProducts = selectedProductIdsForScope("inactive", getInactiveProducts())
-    .map((productId) => getProductById(productId))
-    .filter((product) => product && !product.is_active);
+function reactivateProductFromAction({ confirmed = false } = {}) {
+  const selectedProducts = selectedProductsForLifecycle("reactivate");
   if (selectedProducts.length === 0) {
     showToast("Choose at least one suspended product to reactivate.", "error");
+    commit();
     return;
   }
 
-  const warning = selectedProducts.some((product) => hasPendingProductClosureDebt(product.id))
-    ? "There are pending suspension closure events for this product in Work to Send."
-    : "";
+  if (!confirmed) {
+    requestProductLifecycleConfirmation("reactivate");
+    return;
+  }
 
-  const shouldProceed = window.confirm(
-    `Reactivate ${selectedProducts.length === 1 ? `"${selectedProducts[0].name}"` : `${selectedProducts.length} products`}?\n\nReactivation does not create any stock movement events. Current stock (replayed) becomes immediately reusable.${warning ? `\n\n${warning}` : ""}`,
-  );
-  if (!shouldProceed) return;
   const actorReason = `${state.form.reason ?? ""}`.trim();
   const timestamp = Date.now();
   const reactivationEvents = buildProductReactivationWork(selectedProducts, {

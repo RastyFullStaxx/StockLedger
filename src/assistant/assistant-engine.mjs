@@ -180,7 +180,7 @@ function assistantUncertainAnswer() {
 
 function assistantOutOfScopeAnswer() {
   return {
-    text: "I’m here to help with StockLedger, and I don’t want to guess outside what this session can show me. I can help with stock on hand, low stock, saved work, page purpose, actions, audit behavior, products, locations, sales, purchases, users, reports, and settings. Try one of these: “What needs attention?”, “How much stock do we have?”, or “What should I do next?”",
+    text: "I’m here to help with StockLedger, but I can’t reliably answer that from this local inventory session. I can help with stock on hand, low stock, saved work, page purpose, actions, audit behavior, products, locations, sales, purchases, users, reports, and settings. Try one of these: “What needs attention?”, “How much stock do we have?”, or “What should I do next?”",
     actions: [
       { label: "Open Stock Overview", view: "dashboard" },
       { label: "Open Stock Actions", view: "compose" },

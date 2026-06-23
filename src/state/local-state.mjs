@@ -85,7 +85,7 @@ export function loadState(storage = globalThis.localStorage) {
 }
 
 export function saveState(state, storage = globalThis.localStorage) {
-  const { toast, accountOpen, locationModalOpen, guideOpen, assistantInput, assistantMessages, ...persistedState } = state;
+  const { toast, accountOpen, locationModalOpen, productLifecycleConfirm, guideOpen, assistantInput, assistantMessages, ...persistedState } = state;
   storage?.setItem(STORAGE_KEY, JSON.stringify(persistedState));
 }
 

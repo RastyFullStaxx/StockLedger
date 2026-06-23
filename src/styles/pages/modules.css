@@ -80,6 +80,12 @@
 .business-record-panel {
   position: sticky;
   top: 18px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-content: stretch;
+  height: var(--record-workspace-height, clamp(320px, calc(100dvh - 260px), 680px));
+  max-height: var(--record-workspace-height, clamp(320px, calc(100dvh - 260px), 680px));
+  min-height: 0;
 }
 
 .record-workspace {
@@ -114,6 +120,12 @@
   min-width: 0;
   max-width: 100%;
   width: 100%;
+}
+
+.record-workspace > .record-table-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-content: stretch;
 }
 
 .record-table-panel {
@@ -201,11 +213,17 @@
   box-sizing: border-box;
   overflow-x: auto;
   overflow-y: auto;
-  height: var(--record-workspace-height, clamp(320px, calc(100dvh - 260px), 680px));
-  max-height: var(--record-workspace-height, clamp(320px, calc(100dvh - 260px), 680px));
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.68);
+}
+
+.record-workspace > .record-table-shell {
+  height: var(--record-workspace-height, clamp(320px, calc(100dvh - 260px), 680px));
+  max-height: var(--record-workspace-height, clamp(320px, calc(100dvh - 260px), 680px));
 }
 
 .record-workspace.has-detail > .record-table-panel {
@@ -243,6 +261,22 @@
 
 .sales-record-panel .record-table-shell {
   height: var(--record-workspace-height);
+}
+
+.business-record-panel > .record-workspace {
+  --record-workspace-height: 100%;
+  height: 100%;
+  min-height: 0;
+  align-items: stretch;
+}
+
+.business-record-panel > .record-workspace.has-detail {
+  --record-workspace-height: 100%;
+}
+
+.business-record-panel > .record-workspace > .record-table-shell {
+  height: 100%;
+  max-height: 100%;
 }
 
 .record-table {
@@ -453,10 +487,6 @@
 .record-row:focus-visible {
   outline: var(--focus-ring);
   outline-offset: -3px;
-}
-
-.record-workspace.has-detail .detail-optional {
-  display: none;
 }
 
 .record-detail-panel {

@@ -430,7 +430,7 @@ export function defaultState() {
     serverLedger: seedEvents(),
     outbox: [],
     online: false,
-    activeView: "home",
+    activeView: "landing",
     products: defaultProducts(),
     locations: defaultLocations(),
     stockView: "totals",

@@ -216,7 +216,7 @@ export function buildProductionSeedState({ now = PRODUCTION_SEED_NOW } = {}) {
     serverLedger: events,
     outbox: queued,
     online: true,
-    activeView: "home",
+    activeView: "landing",
     products,
     locations,
     stockView: "detail",
