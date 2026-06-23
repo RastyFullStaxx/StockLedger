@@ -84,10 +84,17 @@
 
 .record-workspace {
   --record-workspace-height: max(360px, calc(100dvh - 260px));
+  --record-workspace-gap: var(--topbar-gap);
+  --record-detail-panel-pad: var(--panel-padding);
+  --record-detail-stack-gap: clamp(9px, 1.4vw, 12px);
+  --record-detail-radius: var(--panel-radius-lg);
+  --record-detail-heading-color: var(--color-primary);
+  --record-detail-list-bg: rgba(248, 252, 250, 0.82);
+  --record-detail-section-bg: rgba(248, 252, 250, 0.74);
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
-  gap: 10px;
+  gap: var(--record-workspace-gap);
   min-width: 0;
 }
 
@@ -95,6 +102,7 @@
   --record-workspace-height: max(560px, calc(100dvh - 180px));
   grid-template-columns: minmax(0, 1fr) minmax(340px, 0.44fr);
   align-items: stretch;
+  gap: var(--record-workspace-gap);
 }
 
 .record-workspace.has-detail > .record-table-panel,
@@ -415,11 +423,12 @@
   height: auto;
   max-height: calc(100dvh - 140px);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--record-detail-radius);
   background: var(--color-card);
   box-shadow: var(--glass-inset), var(--shadow-soft);
   padding: 0;
   overflow: hidden;
+  isolation: isolate;
 }
 
 .record-workspace.has-detail > .record-detail-panel {
@@ -434,50 +443,69 @@
   align-content: start;
   gap: 14px;
   overflow: auto;
-  padding: 16px;
+  padding: var(--record-detail-panel-pad);
 }
 
 .record-detail-heading {
   display: grid;
-  gap: 4px;
+  gap: 6px;
 }
 
 .record-detail-heading span {
-  color: var(--color-primary);
-  font-size: 0.78rem;
+  color: var(--record-detail-heading-color);
+  font-size: 0.77rem;
   font-weight: 840;
   text-transform: uppercase;
+  letter-spacing: 0.015em;
 }
 
 .record-detail-heading h2 {
-  margin: 0;
-  font-size: 1.35rem;
+  margin: 2px 0 0;
+  font-size: clamp(1.2rem, 1.7vw, 1.42rem);
+  line-height: 1.12;
 }
 
 .record-detail-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: var(--record-detail-stack-gap);
   margin: 0;
+}
+
+.record-detail-list > div {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--record-detail-list-bg);
 }
 
 .record-detail-list dt {
   color: var(--color-text-muted);
-  font-size: 0.75rem;
-  font-weight: 800;
+  font-size: 0.72rem;
+  font-weight: 810;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
 }
 
 .record-detail-list dd {
   margin: 0;
   color: var(--color-text);
-  font-weight: 740;
+  font-size: 0.93rem;
+  line-height: 1.28;
+  font-weight: 760;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .record-detail-section {
   display: grid;
   gap: 6px;
-  padding-top: 12px;
-  border-top: 1px solid var(--color-border);
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--record-detail-section-bg);
 }
 
 .record-detail-section h3,
@@ -487,10 +515,13 @@
 
 .record-detail-section h3 {
   color: var(--color-primary-strong);
-  font-size: 1rem;
+  font-size: 0.97rem;
+  line-height: 1.2;
 }
 
 .record-detail-section p {
+  font-size: 0.88rem;
+  line-height: 1.4;
   color: var(--color-text-muted);
 }
 
@@ -500,15 +531,17 @@
   margin: 0;
   padding-left: 18px;
   color: var(--color-text-muted);
-  font-size: 0.88rem;
+  font-size: 0.87rem;
   font-weight: 680;
+  line-height: 1.42;
 }
 
 .record-detail-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
-  padding: 12px;
+  padding: 11px var(--record-detail-panel-pad);
   border-top: 1px solid var(--color-border);
   background: rgba(255, 255, 255, 0.88);
 }
@@ -1415,7 +1448,12 @@
   }
 
   .record-detail-actions {
-    flex-direction: column;
+    flex-wrap: wrap;
+    justify-content: stretch;
+  }
+
+  .record-detail-actions .button {
+    width: 100%;
   }
 
   .business-form-footer,
