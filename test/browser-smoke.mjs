@@ -241,6 +241,7 @@ try {
   await page.locator(".nav-item[data-view='compose']").click();
   await page.getByRole("heading", { name: "Stock Actions" }).waitFor();
   await page.getByText("Work to Send", { exact: true }).waitFor();
+  const initialQueuedCount = await page.locator("[data-work-queue-card]").count();
   const actionLabels = await page.locator(".action-type-tab").evaluateAll((tabs) =>
     tabs.map((tab) => tab.textContent?.trim()),
   );
@@ -254,8 +255,8 @@ try {
   await page.getByRole("button", { name: "Save Action" }).click();
   await page.getByRole("heading", { name: "Stock Actions" }).waitFor();
   const queuedCount = await page.locator("[data-work-queue-card]").count();
-  if (queuedCount !== 1) {
-    throw new Error(`Expected one queued event after one append click, saw ${queuedCount}.`);
+  if (queuedCount !== initialQueuedCount + 1) {
+    throw new Error(`Expected one additional queued event after one append click, saw ${initialQueuedCount} -> ${queuedCount}.`);
   }
   const activeNavCountColors = await page.evaluate(() => {
     const badge = document.querySelector(".nav-item.is-active[data-view='compose'] .nav-count");
@@ -264,23 +265,26 @@ try {
     probe.style.color = getComputedStyle(document.documentElement).getPropertyValue("--color-primary");
     document.body.append(probe);
     const primary = getComputedStyle(probe).color;
+    probe.style.color = "#ffffff";
+    const white = getComputedStyle(probe).color;
     probe.remove();
     const badgeStyles = getComputedStyle(badge);
     return {
       background: badgeStyles.backgroundColor,
       color: badgeStyles.color,
       primary,
+      white,
     };
   });
   if (!activeNavCountColors) {
     throw new Error("Expected active Stock Actions nav count badge after queueing work.");
   }
-  if (activeNavCountColors.background !== "rgb(255, 255, 255)" || activeNavCountColors.color !== activeNavCountColors.primary) {
+  if (activeNavCountColors.background !== activeNavCountColors.primary || activeNavCountColors.color !== activeNavCountColors.white) {
     throw new Error(
-      `Expected active Stock Actions count badge to be white with primary text, saw ${activeNavCountColors.background} / ${activeNavCountColors.color}.`,
+      `Expected active Stock Actions count badge to use primary background with white text, saw ${activeNavCountColors.background} / ${activeNavCountColors.color}.`,
     );
   }
-  await page.locator(".work-queue-list").getByText("Use Stock", { exact: true }).waitFor();
+  await page.locator(".work-queue-list").getByText("Use Stock", { exact: true }).first().waitFor();
   await page.locator(".work-queue-list").getByText("Juniper Gin").waitFor();
   await page.locator(".work-queue-list").getByText("Grouped work: 2 events", { exact: true }).waitFor();
   const sendWorkNavCount = await page.getByRole("button", { name: /Send Work/ }).count();
@@ -301,7 +305,7 @@ try {
   await page.locator(".action-type-tab.is-active").getByText("Undo Record", { exact: true }).waitFor();
   await page.getByText("Reversal Amount", { exact: true }).waitFor();
   const queuedAfterPrepare = await page.locator("[data-work-queue-card]").count();
-  if (queuedAfterPrepare !== 1) {
+  if (queuedAfterPrepare !== queuedCount) {
     throw new Error(`Preparing a reverse record should not queue work immediately; saw ${queuedAfterPrepare} rows.`);
   }
 
