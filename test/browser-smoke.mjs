@@ -232,8 +232,8 @@ try {
   await page.getByText("Default Location", { exact: true }).waitFor();
   await page.getByText("SALE-2026-00042", { exact: true }).waitFor();
   await page.getByRole("heading", { name: "CI Lanes", exact: true }).waitFor();
+  await page.getByText("Browser lane", { exact: true }).waitFor();
   await page.getByText("npm run verify:ui", { exact: true }).waitFor();
-  await page.getByText("Pipeline Strategy", { exact: true }).waitFor();
 
   await page.locator(".nav-item[data-view='dashboard']").click();
   await page.getByRole("heading", { name: "Stock Overview" }).waitFor();
