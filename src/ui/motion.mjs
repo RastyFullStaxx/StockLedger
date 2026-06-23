@@ -239,3 +239,38 @@ export function bindTabMotion() {
     bindSimplePressMotion(button);
   });
 }
+
+export function animateActionTypeSelect(button) {
+  if (shouldReduceMotion || !button) return;
+  animate(
+    button,
+    {
+      scale: [1, 1.03, 1],
+      y: [0, -1, 0],
+    },
+    {
+      duration: 0.2,
+      ease: "easeOut",
+    },
+  );
+}
+
+export function animateProductOptionSelect(optionElement, selected = true) {
+  if (shouldReduceMotion || !optionElement) return;
+  const selectedAnimation = {
+    backgroundColor: ["var(--color-card-solid)", "rgba(255, 255, 255, 0.04)", "var(--color-primary)"],
+    borderColor: ["var(--color-border)", "var(--color-primary)", "var(--color-primary-strong)"],
+    scale: [1, 1.04, 1],
+    y: [0, -1, 0],
+  };
+  const deselectedAnimation = {
+    backgroundColor: ["var(--color-primary)", "rgba(255, 255, 255, 0.25)", "var(--color-card-solid)"],
+    borderColor: ["var(--color-primary-strong)", "var(--color-border)", "var(--color-border)"],
+    scale: [1, 0.98, 1],
+    y: [0, 1, 0],
+  };
+  animate(optionElement, selected ? selectedAnimation : deselectedAnimation, {
+    duration: 0.22,
+    ease: "easeOut",
+  });
+}

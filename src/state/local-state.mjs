@@ -1,22 +1,38 @@
 import { defaultLocations, defaultProducts, defaultState } from "../data/demo-data.mjs";
+import { buildProductionSeedState } from "../data/production-seed.mjs";
+
+function seededDemoState() {
+  return buildProductionSeedState();
+}
+
+export function seedDemoState() {
+  return seededDemoState();
+}
 
 export const STORAGE_KEY = "stockledger-local-prototype-state-v1";
 
+function preferSeedIfEmpty(candidate, seedValue) {
+  if (!Array.isArray(candidate) || candidate.length === 0) return seedValue;
+  return candidate;
+}
+
 export function loadState(storage = globalThis.localStorage) {
   const saved = storage?.getItem(STORAGE_KEY);
-  if (!saved) return defaultState();
+  if (!saved) return seedDemoState();
+
+  const seed = seedDemoState();
 
   try {
     const parsed = JSON.parse(saved);
     const next = {
-      ...defaultState(),
+      ...seed,
       ...parsed,
-      form: { ...defaultState().form, ...(parsed.form ?? {}) },
-      productForm: { ...defaultState().productForm, ...(parsed.productForm ?? {}) },
-      saleForm: { ...defaultState().saleForm, ...(parsed.saleForm ?? {}) },
-      purchaseForm: { ...defaultState().purchaseForm, ...(parsed.purchaseForm ?? {}) },
-      sales: Array.isArray(parsed.sales) ? parsed.sales : [],
-      purchases: Array.isArray(parsed.purchases) ? parsed.purchases : [],
+      form: { ...seed.form, ...(parsed.form ?? {}) },
+      productForm: { ...seed.productForm, ...(parsed.productForm ?? {}) },
+      saleForm: { ...seed.saleForm, ...(parsed.saleForm ?? {}) },
+      purchaseForm: { ...seed.purchaseForm, ...(parsed.purchaseForm ?? {}) },
+      sales: preferSeedIfEmpty(parsed.sales, seed.sales),
+      purchases: preferSeedIfEmpty(parsed.purchases, seed.purchases),
       selectedClientId: parsed.selectedClientId ?? null,
       selectedSaleId: parsed.selectedSaleId ?? null,
       selectedPurchaseId: parsed.selectedPurchaseId ?? null,
@@ -52,10 +68,10 @@ export function loadState(storage = globalThis.localStorage) {
       userViewFilter: parsed.userViewFilter ?? "all",
       userSearch: parsed.userSearch ?? "",
       userRoleFilter: parsed.userRoleFilter ?? "all",
-      products: sanitizeProducts(parsed.products),
-      locations: sanitizeLocations(parsed.locations),
+      products: preferSeedIfEmpty(sanitizeProducts(parsed.products), seed.products),
+      locations: preferSeedIfEmpty(sanitizeLocations(parsed.locations), seed.locations),
       locationModalOpen: false,
-      locationForm: { ...defaultState().locationForm, ...(parsed.locationForm ?? {}) },
+      locationForm: { ...seed.locationForm, ...(parsed.locationForm ?? {}) },
     };
     delete next.physicalCounts;
     delete next.selectedReconcileRowKey;
@@ -64,7 +80,7 @@ export function loadState(storage = globalThis.localStorage) {
     if (next.activeView === "reconcile" || next.activeView === "outbox") next.activeView = "compose";
     return next;
   } catch {
-    return defaultState();
+    return seedDemoState();
   }
 }
 

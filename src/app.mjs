@@ -39,6 +39,8 @@ import {
   flushQueuedRecordDetailMotion,
   flushQueuedTabMotion,
   animateGuideMenuClose,
+  animateActionTypeSelect,
+  animateProductOptionSelect,
   queueActiveViewMotion,
   queueRecordDetailMotion,
   queueStockViewMotion,
@@ -48,6 +50,7 @@ import {
   normalizeLocationKind,
   normalizeLocationStatus,
   normalizeSelectedProductIds,
+  seedDemoState,
   saveState as persistState,
 } from "./state/local-state.mjs";
 import {
@@ -2600,15 +2603,14 @@ function renderComposer(localLedger, outboxValidation) {
   const canPreviewValidation = isStockAction;
 
   return `
-    <section class="content-grid stock-actions-grid">
+      <section class="content-grid stock-actions-grid">
       <article class="panel panel-wide">
-        <form class="event-form" data-form="event">
+        <form class="event-form compose-event-form" data-form="event">
           <div class="action-type-field form-field-span-2">
             <span class="action-type-label">Action Type</span>
             ${renderActionTypeTabs(form.type)}
             <input type="hidden" name="type" value="${escapeAttr(form.type)}" />
           </div>
-          ${renderActionTemplate(form.type)}
           ${renderActionFields(form, template, revertOptions)}
           <div class="form-footer form-field-span-2">
             <div class="validation ${canPreviewValidation ? (validation.valid ? "is-valid" : "is-error") : "is-valid"}">
@@ -3260,17 +3262,6 @@ function renderRevertAmountHelp(originalEvent) {
   return `${quantity} ${productUnit(originalEvent.product_id)} of ${productName(originalEvent.product_id)} will be reversed.`;
 }
 
-function renderActionTemplate(type) {
-  const copy = actionTemplate(type);
-
-  return `
-    <div class="compose-template-strip form-field-span-2" aria-label="Action Template">
-      <span>${copy.template}</span>
-      <strong>${copy.summary}</strong>
-    </div>
-  `;
-}
-
 function findEventForRevert(eventId) {
   if (!eventId) return null;
 
@@ -3296,7 +3287,7 @@ function renderWorkQueueCard(item) {
             <span class="type-pill">${item.label}</span>
             ${item.valid ? "" : `<span class="badge is-error">${escapeHtml(item.status)}</span>`}
           </div>
-          <strong>${escapeHtml(item.product_name)}</strong>
+          <strong class="work-queue-card-title">${escapeHtml(item.product_name)}</strong>
           <dl class="work-queue-facts">
             <div>
               <dt>Location</dt>
@@ -3306,19 +3297,15 @@ function renderWorkQueueCard(item) {
               <dt>Amount</dt>
               <dd>${escapeHtml(item.amount)}</dd>
             </div>
+            <div>
+              <dt>Events</dt>
+              <dd>${item.event_count} queued</dd>
+            </div>
           </dl>
+          ${item.source ? `<p class="work-queue-meta">${escapeHtml(item.source)}</p>` : ""}
         </div>
         <button class="table-action" data-action="undo-work-item" data-work-item-id="${escapeAttr(item.work_item_id)}" type="button">Undo</button>
       </div>
-      <details class="work-queue-technical">
-        <summary>Technical details</summary>
-        <dl>
-          ${item.source ? `<div><dt>Source</dt><dd>${escapeHtml(item.source)}</dd></div>` : ""}
-          <div><dt>Batch detail</dt><dd>${item.detailIsCode ? `<code>${escapeHtml(item.detail)}</code>` : escapeHtml(item.detail)}</dd></div>
-          <div><dt>Validation</dt><dd>${escapeHtml(item.status)}</dd></div>
-          <div><dt>Events</dt><dd>${item.event_count}</dd></div>
-        </dl>
-      </details>
     </article>
   `;
 }
@@ -3944,7 +3931,7 @@ function bindEvents() {
   document.querySelectorAll("[data-action='reset-demo']").forEach((button) => {
     button.addEventListener("click", () => {
       if (!confirm("Reset this demo and return to the sample data?")) return;
-      state = defaultState();
+      state = seedDemoState();
       commit();
     });
   });
@@ -4296,6 +4283,7 @@ function bindEvents() {
     button.addEventListener("click", () => {
       const nextType = button.dataset.actionType;
       if (!nextType || nextType === state.form.type) return;
+      animateActionTypeSelect(button);
 
       state.form = {
         ...state.form,
@@ -4593,8 +4581,7 @@ function bindEvents() {
         event.target?.name === "physical_count" ||
         event.target?.name?.startsWith("physical_count_") ||
         event.target?.name === "attach_sale" ||
-        event.target?.name === "attach_purchase" ||
-        event.target?.name === "product_ids"
+        event.target?.name === "attach_purchase"
       ) {
         commit();
         return;
@@ -4608,6 +4595,13 @@ function bindEvents() {
       const data = new FormData(form);
       const nextType = data.get("type") ?? previousType;
       state.form = readEventFormState(data, { ...state.form, type: nextType });
+
+      if (event.target?.name === "product_ids") {
+        const option = event.target.closest(".product-check-option");
+        animateProductOptionSelect(option, event.target.checked);
+        commit();
+        return;
+      }
 
       if (event.target?.name?.startsWith("quantity_")) {
         saveState();
