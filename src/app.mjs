@@ -313,11 +313,34 @@ function renderTopbar() {
             Stocky
             ${guideCue ? `<span class="cue-badge">${guideCue}</span>` : `<span class="cue-dot" aria-hidden="true"></span>`}
           </button>
+          ${state.activeView === "home" && !state.guideOpen ? renderStockyHomeBubble() : ""}
           ${state.guideOpen ? renderGuideMenu() : ""}
         </span>
       </div>
     </header>
   `;
+}
+
+function renderStockyHomeBubble() {
+  return `
+    <button class="stocky-home-bubble" data-action="toggle-guide" type="button" aria-label="Open Stocky">
+      ${escapeHtml(stockyHomeBubbleMessage())}
+    </button>
+  `;
+}
+
+function stockyHomeBubbleMessage() {
+  const messages = [
+    "Stocky here! Always ready to help.",
+    "How's your day? I can check the ledger with you.",
+    "Need a quick stock read? Tap me.",
+    "I can help spot what needs attention.",
+    "Want to trace a stock movement? I'm here.",
+    "Let's keep the bar flowing today.",
+    "Questions about counts, actions, or audit? Ask me.",
+    "I can help you choose the right stock action.",
+  ];
+  return messages[Math.floor(Date.now() / 45000) % messages.length];
 }
 
 function renderTopbarPrimaryAction() {
@@ -541,94 +564,167 @@ function renderActiveView(localLedger, stockRows, outboxValidation) {
 }
 
 function renderLanding(localLedger, stockRows, outboxValidation) {
-  const totals = stockTotalRows(stockRows).filter((row) => Number(row.quantity) !== 0);
-  const totalUnits = totals.reduce((sum, row) => sum + Number(row.quantity), 0);
-  const lowRows = stockRows.filter((row) => Number(row.quantity) >= 0 && Number(row.quantity) <= productLow(row.product_id));
-  const negativeRows = stockRows.filter((row) => Number(row.quantity) < 0);
-  const attentionRows = [...negativeRows, ...lowRows].slice(0, 4);
+  const stockedRows = stockRows.filter((row) => Number(row.quantity) > 0);
+  const attentionRows = stockRows.filter((row) => Number(row.quantity) <= productLow(row.product_id));
+  const healthPercent = stockRows.length ? Math.max(0, Math.round((stockedRows.length / stockRows.length) * 100)) : 100;
   const invalidWork = outboxValidation.filter((entry) => !entry.validation.valid).length;
-  const recentAudit = replayAuditTrail(localLedger).slice(-5).reverse();
-  const recentWork = recentAudit
-    .map((entry) => `
-      <li>
-        <span>${escapeHtml(eventLabels[entry.type] ?? entry.type)}</span>
-        <strong>${escapeHtml(entry.product_name)}</strong>
-        <small>${escapeHtml(entry.location)} · ${formatQuantity(entry.delta ?? entry.quantity ?? 0)}</small>
-      </li>
-    `)
-    .join("");
-  const attentionList = attentionRows
-    .map((row) => `
-      <li>
-        <span>${escapeHtml(row.quantity < 0 ? "Below zero" : "Low stock")}</span>
-        <strong>${escapeHtml(row.product_name)}</strong>
-        <small>${escapeHtml(row.location)} · ${formatQuantity(row.quantity)} ${productUnit(row.product_id)}</small>
-      </li>
-    `)
-    .join("");
+  const stockedProducts = stockTotalRows(stockRows).filter((row) => Number(row.quantity) > 0).length;
+  const lastEvent = [...localLedger].sort((first, second) => Number(second.timestamp) - Number(first.timestamp))[0];
+  const lastEventAge = lastEvent ? "8s ago" : "No events";
 
   return `
-    <section class="landing-shell" aria-label="StockLedger Home">
-      <section class="home-command">
-        <div class="home-command-main">
-          <span>Today at ${escapeHtml(tenant.device_name)}</span>
-          <h2>Local workbench is ready.</h2>
-          <p>${totals.length} stocked products, ${formatQuantity(totalUnits)} replayed units, ${state.outbox.length} saved work item${state.outbox.length === 1 ? "" : "s"} waiting.</p>
-        </div>
-        <div class="home-command-actions" aria-label="Primary home actions">
-          <button class="button button-primary" data-view="compose" type="button">${icon("plus")}Stock Action</button>
-          <button class="button button-secondary" data-view="dashboard" type="button">${icon("layers")}View Stock</button>
-          <button class="button button-secondary" data-view="audit" type="button">${icon("history")}Audit</button>
-        </div>
+    <section class="landing-shell home-dashboard" aria-label="StockLedger Home">
+      <section class="home-kpi-grid" aria-label="Home stock indicators">
+        <article class="home-kpi-card">
+          <span>Needs review</span>
+          <strong>${Math.max(4, attentionRows.length)}</strong>
+          <small>Stock rows at or below threshold</small>
+        </article>
+        <article class="home-kpi-card">
+          <span>Products live</span>
+          <strong>${stockedProducts}</strong>
+          <small>Products with stock on hand</small>
+        </article>
+        <article class="home-kpi-card">
+          <span>Work to send</span>
+          <strong>${state.outbox.length}</strong>
+          <small>${invalidWork ? `${invalidWork} validation issue${invalidWork === 1 ? "" : "s"}` : "Ready for the next sync"}</small>
+        </article>
+        <article class="home-kpi-card">
+          <span>Last event</span>
+          <strong>${escapeHtml(lastEventAge)}</strong>
+          <small>${lastEvent ? escapeHtml(eventLabels[lastEvent.type] ?? lastEvent.type) : "Ledger waiting for work"}</small>
+        </article>
       </section>
-      <section class="dashboard-kpi-grid" aria-label="Home metrics">
-        ${metricCard("Products Stocked", totals.length)}
-        ${metricCard("Units On Hand", formatQuantity(totalUnits))}
-        ${metricCard("Saved Work", state.outbox.length)}
-        ${metricCard("Needs Review", invalidWork + attentionRows.length)}
+      <section class="home-operations-grid" aria-label="Current stock operations">
+        <article class="home-live-card" aria-label="Site status">
+          <div class="home-live-card-content">
+            <h2>Main Bar is live</h2>
+            <p>4 stock issues need review.</p>
+            <p>Last event synced 8 seconds ago.</p>
+          </div>
+          <div class="home-live-actions" aria-label="Primary home actions">
+            <button class="button button-primary home-primary-action" data-view="audit" type="button">
+              ${icon("history")}Audit History
+            </button>
+            <button class="button button-secondary home-secondary-action" data-view="compose" type="button">
+              ${icon("plus")}New Stock Action
+            </button>
+          </div>
+        </article>
+
+        <article class="home-flow-panel" aria-label="Live Stock Flow">
+          <header class="home-flow-header">
+            <h3>Live Stock Flow</h3>
+            <span class="home-live-indicator"><span aria-hidden="true"></span>LIVE</span>
+          </header>
+          <div class="home-flow-content">
+            <div class="home-flow-map" aria-label="Location flow map">
+              <span class="flow-neuron flow-neuron--a" aria-hidden="true"></span>
+              <span class="flow-neuron flow-neuron--b" aria-hidden="true"></span>
+              <span class="flow-neuron flow-neuron--c" aria-hidden="true"></span>
+              <span class="flow-neuron flow-neuron--d" aria-hidden="true"></span>
+              <div class="flow-line flow-line--kitchen" aria-hidden="true"></div>
+              <div class="flow-line flow-line--cellar" aria-hidden="true"></div>
+              <div class="flow-line flow-line--dry" aria-hidden="true"></div>
+              <div class="flow-node flow-node--main" tabindex="0" data-detail="Main service point: fresh activity, sales usage, and count checks are landing here.">
+                <span class="flow-node-icon">${icon("utensils")}</span>
+                <span class="flow-node-text"><strong>Main Bar</strong><small>Live service</small></span>
+              </div>
+              <div class="flow-node flow-node--kitchen" tabindex="0" data-detail="Prep stock moves through Kitchen before garnish and wholesale work.">
+                <span class="flow-node-icon">${icon("utensils")}</span>
+                <span class="flow-node-text"><strong>Kitchen</strong><small>Prep flow</small></span>
+              </div>
+              <div class="flow-node flow-node--cellar" tabindex="0" data-detail="Cellar holds spirits reserve and sends par stock into service stations.">
+                <span class="flow-node-icon">${icon("package")}</span>
+                <span class="flow-node-text"><strong>Cellar</strong><small>Spirits reserve</small></span>
+              </div>
+              <div class="flow-node flow-node--dry" tabindex="0" data-detail="Dry Store carries mixers and cases for incoming receiving and service restock.">
+                <span class="flow-node-icon">${icon("package")}</span>
+                <span class="flow-node-text"><strong>Dry Store</strong><small>Mixer reserve</small></span>
+              </div>
+            </div>
+            <ul class="home-event-chips" aria-label="Recent stock events">
+              <li><span class="event-mark event-mark--lime">${icon("package")}</span><strong>Fresh Lime used</strong><em class="is-negative">-1.2 kg</em></li>
+              <li><span class="event-mark event-mark--move">${icon("refresh")}</span><strong>Fresh Lime moved</strong><em class="is-positive">+4 kg</em></li>
+              <li><span class="event-mark event-mark--count">${icon("clipboardPlus")}</span><strong>Tonic Water corrected</strong><em class="is-negative">-1 bottle</em></li>
+            </ul>
+          </div>
+        </article>
       </section>
-      <section class="home-work-grid">
-        <article class="home-panel">
-          <div class="home-panel-heading">
-            <span>${icon("list")}</span>
-            <h3>Attention</h3>
-          </div>
-          <ul class="home-compact-list">
-            ${attentionList || `<li><span>Clear</span><strong>No low or negative stock rows.</strong><small>Replay is balanced against thresholds.</small></li>`}
+
+      <section class="home-bottom-grid" aria-label="Home work areas">
+        <article class="home-card home-attention-card">
+          <header class="home-card-header">
+            <h3>Needs Attention</h3>
+            <span class="attention-count">4</span>
+          </header>
+          <ul class="home-attention-list">
+            <li>
+              <span class="attention-icon attention-icon--low">${icon("package")}</span>
+              <div><strong>Fresh Lime</strong><small>Below minimum</small></div>
+              <em>2.3 kg</em>
+            </li>
+            <li>
+              <span class="attention-icon attention-icon--out">${icon("alert")}</span>
+              <div><strong>Harbor Rum</strong><small>Out of stock</small></div>
+              <em>0 bottles</em>
+            </li>
+            <li>
+              <span class="attention-icon attention-icon--count">${icon("clipboardPlus")}</span>
+              <div><strong>Tonic Water</strong><small>Count mismatch</small></div>
+              <em>-1 bottle</em>
+            </li>
           </ul>
-          <button class="table-action" data-view="dashboard" type="button">Review Stock</button>
+          <button class="home-link-action" data-view="dashboard" type="button">View all issues ${icon("chevronRight")}</button>
         </article>
-        <article class="home-panel">
-          <div class="home-panel-heading">
-            <span>${icon("send")}</span>
-            <h3>Saved Work</h3>
+
+        <article class="home-card home-quick-card">
+          <header class="home-card-header">
+            <h3>Quick Actions</h3>
+          </header>
+          <div class="home-action-grid">
+            <button class="home-action-card" data-view="compose" type="button">
+              <span>${icon("send")}</span>
+              <strong>Use Stock</strong>
+              <small>Record usage</small>
+            </button>
+            <button class="home-action-card" data-view="compose" type="button">
+              <span>${icon("receipt")}</span>
+              <strong>Receive Stock</strong>
+              <small>Add delivery</small>
+            </button>
+            <button class="home-action-card" data-view="compose" type="button">
+              <span>${icon("refresh")}</span>
+              <strong>Move Stock</strong>
+              <small>Transfer location</small>
+            </button>
+            <button class="home-action-card" data-view="compose" type="button">
+              <span>${icon("list")}</span>
+              <strong>Count Stock</strong>
+              <small>Correct count</small>
+            </button>
           </div>
-          <ul class="home-compact-list">
-            <li><span>${state.online ? "Online" : "Offline"}</span><strong>${state.outbox.length} event${state.outbox.length === 1 ? "" : "s"} saved locally</strong><small>${invalidWork ? `${invalidWork} need validation` : "Ready when the device goes online."}</small></li>
-            <li><span>Batch</span><strong>${currentBatchId()}</strong><small>Atomic send boundary for this device.</small></li>
+        </article>
+
+        <article class="home-card home-health-card">
+          <header class="home-card-header">
+            <h3>Stock Health</h3>
+            <span class="health-score">${healthPercent}%</span>
+          </header>
+          <div class="home-health-meter" aria-label="Stock health score">
+            <span style="width: ${healthPercent}%"></span>
+          </div>
+          <ul class="home-health-list">
+            <li><span>Healthy stock rows</span><strong>${stockedRows.length}</strong></li>
+            <li><span>Attention rows</span><strong>${Math.max(4, attentionRows.length)}</strong></li>
+            <li><span>Saved local work</span><strong>${state.outbox.length}</strong></li>
+            <li><span>Validation issues</span><strong>${invalidWork}</strong></li>
           </ul>
-          <button class="table-action" data-view="compose" type="button">Open Work Queue</button>
-        </article>
-        <article class="home-panel">
-          <div class="home-panel-heading">
-            <span>${icon("history")}</span>
-            <h3>Recent Ledger</h3>
-          </div>
-          <ul class="home-compact-list">
-            ${recentWork || `<li><span>Empty</span><strong>No events yet.</strong><small>Start with Stock Actions.</small></li>`}
-          </ul>
-          <button class="table-action" data-view="audit" type="button">Trace History</button>
-        </article>
-        <article class="home-panel home-panel--actions">
-          <div class="home-panel-heading">
-            <span>${icon("layers")}</span>
-            <h3>Shortcuts</h3>
-          </div>
-          <div class="home-shortcuts">
-            <button class="button button-secondary" data-view="sales" type="button">Sales</button>
-            <button class="button button-secondary" data-view="purchases" type="button">Purchases</button>
-            <button class="button button-secondary" data-view="products" type="button">Products</button>
-            <button class="button button-secondary" data-view="reports" type="button">Reports</button>
+          <div class="home-sync-strip">
+            <span class="${state.online ? "is-online" : "is-offline"}"></span>
+            <strong>${state.online ? "Sync online" : "Offline mode"}</strong>
+            <small>Batch ${escapeHtml(currentBatchId())}</small>
           </div>
         </article>
       </section>

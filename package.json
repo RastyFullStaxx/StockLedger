@@ -8,6 +8,7 @@
     "test": "node --test test/*.test.mjs",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
+    "seed:production": "node scripts/seed-production.mjs",
     "smoke:browser": "node test/browser-smoke.mjs",
     "verify:quick": "npm run test",
     "verify:ui": "node test/verify.mjs --skip-unit --skip-build",

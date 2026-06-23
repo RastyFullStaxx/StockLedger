@@ -734,6 +734,61 @@ button.account-popover-toggle > .mini-toggle-track.is-on {
   align-items: flex-start;
 }
 
+.stocky-home-bubble {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 20;
+  width: max-content;
+  max-width: min(300px, calc(100vw - 40px));
+  min-height: 38px;
+  padding: 9px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: var(--radius-lg);
+  background: var(--color-primary);
+  color: #ffffff;
+  box-shadow: 0 12px 24px rgba(6, 63, 57, 0.18);
+  font-size: 0.88rem;
+  font-weight: 760;
+  line-height: 1.25;
+  text-align: left;
+  animation: stocky-bubble-in 240ms ease-out;
+}
+
+.stocky-home-bubble::before {
+  position: absolute;
+  top: -7px;
+  right: 24px;
+  width: 12px;
+  height: 12px;
+  content: "";
+  border-top: 1px solid rgba(255, 255, 255, 0.24);
+  border-left: 1px solid rgba(255, 255, 255, 0.24);
+  background: var(--color-primary);
+  transform: rotate(45deg);
+}
+
+.stocky-home-bubble:hover,
+.stocky-home-bubble:focus-visible {
+  background: var(--color-primary-strong);
+}
+
+.stocky-home-bubble:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+@keyframes stocky-bubble-in {
+  from {
+    transform: translateY(-4px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
 .cue-badge,
 .cue-dot {
   display: inline-grid;

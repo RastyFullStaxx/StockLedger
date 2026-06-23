@@ -20,6 +20,7 @@ import {
   seedSales,
   tenant,
 } from "../src/data/demo-data.mjs";
+import { buildProductionSeedState, productionSeedSummary } from "../src/data/production-seed.mjs";
 import { ACTION_TEMPLATES, actionTemplate, eventLabels, navigationGroups, screenMeta } from "../src/config/app-config.mjs";
 import { STORAGE_KEY, loadState, normalizeSelectedProductIds, saveState } from "../src/state/local-state.mjs";
 import {
@@ -111,6 +112,34 @@ test("seeded business records point at seeded ledger events", () => {
 
   for (const purchase of seedPurchases()) {
     assert.equal(eventIds.has(purchase.event_id), true, `missing event for purchase ${purchase.id}`);
+  }
+});
+
+test("production seed creates a loaded valid ledger state", () => {
+  const state = buildProductionSeedState();
+  const summary = productionSeedSummary(state);
+  const ledgerEventIds = new Set(state.serverLedger.map((event) => event.event_id));
+
+  assert.equal(state.products.length >= 16, true);
+  assert.equal(state.locations.length >= 9, true);
+  assert.equal(state.serverLedger.length >= 45, true);
+  assert.equal(state.outbox.length >= 5, true);
+  assert.equal(state.sales.length >= 6, true);
+  assert.equal(state.purchases.length >= 3, true);
+  assert.equal(summary.invalidEvents, 0);
+  assert.equal(summary.stockRows > state.products.length, true);
+  assert.equal(summary.lowOrNegativeRows > 0, true);
+
+  for (const event of [...state.serverLedger, ...state.outbox]) {
+    assert.equal(validateEvent(event).valid, true, `invalid seed event ${event.event_id}`);
+  }
+
+  for (const sale of state.sales) {
+    assert.equal(ledgerEventIds.has(sale.event_id), true, `missing event for production sale ${sale.id}`);
+  }
+
+  for (const purchase of state.purchases) {
+    assert.equal(ledgerEventIds.has(purchase.event_id), true, `missing event for production purchase ${purchase.id}`);
   }
 });
 
