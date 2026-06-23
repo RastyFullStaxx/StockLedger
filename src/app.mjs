@@ -2677,9 +2677,6 @@ function renderProducts() {
         ${metricCard("Low Thresholds", getProductCatalog().filter((product) => Number(product.low) > 0).length)}
       </section>
       <article class="panel panel-wide record-table-panel">
-        <div class="panel-header panel-header--compact">
-          <button class="button button-primary" data-view="compose" type="button">${icon("plus")}Open Stock Actions</button>
-        </div>
         ${renderProductControls()}
         ${visibleProducts.length === 0 ? `<div class="empty-state"><strong>No products match these filters.</strong></div>` : renderProductTable(visibleProducts)}
         ${renderTablePagination("product", productPagination, products.length)}
