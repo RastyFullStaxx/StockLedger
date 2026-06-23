@@ -37,8 +37,10 @@ import { displayDateTime, escapeAttr, escapeHtml, formatQuantity } from "./utils
 import {
   animateSidebarTransition,
   bindTabMotion,
+  flushQueuedRecordDetailMotion,
   flushQueuedTabMotion,
   queueActiveViewMotion,
+  queueRecordDetailMotion,
   queueStockViewMotion,
 } from "./ui/motion.mjs";
 import {
@@ -131,6 +133,7 @@ let toastTimer = null;
 let shouldFocusActionOnCompose = state.activeView === "compose";
 let fieldSelectUid = 0;
 let customSelectEventsBound = false;
+let reportChartsModulePromise = null;
 const eventSelectPortalMap = new WeakMap();
 
 function saveState() {
@@ -167,6 +170,7 @@ function render() {
   requestAnimationFrame(() => {
     const assistantFeed = app.querySelector(".assistant-feed");
     if (assistantFeed) assistantFeed.scrollTop = assistantFeed.scrollHeight;
+    mountReportChartsWhenPresent(app);
   });
 
   if (state.activeView === "compose" && shouldFocusActionOnCompose) {
@@ -1393,6 +1397,37 @@ function renderReportsPage(localLedger, stockRows) {
   const stockOutEvents = localLedger.filter((event) => event.type === "STOCK_OUT");
   const stockInEvents = localLedger.filter((event) => event.type === "STOCK_IN");
   const sourceLinkedEvents = localLedger.filter((event) => event.source_label).length;
+  const salesReportRows = clientSalesReportRows(sales, { clients: DEFAULT_CLIENTS, clientName });
+  const purchaseReportRows = supplierPurchaseReportRows(purchases, { suppliers: DEFAULT_SUPPLIERS, supplierName, formatQuantity });
+  const movementRows = movementReportRows(localLedger, { eventLabels, formatQuantity });
+  const stockHealthSeries = stockTotals
+    .sort((first, second) => Number(first.quantity) - Number(second.quantity))
+    .slice(0, 8)
+    .map((row) => ({
+      label: row.product_name,
+      value: Math.max(0, Number(row.quantity)),
+      displayValue: `${formatQuantity(row.quantity)} ${productUnit(row.product_id)}`,
+      meta: `${row.location_count} stocked location${row.location_count === 1 ? "" : "s"}`,
+      tone: row.quantity < 0 ? "error" : row.quantity <= productLow(row.product_id) ? "warning" : "success",
+    }));
+  const movementSeries = movementRows.map((row) => ({
+    label: row.label,
+    value: toChartNumber(row.value),
+    displayValue: row.value,
+    meta: row.meta,
+  }));
+  const salesSeries = salesReportRows.map((row) => ({
+    label: row.label,
+    value: toChartNumber(row.value),
+    displayValue: row.value,
+    meta: row.meta,
+  }));
+  const purchaseSeries = purchaseReportRows.map((row) => ({
+    label: row.label,
+    value: toChartNumber(row.meta),
+    displayValue: row.meta,
+    meta: row.value,
+  }));
 
   return `
     <section class="content-grid module-page reports-workspace" aria-label="Reports">
@@ -1402,41 +1437,41 @@ function renderReportsPage(localLedger, stockRows) {
         ${metricCard("Purchases Received", purchases.length)}
         ${metricCard("Source Links", sourceLinkedEvents)}
       </section>
-      <section class="report-board" aria-label="Detailed report summaries">
-        ${renderReportPanel({
+      <section class="report-analytics-grid" aria-label="Analytics charts">
+        ${renderBarAnalyticsChart({
           eyebrow: "Stock",
-          title: "Stock Health",
-          summary: `${lowStockRows.length} low row${lowStockRows.length === 1 ? "" : "s"} and ${negativeRows.length} row${negativeRows.length === 1 ? "" : "s"} below zero.`,
-          rows: stockTotals
-            .sort((first, second) => Number(first.quantity) - Number(second.quantity))
-            .slice(0, 5)
-            .map((row) => ({
-              label: row.product_name,
-              value: `${formatQuantity(row.quantity)} ${productUnit(row.product_id)}`,
-              meta: `${row.location_count} stocked location${row.location_count === 1 ? "" : "s"}`,
-            })),
-          empty: "No stock rows to report.",
+          title: "Stock Health by Product",
+          summary: `${lowStockRows.length} low row${lowStockRows.length === 1 ? "" : "s"} and ${negativeRows.length} below zero. Lowest balances are shown first.`,
+          series: stockHealthSeries,
+          empty: "No stock rows to chart.",
         })}
-        ${renderReportPanel({
+        ${renderDonutAnalyticsChart({
+          eyebrow: "Ledger",
+          title: "Movement Mix",
+          summary: `${stockOutEvents.length} stock-out event${stockOutEvents.length === 1 ? "" : "s"} and ${stockInEvents.length} stock-in event${stockInEvents.length === 1 ? "" : "s"} in the replay.`,
+          series: movementSeries,
+          empty: "No movement events to chart.",
+        })}
+        ${renderBarAnalyticsChart({
           eyebrow: "Sales",
           title: "Sales by Client",
           summary: `${sales.filter((sale) => sale.sale_mode === "menu_item").length} menu sale${sales.filter((sale) => sale.sale_mode === "menu_item").length === 1 ? "" : "s"} fulfilled locally.`,
-          rows: clientSalesReportRows(sales, { clients: DEFAULT_CLIENTS, clientName }),
+          series: salesSeries,
           empty: "No fulfilled sales yet.",
         })}
-        ${renderReportPanel({
+        ${renderBarAnalyticsChart({
           eyebrow: "Purchases",
           title: "Receiving by Supplier",
           summary: `${stockInEvents.length} stock-in event${stockInEvents.length === 1 ? "" : "s"} in the replayed ledger and queue.`,
-          rows: supplierPurchaseReportRows(purchases, { suppliers: DEFAULT_SUPPLIERS, supplierName, formatQuantity }),
+          series: purchaseSeries,
           empty: "No purchases received yet.",
         })}
-        ${renderReportPanel({
-          eyebrow: "Movement",
-          title: "Stock Movement Mix",
-          summary: `${stockOutEvents.length} stock-out event${stockOutEvents.length === 1 ? "" : "s"} and ${stockInEvents.length} stock-in event${stockInEvents.length === 1 ? "" : "s"}.`,
-          rows: movementReportRows(localLedger, { eventLabels, formatQuantity }),
-          empty: "No movement events yet.",
+        ${renderLineAnalyticsChart({
+          eyebrow: "Replay",
+          title: "Ledger Activity Trend",
+          summary: "Event volume by replay day. Use this to spot operational bursts before opening audit detail.",
+          series: ledgerTrendSeries(localLedger),
+          empty: "No ledger activity to chart.",
         })}
       </section>
       <article class="panel panel-wide report-export-note">
@@ -1895,6 +1930,137 @@ function renderPrivacyGuardrailTable() {
         </tbody>
       </table>
     </div>
+  `;
+}
+
+function mountReportChartsWhenPresent(app) {
+  if (!app.querySelector("[data-recharts-chart]")) return;
+
+  reportChartsModulePromise ??= import("./reports/recharts-analytics.mjs");
+  reportChartsModulePromise
+    .then((module) => module.mountReportCharts(app))
+    .catch((error) => {
+      console.error("Unable to load report charts", error);
+    });
+}
+
+function toChartNumber(value) {
+  const parsed = Number.parseFloat(`${value ?? ""}`.replace(/,/g, ""));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function chartSeriesMax(series) {
+  return Math.max(1, ...series.map((item) => Math.abs(Number(item.value) || 0)));
+}
+
+function chartToneClass(tone) {
+  if (tone === "error") return "is-error";
+  if (tone === "warning") return "is-warning";
+  if (tone === "success") return "is-success";
+  return "";
+}
+
+function rechartsSeriesAttr(series) {
+  return escapeAttr(JSON.stringify(series));
+}
+
+function renderChartFallbackList(series) {
+  if (!series.length) return "";
+  return `
+    <div class="analytics-fallback-list" aria-label="Chart values">
+      ${series
+        .slice(0, 6)
+        .map(
+          (item) => `
+            <div class="${chartToneClass(item.tone)}">
+              <strong>${escapeHtml(item.label)}</strong>
+              <span>${escapeHtml(item.displayValue ?? formatQuantity(item.value))}</span>
+            </div>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderBarAnalyticsChart({ eyebrow, title, summary, series, empty }) {
+  return `
+    <article class="panel analytics-card analytics-card--bar">
+      <div class="analytics-card-header">
+        <div>
+          <span>${escapeHtml(eyebrow)}</span>
+          <h2>${escapeHtml(title)}</h2>
+        </div>
+      </div>
+      <p>${escapeHtml(summary)}</p>
+      ${
+        series.length === 0
+          ? `<div class="empty-state"><strong>${escapeHtml(empty)}</strong></div>`
+          : `<div class="recharts-host recharts-host--bar" data-recharts-chart data-recharts-kind="bar" data-recharts-title="${escapeAttr(title)}" data-recharts-series="${rechartsSeriesAttr(series)}"></div>
+             ${renderChartFallbackList(series)}`
+      }
+    </article>
+  `;
+}
+
+function renderDonutAnalyticsChart({ eyebrow, title, summary, series, empty }) {
+  const total = series.reduce((sum, item) => sum + Math.max(0, Number(item.value) || 0), 0);
+
+  return `
+    <article class="panel analytics-card analytics-card--donut">
+      <div class="analytics-card-header">
+        <div>
+          <span>${escapeHtml(eyebrow)}</span>
+          <h2>${escapeHtml(title)}</h2>
+        </div>
+      </div>
+      <p>${escapeHtml(summary)}</p>
+      ${
+        total === 0
+          ? `<div class="empty-state"><strong>${escapeHtml(empty)}</strong></div>`
+          : `<div class="recharts-host recharts-host--donut" data-recharts-chart data-recharts-kind="donut" data-recharts-title="${escapeAttr(title)}" data-recharts-series="${rechartsSeriesAttr(series)}"></div>
+             ${renderChartFallbackList(series)}`
+      }
+    </article>
+  `;
+}
+
+function ledgerTrendSeries(events) {
+  const grouped = new Map();
+  events
+    .filter((event) => Number.isFinite(Number(event.timestamp)))
+    .sort((first, second) => Number(first.timestamp) - Number(second.timestamp))
+    .forEach((event) => {
+      const date = new Date(Number(event.timestamp));
+      const key = date.toISOString().slice(0, 10);
+      const row = grouped.get(key) ?? { label: key.slice(5), value: 0, meta: key };
+      row.value += 1;
+      grouped.set(key, row);
+    });
+
+  return [...grouped.values()].slice(-8).map((row) => ({
+    ...row,
+    displayValue: `${row.value} event${row.value === 1 ? "" : "s"}`,
+  }));
+}
+
+function renderLineAnalyticsChart({ eyebrow, title, summary, series, empty }) {
+  return `
+    <article class="panel analytics-card analytics-card--trend">
+      <div class="analytics-card-header">
+        <div>
+          <span>${escapeHtml(eyebrow)}</span>
+          <h2>${escapeHtml(title)}</h2>
+        </div>
+      </div>
+      <p>${escapeHtml(summary)}</p>
+      ${
+        series.length === 0
+          ? `<div class="empty-state"><strong>${escapeHtml(empty)}</strong></div>`
+          : `<div class="recharts-host recharts-host--line" data-recharts-chart data-recharts-kind="line" data-recharts-title="${escapeAttr(title)}" data-recharts-series="${rechartsSeriesAttr(series)}"></div>
+             ${renderChartFallbackList(series)}`
+      }
+    </article>
   `;
 }
 
@@ -3108,8 +3274,9 @@ function renderWorkQueue(outboxValidation) {
 }
 
 function renderAudit(localLedger) {
+  const allAuditRows = [...replayAuditTrail(localLedger)].reverse();
   const rows = selectAuditRows({
-    rows: [...replayAuditTrail(localLedger)].reverse(),
+    rows: allAuditRows,
     eventLabels,
     auditSourceLabel,
     search: state.auditSearch ?? "",
@@ -3120,6 +3287,7 @@ function renderAudit(localLedger) {
 
   return `
     <section class="content-grid module-page audit-workspace">
+      ${renderAuditKpis(rows)}
       <section class="record-workspace audit-record-workspace ${selectedEntry ? "has-detail" : ""}" data-record-workspace="audit" aria-label="Audit records">
         <article class="panel panel-wide panel--flush-table record-table-panel">
           ${renderAuditControls()}
@@ -3128,6 +3296,25 @@ function renderAudit(localLedger) {
         ${selectedEntry ? renderAuditDetailPanel(selectedEntry) : ""}
       </section>
     </section>
+  `;
+}
+
+function renderAuditKpis(rows) {
+  const additions = rows.filter((entry) => Number(entry.delta) > 0);
+  const deductions = rows.filter((entry) => Number(entry.delta) < 0);
+  const corrections = rows.filter((entry) => ["STOCK_ADJUSTMENT", "STOCK_REVERT"].includes(entry.type));
+  const linkedSources = rows.filter((entry) => entry.source_label && entry.source_label !== "Manual stock work");
+  const addedTotal = additions.reduce((total, entry) => total + Number(entry.delta || 0), 0);
+  const deductedTotal = deductions.reduce((total, entry) => total + Math.abs(Number(entry.delta || 0)), 0);
+
+  return `
+    <section class="module-metrics audit-kpi-grid" aria-label="Audit summary">
+      ${metricCard("Visible Records", rows.length)}
+      ${metricCard("Added Units", formatQuantity(addedTotal))}
+      ${metricCard("Deducted Units", formatQuantity(deductedTotal))}
+      ${metricCard("Corrections & Undo", corrections.length)}
+    </section>
+    <p class="audit-kpi-note">${linkedSources.length} record${linkedSources.length === 1 ? "" : "s"} linked to sales, purchases, or catalog work.</p>
   `;
 }
 
@@ -3491,9 +3678,9 @@ function renderAuditTable(allRows, selectedEntry = null) {
               return `
                 <tr class="record-row ${active ? "is-active" : ""}" data-audit-row data-audit-event-id="${escapeAttr(entry.event_id)}" tabindex="0" aria-selected="${active}">
                   <td class="table-cell--numeric">${entry.sequence_number}</td>
-                  <td><span class="type-pill">${eventLabels[entry.type] ?? entry.type}</span></td>
-                  <td>${entry.product_name}</td>
-                  <td class="table-cell--numeric ${entry.delta < 0 ? "danger-text" : ""}">${entry.delta > 0 ? "+" : ""}${formatQuantity(entry.delta)}</td>
+                  <td>${renderAuditActionToken(entry.type)}</td>
+                  <td>${escapeHtml(entry.product_name)}</td>
+                  <td class="table-cell--numeric">${renderAuditChangeToken(entry.delta)}</td>
                   <td>${auditSourceLabel(entry)}</td>
                 </tr>
               `;
@@ -3505,18 +3692,37 @@ function renderAuditTable(allRows, selectedEntry = null) {
   `;
 }
 
+function renderAuditActionToken(type) {
+  const label = eventLabels[type] ?? type;
+  return `<span class="record-token audit-action-token ${auditActionTone(type)}">${escapeHtml(label)}</span>`;
+}
+
+function renderAuditChangeToken(value) {
+  const amount = Number(value);
+  const tone = amount > 0 ? "is-positive" : amount < 0 ? "is-negative" : "is-neutral";
+  return `<span class="record-token audit-change-token ${tone}">${amount > 0 ? "+" : ""}${formatQuantity(value)}</span>`;
+}
+
+function auditActionTone(type) {
+  if (["STOCK_IN", "PRODUCT_CREATED", "PRODUCT_REACTIVATED"].includes(type)) return "is-positive";
+  if (["STOCK_OUT", "STOCK_REVERT", "PRODUCT_DEACTIVATED"].includes(type)) return "is-negative";
+  if (type === "STOCK_TRANSFER") return "is-info";
+  if (type === "STOCK_ADJUSTMENT") return "is-warning";
+  return "is-neutral";
+}
+
 function renderAuditDetailPanel(entry) {
   return `
     <aside class="record-detail-panel" data-record-detail-panel aria-label="Audit details">
       <div class="record-detail-scroll">
         <div class="record-detail-heading">
-          <span>${eventLabels[entry.type] ?? entry.type}</span>
+          ${renderAuditActionToken(entry.type)}
           <h2>${escapeHtml(entry.product_name)}</h2>
         </div>
         <dl class="record-detail-list">
           <div><dt>Sequence</dt><dd>${entry.sequence_number}</dd></div>
           <div><dt>Location</dt><dd>${escapeHtml(entry.location)}</dd></div>
-          <div><dt>Change</dt><dd class="${entry.delta < 0 ? "danger-text" : ""}">${entry.delta > 0 ? "+" : ""}${formatQuantity(entry.delta)}</dd></div>
+          <div><dt>Change</dt><dd>${renderAuditChangeToken(entry.delta)}</dd></div>
           <div><dt>New Balance</dt><dd>${formatAuditBalance(entry.running_balance)}</dd></div>
           <div><dt>Source</dt><dd>${auditSourceLabel(entry)}</dd></div>
           <div><dt>Actor</dt><dd>${escapeHtml(entry.actor_name)}</dd></div>
@@ -4114,6 +4320,7 @@ function bindEvents() {
 
   document.querySelectorAll("[data-client-row]").forEach((row) => {
     const openClient = () => {
+      queueRecordDetailMotion(state.activeView, "open");
       state.selectedClientId = row.dataset.clientId ?? null;
       commit();
     };
@@ -4127,6 +4334,7 @@ function bindEvents() {
 
   document.querySelectorAll("[data-sale-row]").forEach((row) => {
     const openSale = () => {
+      queueRecordDetailMotion(state.activeView, "open");
       state.selectedSaleId = row.dataset.saleId ?? null;
       commit();
     };
@@ -4140,6 +4348,7 @@ function bindEvents() {
 
   document.querySelectorAll("[data-purchase-row]").forEach((row) => {
     const openPurchase = () => {
+      queueRecordDetailMotion(state.activeView, "open");
       state.selectedPurchaseId = row.dataset.purchaseId ?? null;
       commit();
     };
@@ -4153,6 +4362,7 @@ function bindEvents() {
 
   document.querySelectorAll("[data-supplier-row]").forEach((row) => {
     const openSupplier = () => {
+      queueRecordDetailMotion(state.activeView, "open");
       state.selectedSupplierId = row.dataset.supplierId ?? null;
       commit();
     };
@@ -4166,6 +4376,7 @@ function bindEvents() {
 
   document.querySelectorAll("[data-menu-row]").forEach((row) => {
     const openMenu = () => {
+      queueRecordDetailMotion(state.activeView, "open");
       state.selectedMenuId = row.dataset.menuId ?? null;
       commit();
     };
@@ -4179,6 +4390,7 @@ function bindEvents() {
 
   document.querySelectorAll("[data-location-row]").forEach((row) => {
     const openLocation = () => {
+      queueRecordDetailMotion(state.activeView, "open");
       state.selectedLocationId = row.dataset.locationId ?? null;
       commit();
     };
@@ -4192,6 +4404,7 @@ function bindEvents() {
 
   document.querySelectorAll("[data-user-row]").forEach((row) => {
     const openUser = () => {
+      queueRecordDetailMotion(state.activeView, "open");
       state.selectedUserId = row.dataset.userId ?? null;
       commit();
     };
@@ -4205,6 +4418,7 @@ function bindEvents() {
 
   document.querySelectorAll("[data-audit-row]").forEach((row) => {
     const openAudit = () => {
+      queueRecordDetailMotion(state.activeView, "open");
       state.selectedAuditEventId = row.dataset.auditEventId ?? null;
       commit();
     };
@@ -4218,6 +4432,7 @@ function bindEvents() {
 
   document.querySelectorAll("[data-action='close-record-detail']").forEach((button) => {
     button.addEventListener("click", () => {
+      queueRecordDetailMotion(state.activeView, "close");
       state.selectedClientId = null;
       state.selectedSaleId = null;
       state.selectedPurchaseId = null;
@@ -4247,6 +4462,7 @@ function bindEvents() {
     if (event.target.closest("[data-client-filter], [data-sale-filter], [data-purchase-filter], [data-supplier-filter], [data-menu-filter], [data-location-record-filter], [data-user-filter], [data-audit-filter]")) return;
     if (event.target.closest("[data-filter='client-search'], [data-filter='client-menu'], [data-filter='purchase-search'], [data-filter='purchase-supplier'], [data-filter='supplier-search'], [data-filter='supplier-product'], [data-filter='menu-search'], [data-filter='menu-client'], [data-filter='location-search'], [data-filter='location-kind'], [data-filter='user-search'], [data-filter='user-role'], [data-filter='audit-search'], [data-filter='audit-product'], [data-custom-select]")) return;
     if (event.target.closest("[data-action='start-client-sale'], [data-action='start-supplier-purchase'], [data-action='open-stock-in-action'], [data-view], [data-action='close-record-detail']")) return;
+    queueRecordDetailMotion(state.activeView, "close");
     state.selectedClientId = null;
     state.selectedSaleId = null;
     state.selectedPurchaseId = null;
@@ -4413,6 +4629,7 @@ function bindEvents() {
 
   bindTabMotion();
   flushQueuedTabMotion(state);
+  flushQueuedRecordDetailMotion(state);
 }
 
 function fieldNameForProductInput(name) {

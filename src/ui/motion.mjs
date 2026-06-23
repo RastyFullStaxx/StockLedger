@@ -9,6 +9,10 @@ const tabMotionQueue = {
   activeView: null,
   stockView: null,
 };
+const recordDetailMotionQueue = {
+  view: null,
+  mode: null,
+};
 
 let sidebarMotion = null;
 
@@ -22,6 +26,11 @@ export function queueActiveViewMotion(view) {
 
 export function queueStockViewMotion(view) {
   tabMotionQueue.stockView = view;
+}
+
+export function queueRecordDetailMotion(view, mode = "open") {
+  recordDetailMotionQueue.view = view;
+  recordDetailMotionQueue.mode = mode;
 }
 
 export function animateSidebarTransition(targetCollapsed) {
@@ -137,6 +146,74 @@ export function flushQueuedTabMotion(state) {
     if (nextStockTab) animateTabActivate(nextStockTab);
   }
   tabMotionQueue.stockView = null;
+}
+
+export function flushQueuedRecordDetailMotion(state) {
+  if (shouldReduceMotion) {
+    recordDetailMotionQueue.view = null;
+    recordDetailMotionQueue.mode = null;
+    return;
+  }
+
+  if (recordDetailMotionQueue.view !== state.activeView) {
+    recordDetailMotionQueue.view = null;
+    recordDetailMotionQueue.mode = null;
+    return;
+  }
+
+  const mode = recordDetailMotionQueue.mode;
+  recordDetailMotionQueue.view = null;
+  recordDetailMotionQueue.mode = null;
+
+  const workspace = document.querySelector(`[data-record-workspace="${CSS.escape(state.activeView)}"]`);
+  if (!workspace) return;
+
+  const tablePanel = workspace.querySelector(".record-table-panel, .record-table-shell");
+  const detailPanel = workspace.querySelector("[data-record-detail-panel]");
+
+  if (mode === "open" && detailPanel) {
+    animate(
+      detailPanel,
+      {
+        opacity: [0, 1],
+        x: [22, 0],
+        scale: [0.985, 1],
+      },
+      {
+        duration: 0.26,
+        ease: "easeOut",
+      },
+    );
+
+    if (tablePanel) {
+      animate(
+        tablePanel,
+        {
+          opacity: [0.92, 1],
+          scale: [0.995, 1],
+        },
+        {
+          duration: 0.2,
+          ease: "easeOut",
+        },
+      );
+    }
+    return;
+  }
+
+  if (mode === "close" && tablePanel) {
+    animate(
+      tablePanel,
+      {
+        opacity: [0.92, 1],
+        scale: [0.992, 1],
+      },
+      {
+        duration: 0.22,
+        ease: "easeOut",
+      },
+    );
+  }
 }
 
 export function bindTabMotion() {
