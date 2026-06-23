@@ -736,11 +736,11 @@ button.account-popover-toggle > .mini-toggle-track.is-on {
 
 .stocky-home-bubble {
   position: absolute;
-  top: calc(100% + 10px);
-  right: 0;
+  top: 50%;
+  right: calc(100% + 10px);
   z-index: 20;
   width: max-content;
-  max-width: min(300px, calc(100vw - 40px));
+  max-width: min(300px, calc(100vw - 420px));
   min-height: 38px;
   padding: 9px 12px;
   border: 1px solid rgba(255, 255, 255, 0.24);
@@ -752,20 +752,21 @@ button.account-popover-toggle > .mini-toggle-track.is-on {
   font-weight: 760;
   line-height: 1.25;
   text-align: left;
+  transform: translateY(-50%);
   animation: stocky-bubble-in 240ms ease-out;
 }
 
 .stocky-home-bubble::before {
   position: absolute;
-  top: -7px;
-  right: 24px;
+  top: 50%;
+  right: -7px;
   width: 12px;
   height: 12px;
   content: "";
   border-top: 1px solid rgba(255, 255, 255, 0.24);
-  border-left: 1px solid rgba(255, 255, 255, 0.24);
+  border-right: 1px solid rgba(255, 255, 255, 0.24);
   background: var(--color-primary);
-  transform: rotate(45deg);
+  transform: translateY(-50%) rotate(45deg);
 }
 
 .stocky-home-bubble:hover,
@@ -779,6 +780,35 @@ button.account-popover-toggle > .mini-toggle-track.is-on {
 }
 
 @keyframes stocky-bubble-in {
+  from {
+    transform: translate(-4px, -50%);
+    opacity: 0;
+  }
+  to {
+    transform: translate(0, -50%);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 900px) {
+  .stocky-home-bubble {
+    top: calc(100% + 10px);
+    right: 0;
+    max-width: min(280px, calc(100vw - 40px));
+    transform: none;
+    animation-name: stocky-bubble-in-mobile;
+  }
+
+  .stocky-home-bubble::before {
+    top: -7px;
+    right: 24px;
+    border-right: 0;
+    border-left: 1px solid rgba(255, 255, 255, 0.24);
+    transform: rotate(45deg);
+  }
+}
+
+@keyframes stocky-bubble-in-mobile {
   from {
     transform: translateY(-4px);
     opacity: 0;

@@ -291,7 +291,7 @@
   color: var(--color-text);
   box-shadow: 0 8px 18px rgba(18, 43, 38, 0.05);
   transform: translate(var(--node-x), var(--node-y));
-  animation: neuron-float 6.6s ease-in-out infinite;
+  animation: neuron-node-breathe 5.8s ease-in-out infinite;
   outline: none;
 }
 
@@ -733,13 +733,13 @@
   }
 }
 
-@keyframes neuron-float {
+@keyframes neuron-node-breathe {
   0%,
   100% {
-    transform: translate(var(--node-x), var(--node-y));
+    box-shadow: 0 8px 18px rgba(18, 43, 38, 0.05);
   }
   50% {
-    transform: translate(calc(var(--node-x) + var(--float-x)), calc(var(--node-y) + var(--float-y)));
+    box-shadow: 0 10px 22px rgba(11, 95, 86, 0.11);
   }
 }
 

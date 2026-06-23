@@ -323,7 +323,7 @@ function renderTopbar() {
 
 function renderStockyHomeBubble() {
   return `
-    <button class="stocky-home-bubble" data-action="toggle-guide" type="button" aria-label="Open Stocky">
+    <button class="stocky-home-bubble" data-action="toggle-guide" type="button" aria-label="Open assistant">
       ${escapeHtml(stockyHomeBubbleMessage())}
     </button>
   `;
