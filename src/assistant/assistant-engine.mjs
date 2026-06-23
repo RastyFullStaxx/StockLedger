@@ -32,13 +32,7 @@ export function answerAssistantQuestion(question, context) {
   }
 
   if (matchesAny(normalized, ["what should i do", "what next", "next step", "help me", "guide me", "where should i start", "best next step", "what do i do now"])) {
-    return {
-      text: `On ${meta.title}, I’d start with what is most useful today: ${humanJoin(context.guideTipsForView(activeView).slice(0, 3).map(cleanTipForSentence))}. If you are unsure, check notifications first and then record the action that matches what actually happened.`,
-      actions: [
-        ...pageAssistantActions(activeView, context).slice(0, 2),
-        { label: "Notifications", view: activeView },
-      ],
-    };
+    return assistantNextStepAnswer(context, meta, activeView);
   }
 
   if (matchesAny(normalized, ["what is this page", "current page", "this page for", "where am i", "about this page"])) {
@@ -81,6 +75,10 @@ export function answerAssistantQuestion(question, context) {
         actions: assistantActionsFromKnowledge(matches, context),
       };
     }
+  }
+
+  if (matchesAny(normalized, ["privacy", "private", "pii", "sensitive", "contact", "terms", "export", "retention", "device trust", "trusted device", "offline retention", "setting", "settings", "policy"])) {
+    return assistantSettingsAnswer(context);
   }
 
   if (matchesAny(normalized, ["role", "permission", "roles", "access", "admin", "admin role", "rbac", "global_admin", "client_admin", "staff"])) {
@@ -167,6 +165,59 @@ export function answerAssistantQuestion(question, context) {
   return assistantOutOfScopeAnswer();
 }
 
+function assistantNextStepAnswer(context, meta, activeView) {
+  const notifications = context.notifications();
+  const urgentNotifications = notifications.filter((item) => item.tone === "error" || item.tone === "warning");
+  const validations = context.validations();
+  const invalidCount = validations.filter((result) => !result.valid).length;
+  const workItems = context.workItems();
+  const lowRows = context.stockRows().filter((row) => Number(row.quantity) >= 0 && Number(row.quantity) <= context.productLow(row.product_id));
+  const negativeRows = context.stockRows().filter((row) => Number(row.quantity) < 0);
+
+  const steps = [];
+  if (invalidCount > 0) {
+    steps.push(`Open Stock Actions and fix ${invalidCount} saved item${invalidCount === 1 ? "" : "s"} that cannot be sent yet.`);
+  }
+  if (negativeRows.length > 0) {
+    steps.push(`Review ${negativeRows.length} below-zero stock row${negativeRows.length === 1 ? "" : "s"} in Stock Overview before recording more movement.`);
+  }
+  if (lowRows.length > 0) {
+    steps.push(`Plan replenishment for the most urgent low-stock rows, starting with ${lowRows[0].product_name} at ${lowRows[0].location}.`);
+  }
+  if (workItems.length > 0 && invalidCount === 0) {
+    steps.push(`Send ${workItems.length} queued work item${workItems.length === 1 ? "" : "s"} once you trust the saved batch.`);
+  }
+  if (steps.length === 0) {
+    steps.push(...context.guideTipsForView(activeView).slice(0, 3));
+  }
+
+  return {
+    text: `On ${meta.title}, I’d do this next:\n\n${steps.slice(0, 4).map((step, index) => `${index + 1}. ${step}`).join("\n")}\n\nI’m prioritizing safety: invalid saved work first, below-zero stock second, low-stock replenishment third, then routine reporting.`,
+    actions: [
+      ...(urgentNotifications.length || lowRows.length || negativeRows.length ? [{ label: "Open Stock Overview", view: "dashboard" }] : []),
+      ...(workItems.length ? [{ label: "Open Stock Actions", view: "compose" }] : pageAssistantActions(activeView, context).slice(0, 1)),
+      { label: "Open Audit Trail", view: "audit" },
+    ].slice(0, 3),
+  };
+}
+
+function assistantSettingsAnswer(context) {
+  const policies = context.settingsPolicies ?? [];
+  const policyLines = policies.map((policy) => `- ${policy.label}: ${policy.value} (${policy.detail})`).join("\n");
+  const savedCount = context.outbox.length;
+  const users = context.users ?? [];
+  const adminCount = users.filter((user) => `${user.role}`.includes("ADMIN")).length;
+
+  return {
+    text: `Settings should protect stock history without slowing daily work.\n\nCurrent posture:\n${policyLines || "- No policy rows are loaded in this session."}\n\n${savedCount ? `${savedCount} saved event${savedCount === 1 ? "" : "s"} are waiting, so review the queue before changing sync, retention, or export behavior.` : "No saved work is waiting, so this is a safe moment to review policy posture."} ${adminCount} admin user${adminCount === 1 ? "" : "s"} are visible in the current user set.\n\nPrivacy rule of thumb: show summaries first, reveal private staff/contact/supplier details only through role-checked, audited flows.`,
+    actions: [
+      { label: "Open Settings", view: "settings" },
+      { label: "Open Users", view: "users" },
+      { label: "Open Audit Trail", view: "audit" },
+    ],
+  };
+}
+
 function assistantUncertainAnswer() {
   return {
     text: "I can help with StockLedger, but I can’t answer this confidently from the current session data. Try one of these instead: “What needs attention?”, “How much stock do we have?”, “What should I do next?”, or “How does sync and idempotency work?”.",
@@ -191,7 +242,7 @@ function assistantOutOfScopeAnswer() {
 function assistantCapabilitiesAnswer(context, meta) {
   const activeView = context.activeView ?? "dashboard";
   return {
-    text: `Great, we can keep this short. I can help you with ${meta.title}, stock levels, saved work, page guidance, action selection, low stock planning, and audit-safe corrections. If you tell me your goal (“what should I do now?” or “how many X are left?”), I’ll give you the next practical step.`,
+    text: `Great, we can keep this short. I can help you with ${meta.title}, stock levels, saved work, page guidance, action selection, low stock planning, privacy-safe settings, and audit-safe corrections.\n\nThe most useful way to ask is goal-first: “what should I do now?”, “why is Fresh Lime low?”, “can I send saved work?”, or “which action fits this situation?” I’ll answer from the current local ledger and give you a next step.`,
     actions: pageAssistantActions(activeView, context),
   };
 }
@@ -208,8 +259,19 @@ function assistantSmallTalkAnswer(normalized, meta, context) {
 
   if (matchesAny(normalized, ["hello", "hi", "hey", "good morning", "good afternoon", "good evening"])) {
     return {
-      text: `Hi there — I’m Stocky. On ${meta.title}, I can explain the page, point out what needs attention, and help you choose the right stock action in plain language.`,
+      text: `Hi. I’m here with you. On ${meta.title}, I can explain what you’re seeing, point out what needs attention, and help you choose the next stock-safe move in plain language.`,
       actions: pageAssistantActions(activeView, context),
+    };
+  }
+
+  if (matchesAny(normalized, ["confused", "lost", "overwhelmed", "not sure", "dont know", "don't know", "stuck"])) {
+    return {
+      text: `Totally fair. Stock systems get noisy fast, so let’s make it small.\n\nStart with one question: “Is anything unsafe right now?” In this session I’d check saved work, then low or below-zero stock, then the audit trail only if a number looks wrong.`,
+      actions: [
+        { label: "What needs attention?", view: meta.title === "Stock Overview" ? "dashboard" : (context.activeView ?? "dashboard") },
+        { label: "Open Stock Overview", view: "dashboard" },
+        { label: "Open Stock Actions", view: "compose" },
+      ],
     };
   }
 
@@ -236,8 +298,12 @@ function assistantSmallTalkAnswer(normalized, meta, context) {
 
 function assistantNotificationAnswer(context) {
   const notifications = context.notifications();
+  const urgent = notifications.filter((item) => item.tone === "error" || item.tone === "warning");
+  const opener = urgent.length
+    ? `${urgent.length} thing${urgent.length === 1 ? "" : "s"} deserve attention before routine work.`
+    : "Nothing urgent is showing right now.";
   return {
-    text: notifications.map((item) => `- ${item.title}: ${item.text}`).join("\n"),
+    text: `${opener}\n\n${notifications.map((item) => `- ${item.title}: ${item.text}`).join("\n")}\n\nI’d handle errors first, then low-stock rows, then send saved work once the queue looks valid.`,
     actions: notifications.some((item) => item.tone === "error" || item.tone === "warning")
       ? [{ label: "Open Stock Overview", view: "dashboard" }]
       : [{ label: "Open Stock Actions", view: "compose" }],
@@ -252,12 +318,23 @@ function assistantStockAnswer(question, context) {
   if (product) {
     const productRows = rows.filter((row) => row.product_id === product.id);
     const total = productRows.reduce((sum, row) => sum + Number(row.quantity), 0);
+    const lowRows = productRows.filter((row) => Number(row.quantity) >= 0 && Number(row.quantity) <= context.productLow(product.id));
+    const negativeRows = productRows.filter((row) => Number(row.quantity) < 0);
+    const busiest = [...productRows].sort((first, second) => Number(second.quantity) - Number(first.quantity))[0];
+    const statusLine = negativeRows.length
+      ? `${negativeRows.length} location${negativeRows.length === 1 ? "" : "s"} are below zero, so check audit history before relying on the total.`
+      : lowRows.length
+        ? `${lowRows.length} location${lowRows.length === 1 ? "" : "s"} are at or below the low threshold of ${context.formatQuantity(context.productLow(product.id))} ${product.unit}.`
+        : `This is above the low threshold of ${context.formatQuantity(context.productLow(product.id))} ${product.unit}.`;
     const places = productRows.length
       ? productRows.map((row) => `${row.location}: ${context.formatQuantity(row.quantity)} ${product.unit}`).join("\n")
       : "No replayed stock at any location.";
     return {
-      text: `${product.name} currently has ${context.formatQuantity(total)} ${product.unit} on hand.\n${places}`,
-      actions: [{ label: "Open Stock Overview", view: "dashboard" }],
+      text: `${product.name} currently has ${context.formatQuantity(total)} ${product.unit} on hand. ${statusLine}${busiest ? ` Highest location: ${busiest.location}.` : ""}\n\n${places}`,
+      actions: [
+        { label: "Open Stock Overview", view: "dashboard" },
+        ...(negativeRows.length || lowRows.length ? [{ label: "Prepare Stock In", view: "compose" }] : []),
+      ],
     };
   }
 
@@ -283,7 +360,9 @@ function assistantLowStockAnswer(context) {
     .join("\n");
 
   return {
-    text: lines || "No low-stock or below-zero rows are showing in the current replay.",
+    text: lines
+      ? `Here’s the short list I’d handle first:\n${lines}\n\nBelow-zero rows are audit questions first. Low-stock rows are replenishment questions after you confirm the count is real.`
+      : "No low-stock or below-zero rows are showing in the current replay. That means you can focus on saved work, upcoming sales, or routine receiving.",
     actions: [
       { label: "Open Stock Overview", view: "dashboard" },
       { label: "Stock In", view: "compose" },
@@ -298,7 +377,7 @@ function assistantOutboxAnswer(context) {
   const lines = workItems.slice(0, 6).map((item) => `- ${item.label}: ${item.product_name}, ${item.location}, ${item.amount}`).join("\n");
 
   return {
-    text: `${context.outbox.length} event${context.outbox.length === 1 ? "" : "s"} are saved locally in ${workItems.length} queued work item${workItems.length === 1 ? "" : "s"}. ${invalid.length ? `${invalid.length} of those item${invalid.length === 1 ? "" : "s"} still need attention.` : "Everything queued is ready to send."}\n${lines || "No work is waiting to send."}`,
+    text: `${context.outbox.length} event${context.outbox.length === 1 ? "" : "s"} are saved locally in ${workItems.length} queued work item${workItems.length === 1 ? "" : "s"}. ${invalid.length ? `${invalid.length} validation result${invalid.length === 1 ? "" : "s"} need attention before sending.` : "Everything queued is ready to send as an atomic batch."}\n\n${lines || "No work is waiting to send."}\n\nIf the queue looks right, send it once. If it looks wrong, undo or correct with a new record instead of editing history.`,
     actions: [{ label: "Open Stock Actions", view: "compose" }],
   };
 }

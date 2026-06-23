@@ -131,6 +131,14 @@ const ACTION_EVENT_TYPES = [
 ];
 
 let state = loadState();
+if (
+  state.productForm &&
+  !`${state.productForm.name ?? ""}`.trim() &&
+  !`${state.productForm.category ?? ""}`.trim() &&
+  `${state.productForm.unit ?? ""}`.trim() === "unit"
+) {
+  state.productForm = { ...state.productForm, unit: "" };
+}
 let productLifecycleBusy = null;
 let toastTimer = null;
 let shouldFocusActionOnCompose = state.activeView === "compose";
@@ -245,11 +253,14 @@ function renderSidebar() {
       <div class="brand-lockup">
         ${
           state.sidebarCollapsed
-            ? `<button class="brand-mark brand-mark-toggle" data-action="toggle-sidebar" type="button" aria-label="Expand Sidebar" aria-pressed="true">
+            ? `<button class="brand-mark brand-mark-toggle" data-action="return-to-landing" type="button" aria-label="Return to landing page">
                 <img class="brand-logo" src="/logo-white.svg" alt="" />
-                <span class="brand-mark-icon" aria-hidden="true">${icon("panelOpen")}</span>
+                <span class="brand-mark-icon" aria-hidden="true">${icon("logIn")}</span>
               </button>`
-            : `<div class="brand-mark" aria-hidden="true"><img src="/logo-white.svg" alt="" /></div>`
+            : `<button class="brand-mark brand-mark-toggle" data-action="return-to-landing" type="button" aria-label="Return to landing page">
+                <img class="brand-logo" src="/logo-white.svg" alt="" />
+                <span class="brand-mark-icon" aria-hidden="true">${icon("logIn")}</span>
+              </button>`
         }
         <div class="brand-copy">
           <p class="brand-name"><span>Stock</span><span>Ledger</span></p>
@@ -296,6 +307,7 @@ function renderSidebar() {
                       <span class="mini-toggle-track ${state.online ? "is-on" : ""}" aria-hidden="true"><span class="mini-toggle-thumb"></span></span>
                     </button>
                     <button type="button" data-action="reset-demo">${icon("refresh")}Reset Demo</button>
+                    <button type="button" data-action="return-to-landing">${icon("logIn")}Sign Out</button>
                   </div>`
             : ""
         }
@@ -668,12 +680,7 @@ function renderActiveView(localLedger, stockRows, outboxValidation) {
   return renderDashboard(localLedger, stockRows, outboxValidation);
 }
 
-function renderLandingEntry(localLedger, stockRows) {
-  const activeProducts = stockTotalRows(stockRows).filter((row) => Number(row.quantity) > 0).length;
-  const lowRows = stockRows.filter((row) => Number(row.quantity) >= 0 && Number(row.quantity) <= productLow(row.product_id)).length;
-  const lastEvent = [...localLedger].sort((first, second) => Number(second.timestamp) - Number(first.timestamp))[0];
-  const lastEventLabel = lastEvent ? `${eventLabels[lastEvent.type] ?? lastEvent.type} - ${productName(lastEvent.product_id)}` : "No ledger events yet";
-
+function renderLandingEntry() {
   return `
     <main class="entry-landing" aria-label="StockLedger sign in">
       <section class="entry-login-panel" aria-label="Sign in panel">
@@ -682,7 +689,7 @@ function renderLandingEntry(localLedger, stockRows) {
           <strong>StockLedger</strong>
         </div>
         <div class="entry-avatar" aria-hidden="true">
-          ${icon("clipboardPlus")}
+          ${icon("logIn")}
         </div>
         <form class="entry-login-form" data-form="landing-login">
           <label>
@@ -710,29 +717,6 @@ function renderLandingEntry(localLedger, stockRows) {
           <button type="button" data-view="audit">Audit</button>
           <button class="entry-nav-signin" type="button" data-view="home">Sign In</button>
         </nav>
-        <div class="entry-welcome-content">
-          <span class="entry-kicker">Event-sourced inventory ledger</span>
-          <h1>Welcome.</h1>
-          <p>Track every bottle, case, transfer, count, and correction without rewriting history.</p>
-          <div class="entry-hero-actions">
-            <button class="button button-primary" data-view="home" type="button">${icon("home")}Open Home</button>
-            <button class="button button-secondary" data-view="compose" type="button">${icon("plus")}Record Action</button>
-          </div>
-        </div>
-        <div class="entry-ledger-strip" aria-label="Ledger snapshot">
-          <article>
-            <span>Live Products</span>
-            <strong>${activeProducts}</strong>
-          </article>
-          <article>
-            <span>Needs Review</span>
-            <strong>${lowRows}</strong>
-          </article>
-          <article>
-            <span>Last Event</span>
-            <strong>${escapeHtml(lastEventLabel)}</strong>
-          </article>
-        </div>
       </section>
     </main>
   `;
@@ -2016,55 +2000,274 @@ function renderDeviceTrustTable() {
 }
 
 function renderSettingsPage() {
+  const trustedDevices = TRUSTED_DEVICES.filter((device) => device.trust === "Trusted").length;
+  const reviewDevices = TRUSTED_DEVICES.filter((device) => device.trust !== "Trusted").length;
+  const activeUsers = DEFAULT_USERS.filter((user) => user.status === "Active").length;
+  const activeLocations = getLocations().filter((location) => location.status === "Active").length;
+  const policyScore = Math.round(((SETTINGS_POLICIES.length + NUMBERING_RULES.length + trustedDevices) / (SETTINGS_POLICIES.length + NUMBERING_RULES.length + TRUSTED_DEVICES.length)) * 100);
+  const guardrailState = state.outbox.length > 0 ? "Needs sync review" : "Clear";
+
   return `
     <section class="content-grid module-page settings-workspace" aria-label="Settings">
-      <section class="module-metrics" aria-label="Settings metrics">
-        ${metricCard("Policies", SETTINGS_POLICIES.length)}
-        ${metricCard("Numbering Rules", NUMBERING_RULES.length)}
-        ${metricCard("CI Lanes", CI_LANES.length)}
-        ${metricCard("Offline Mode", state.online ? "Online" : "Saved Local")}
+      <section class="settings-command" aria-label="Settings command center">
+        <div class="settings-command-copy">
+          <span class="settings-command-kicker">Tenant control room</span>
+          <h2>${escapeHtml(tenant.client_name)}</h2>
+          <p>Site defaults, device trust, offline behavior, numbering, privacy guardrails, and release lanes live here so operators can see what is safe before changing how stock work flows.</p>
+        </div>
+        <div class="settings-command-status" aria-label="Settings readiness">
+          <div class="settings-health-ring" style="--settings-health: ${policyScore}%">
+            <strong>${policyScore}</strong>
+            <span>Ready</span>
+          </div>
+          <dl>
+            <div>
+              <dt>Device</dt>
+              <dd>${escapeHtml(tenant.device_name)}</dd>
+            </div>
+            <div>
+              <dt>Operator</dt>
+              <dd>${escapeHtml(tenant.actor_name)}</dd>
+            </div>
+            <div>
+              <dt>Sync posture</dt>
+              <dd>${state.online ? "Online" : "Local only"}</dd>
+            </div>
+          </dl>
+        </div>
       </section>
-      <section class="settings-grid" aria-label="Tenant settings">
-        <article class="panel settings-panel">
-          <div class="settings-card-header">
-            <h2>Tenant Defaults</h2>
-            <p>Core assumptions used across the workspace.</p>
+
+      <section class="settings-quick-grid" aria-label="Settings snapshot">
+        ${renderSettingsQuickStat("Policies", SETTINGS_POLICIES.length, "Defaults locked for this tenant", "sliders")}
+        ${renderSettingsQuickStat("Trusted devices", `${trustedDevices}/${TRUSTED_DEVICES.length}`, `${reviewDevices} device${reviewDevices === 1 ? "" : "s"} need review`, "wifi")}
+        ${renderSettingsQuickStat("Active users", activeUsers, "Role matrix controls access", "users")}
+        ${renderSettingsQuickStat("Saved work", state.outbox.length, guardrailState, "send")}
+      </section>
+
+      <section class="settings-board" aria-label="Tenant settings board">
+        <article class="panel settings-panel settings-panel--priority">
+          <div class="settings-card-header settings-card-header--split">
+            <div>
+              <span>Site profile</span>
+              <h2>Tenant Defaults</h2>
+              <p>The values daily work starts from before an operator makes an explicit choice.</p>
+            </div>
+            <button class="button button-secondary" data-action="toggle-online" type="button">${icon(state.online ? "wifi" : "wifiOff")}${state.online ? "Online" : "Go Online"}</button>
           </div>
           ${renderSettingsPolicyTable()}
         </article>
-        <article class="panel settings-panel">
+
+        <article class="panel settings-panel settings-panel--sync">
           <div class="settings-card-header">
-            <h2>Numbering Rules</h2>
-            <p>Sequence templates for audit-friendly IDs.</p>
+            <span>Sync and offline</span>
+            <h2>Local work guard</h2>
+            <p>Saved work stays readable locally, then sends as one atomic batch when the site is online.</p>
           </div>
-          ${renderNumberingRuleTable()}
+          ${renderSettingsSyncCard()}
         </article>
       </section>
-      <section class="settings-grid" aria-label="Development and privacy settings">
+
+      <section class="settings-grid" aria-label="Security and device settings">
         <article class="panel settings-panel">
           <div class="settings-card-header">
-            <h2>CI Lanes</h2>
-            <p>Automation checks and environment jobs.</p>
+            <span>Device trust</span>
+            <h2>Terminals and offline access</h2>
+            <p>Every device should have a clear trust state before it can queue stock events offline.</p>
           </div>
-          ${renderCiLaneTable()}
+          ${renderSettingsDeviceList()}
         </article>
         <article class="panel settings-panel">
           <div class="settings-card-header">
-            <h2>Privacy Guardrails</h2>
-            <p>Safety controls that protect private operational data.</p>
+            <span>Privacy posture</span>
+            <h2>Data guardrails</h2>
+            <p>Controls that keep sensitive staff, supplier, client, and tenant data scoped.</p>
           </div>
           ${renderPrivacyGuardrailTable()}
         </article>
       </section>
+
+      <section class="settings-grid" aria-label="Audit and delivery settings">
+        <article class="panel settings-panel">
+          <div class="settings-card-header">
+            <span>Audit identity</span>
+            <h2>Numbering Rules</h2>
+            <p>Sequence templates keep source records easy to trace back through the ledger.</p>
+          </div>
+          ${renderNumberingRuleTable()}
+        </article>
+        <article class="panel settings-panel">
+          <div class="settings-card-header">
+            <span>Release checks</span>
+            <h2>CI Lanes</h2>
+            <p>Automation jobs separate fast logic checks from build and browser coverage.</p>
+          </div>
+          ${renderCiLaneTable()}
+        </article>
+      </section>
+
+      <section class="settings-grid settings-grid--wide" aria-label="Access and site readiness">
+        <article class="panel settings-panel">
+          <div class="settings-card-header">
+            <span>Access model</span>
+            <h2>Role coverage</h2>
+            <p>Operational roles are separated so everyday stock work does not require administrative access.</p>
+          </div>
+          ${renderSettingsRoleMatrix()}
+        </article>
+        <article class="panel settings-panel">
+          <div class="settings-card-header">
+            <span>Site readiness</span>
+            <h2>Operational scope</h2>
+            <p>Current catalog, locations, relationships, and saved work that settings must protect.</p>
+          </div>
+          ${renderSettingsScopeList(activeLocations)}
+        </article>
+      </section>
+
       <article class="panel settings-summary-card">
         <div>
-          <h2>Pipeline Strategy</h2>
-          <p>CI is split into unit, build, and browser lanes so fast failures arrive sooner and UI smoke can run independently after dependencies are ready.</p>
+          <span>Recommended next step</span>
+          <h2>${state.outbox.length > 0 ? "Send or review saved work before changing operating policy." : "Settings are stable for daily operation."}</h2>
+          <p>${state.outbox.length > 0 ? "There is queued work on this device. Review it in Stock Actions or send it before changing retention, export, or trust policies." : "No saved work is waiting. You can review audit evidence, reports, or user access without risking a partially prepared batch."}</p>
         </div>
-        <button class="button button-secondary" data-view="reports" type="button">${icon("list")}Open Reports</button>
-        <button class="button button-secondary" data-view="audit" type="button">${icon("history")}Open Audit Trail</button>
+        <div class="settings-summary-actions">
+          <button class="button button-secondary" data-view="compose" type="button">${icon("clipboardPlus")}Stock Actions</button>
+          <button class="button button-secondary" data-view="audit" type="button">${icon("history")}Audit Trail</button>
+          <button class="button button-secondary" data-action="reset-demo" type="button">${icon("refresh")}Reset Demo</button>
+        </div>
       </article>
     </section>
+  `;
+}
+
+function renderSettingsQuickStat(label, value, detail, iconName) {
+  return `
+    <article class="settings-quick-stat">
+      <span class="settings-quick-icon">${icon(iconName)}</span>
+      <div>
+        <strong>${escapeHtml(value)}</strong>
+        <span>${escapeHtml(label)}</span>
+        <p>${escapeHtml(detail)}</p>
+      </div>
+    </article>
+  `;
+}
+
+function renderSettingsSyncCard() {
+  const validations = state.outbox.map((event) => validateEvent(event));
+  const invalidCount = validations.filter((result) => !result.valid).length;
+  const workItems = workQueueItems(state.outbox.map((event, index) => ({ event, validation: validations[index] })));
+  const statusLabel = state.online ? "Ready to send" : "Saved locally";
+  const syncTone = invalidCount > 0 ? "warning" : state.outbox.length > 0 ? "info" : "success";
+
+  return `
+    <div class="settings-sync-card settings-sync-card--${syncTone}">
+      <div class="settings-sync-status">
+        <span>${icon(state.online ? "wifi" : "wifiOff")}</span>
+        <div>
+          <strong>${escapeHtml(statusLabel)}</strong>
+          <p>${state.outbox.length} event${state.outbox.length === 1 ? "" : "s"} in ${workItems.length} work item${workItems.length === 1 ? "" : "s"}.</p>
+        </div>
+      </div>
+      <div class="settings-sync-meter" aria-label="Sync queue status">
+        <span style="width: ${Math.min(100, state.outbox.length * 12)}%"></span>
+      </div>
+      <dl class="settings-mini-facts">
+        <div>
+          <dt>Invalid</dt>
+          <dd>${invalidCount}</dd>
+        </div>
+        <div>
+          <dt>Batch mode</dt>
+          <dd>Atomic</dd>
+        </div>
+        <div>
+          <dt>Duplicate guard</dt>
+          <dd>Idempotent</dd>
+        </div>
+      </dl>
+      <div class="settings-inline-actions">
+        <button class="button button-primary" data-view="compose" type="button">${icon("send")}Review saved work</button>
+        <button class="button button-secondary" data-action="toggle-online" type="button">${icon(state.online ? "wifiOff" : "wifi")}${state.online ? "Work offline" : "Go online"}</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderSettingsDeviceList() {
+  return `
+    <ul class="settings-device-list" aria-label="Device trust states">
+      ${TRUSTED_DEVICES.map((device) => {
+        const tone = device.trust === "Trusted" ? "success" : device.trust === "Review" ? "warning" : "danger";
+        return `
+          <li class="settings-device-row is-${tone}">
+            <span class="settings-device-icon">${icon(device.trust === "Trusted" ? "check" : device.trust === "Review" ? "alert" : "close")}</span>
+            <div>
+              <strong>${escapeHtml(device.name)}</strong>
+              <p>${escapeHtml(device.id)}</p>
+            </div>
+            <dl>
+              <div><dt>Trust</dt><dd>${escapeHtml(device.trust)}</dd></div>
+              <div><dt>Offline</dt><dd>${escapeHtml(device.offline)}</dd></div>
+              <div><dt>Last sync</dt><dd>${escapeHtml(device.last_sync)}</dd></div>
+            </dl>
+          </li>
+        `;
+      }).join("")}
+    </ul>
+  `;
+}
+
+function renderSettingsRoleMatrix() {
+  return `
+    <div class="settings-role-grid" role="table" aria-label="Role coverage matrix">
+      <div class="settings-role-grid-head" role="row">
+        <span role="columnheader">Role</span>
+        <span role="columnheader">Stock</span>
+        <span role="columnheader">Sales</span>
+        <span role="columnheader">Reports</span>
+        <span role="columnheader">Users</span>
+      </div>
+      ${ROLE_MATRIX.map(
+        (row) => `
+          <div class="settings-role-grid-row" role="row">
+            <strong role="cell">${escapeHtml(row.role)}</strong>
+            <span role="cell">${escapeHtml(row.stock)}</span>
+            <span role="cell">${escapeHtml(row.sales)}</span>
+            <span role="cell">${escapeHtml(row.reports)}</span>
+            <span role="cell">${escapeHtml(row.users)}</span>
+          </div>
+        `,
+      ).join("")}
+    </div>
+  `;
+}
+
+function renderSettingsScopeList(activeLocations) {
+  const products = getProductCatalog();
+  const activeProducts = products.filter((product) => product.is_active).length;
+  const inactiveProducts = products.length - activeProducts;
+  const rows = [
+    ["Active catalog", `${activeProducts} products`, `${inactiveProducts} suspended product${inactiveProducts === 1 ? "" : "s"} remain traceable.`],
+    ["Locations", `${activeLocations} active`, "Every stock event references a known service, storage, prep, or delivery place."],
+    ["Relationships", `${DEFAULT_CLIENTS.length + DEFAULT_SUPPLIERS.length} records`, "Clients and suppliers stay separated from stock movement history."],
+    ["Audit surface", `${allLocalEvents().length} events`, "History is reviewed through Audit Trail, not rewritten from Settings."],
+  ];
+
+  return `
+    <ul class="settings-scope-list" aria-label="Operational scope">
+      ${rows
+        .map(
+          ([label, value, detail]) => `
+            <li>
+              <span>${escapeHtml(label)}</span>
+              <strong>${escapeHtml(value)}</strong>
+              <p>${escapeHtml(detail)}</p>
+            </li>
+          `,
+        )
+        .join("")}
+    </ul>
   `;
 }
 
@@ -3102,7 +3305,7 @@ function selectedProductIdsForScope(scope, products) {
 }
 
 function renderProductCreateFields() {
-  const productForm = state.productForm ?? { name: "", category: "", unit: "unit", low: "0" };
+  const productForm = state.productForm ?? { name: "", category: "", unit: "", low: "0" };
 
   return `
     <label>
@@ -3111,11 +3314,11 @@ function renderProductCreateFields() {
     </label>
     <label>
       <span>Category</span>
-      <input name="product-category" type="text" value="${escapeAttr(productForm.category)}" placeholder="e.g. Mixer" />
+      <input name="product-category" type="text" value="${escapeAttr(productForm.category)}" placeholder="e.g. Beverage" />
     </label>
     <label>
       <span>Unit</span>
-      <input name="product-unit" type="text" value="${escapeAttr(productForm.unit)}" placeholder="e.g. bottle, kg, case, unit" />
+      <input name="product-unit" type="text" value="${escapeAttr(productForm.unit)}" placeholder="e.g. bottle" />
     </label>
     <label>
       <span>Low Stock Alert Threshold</span>
@@ -4041,6 +4244,15 @@ function bindEvents() {
     });
   });
 
+  document.querySelectorAll("[data-action='return-to-landing']").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.activeView = "landing";
+      state.accountOpen = false;
+      state.guideOpen = false;
+      commit();
+    });
+  });
+
   document.querySelectorAll("[data-action='toggle-online']").forEach((button) => {
     button.addEventListener("click", () => {
       state.online = !state.online;
@@ -4915,7 +5127,7 @@ function fieldNameForProductInput(name) {
 }
 
 function createProductFromAction() {
-  const productForm = state.productForm ?? { name: "", category: "", unit: "unit", low: "0" };
+  const productForm = state.productForm ?? { name: "", category: "", unit: "", low: "0" };
   const rawName = `${productForm.name ?? ""}`.trim();
   const rawCategory = `${productForm.category ?? ""}`.trim();
   const rawUnit = `${productForm.unit ?? "unit"}`.trim() || "unit";
@@ -4977,7 +5189,7 @@ function createProductFromAction() {
   state.productForm = {
     name: "",
     category: "",
-    unit: "unit",
+    unit: "",
     low: "0",
   };
 
@@ -6015,6 +6227,7 @@ function icon(name) {
     utensils: '<path d="M6 3v8"/><path d="M4 3v4a2 2 0 0 0 4 0V3"/><path d="M6 11v10"/><path d="M17 3v18"/><path d="M14 3h3a3 3 0 0 1 0 6h-3"/>',
     package: '<path d="m12 3 8 4-8 4-8-4 8-4Z"/><path d="M4 7v10l8 4 8-4V7"/><path d="M12 11v10"/><path d="m8 5 8 4"/>',
     clipboardPlus: '<path d="M9 4h6"/><path d="M10 2h4a2 2 0 0 1 2 2v2H8V4a2 2 0 0 1 2-2Z"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2"/><path d="M12 11v6"/><path d="M9 14h6"/>',
+    logIn: '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/>',
     chart: '<path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 16v-5"/><path d="M12 16V8"/><path d="M16 16v-3"/>',
     users: '<path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><path d="M9.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
     sliders: '<path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M2 14h4"/><path d="M10 8h4"/><path d="M18 16h4"/>',

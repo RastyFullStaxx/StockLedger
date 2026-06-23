@@ -519,7 +519,7 @@ export function defaultState() {
     productForm: {
       name: "",
       category: "",
-      unit: "unit",
+      unit: "",
       low: "0",
     },
     locationModalOpen: false,
