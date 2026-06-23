@@ -97,8 +97,8 @@
 
 .action-type-tab.is-active {
   border-color: var(--color-primary-strong);
-  background: var(--color-primary);
-  color: #ffffff;
+  background: #ffffff;
+  color: var(--color-primary);
 }
 
 .compose-template-strip {

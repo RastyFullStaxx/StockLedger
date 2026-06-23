@@ -40,7 +40,7 @@
   height: 36px;
   padding: 3px;
   border-radius: var(--radius-lg);
-  background: rgba(255, 255, 255, 0.1);
+  background: transparent;
   box-shadow: none;
   color: inherit;
   font-weight: 900;
@@ -243,20 +243,20 @@
 }
 
 .nav-item.is-active {
-  border-color: rgba(255, 255, 255, 0.62);
-  background: rgba(255, 255, 255, 0.18);
-  color: #ffffff;
+  border-color: var(--color-primary-strong);
+  background: var(--color-card-solid);
+  color: var(--color-primary);
 }
 
 .nav-item.is-active > span,
 .nav-item.is-active .icon,
 .nav-item.is-active .nav-item-title,
 .nav-item.is-active .nav-item-subtitle {
-  color: #ffffff;
+  color: var(--color-primary);
 }
 
 .nav-item.is-active small {
-  color: #ffffff;
+  color: var(--color-primary-strong);
 }
 
 .nav-item.is-active {
@@ -264,7 +264,7 @@
 }
 
 .sidebar .nav-item .icon {
-  color: #ffffff;
+  color: currentColor;
   opacity: 1;
 }
 
@@ -283,10 +283,10 @@
   font-size: 0.78rem;
 }
 
-.nav-item.is-active > .nav-count {
-  border-color: #ffffff;
-  background: #ffffff;
-  color: var(--color-primary);
+.nav-item[data-view="compose"].is-active > .nav-count {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: #ffffff;
 }
 
 .sidebar-divider {
@@ -949,6 +949,12 @@ button.account-popover-toggle > .mini-toggle-track.is-on {
 
 .assistant-menu .guide-menu-header {
   border-bottom-color: rgba(255, 255, 255, 0.18);
+}
+
+.assistant-menu .guide-menu-header > .icon-button {
+  background: transparent;
+  border-color: transparent;
+  color: #ffffff;
 }
 
 .guide-menu-header div,
