@@ -1,8 +1,8 @@
 # StockLedger
 
-StockLedger is a distributed, event-sourced inventory ledger system designed for bar, kitchen, and supply chain environments requiring strict audit control, offline capability, and multi-tenant isolation.
+StockLedger is a distributed, event-sourced inventory ledger system designed for bar, kitchen, and supply chain environments requiring strict audit control, offline capability, and multi-tenant isolation
 
-It is not a traditional inventory system. It is an immutable event ledger where all stock changes are derived from historical transactions.
+It is not a traditional inventory system. It is an immutable event ledger where all stock changes are derived from historical transactions
 
 ---
 
